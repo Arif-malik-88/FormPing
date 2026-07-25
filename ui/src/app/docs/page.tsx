@@ -219,10 +219,13 @@ export default function DocsPage() {
             </P>
             <UL>
               <LI>
-                When you add or run a URL that isn&apos;t in a project, a popup asks to file it.
-                <strong> Yes</strong> → pick or create a project; <strong>No</strong> → it keeps
-                monitoring but stays hidden from Projects (a deliberate throwaway / test URL);
-                <strong> Decide later</strong> → it waits in the Unassigned bucket.
+                When you add or run a URL that isn&apos;t already in a project, a popup asks to file it —
+                and it appears <strong>only</strong> when the URL is genuinely unassigned (never for one
+                already grouped or dismissed). Three choices:{' '}
+                <strong>Add to a client</strong> → pick or create a project;{' '}
+                <strong>Decide later</strong> → leaves it in <strong>Unassigned</strong> to sort anytime
+                (may ask again next test); <strong>Don&apos;t track this URL</strong> → hides it from
+                Projects and won&apos;t ask again (testing it later brings it back).
               </LI>
               <LI>
                 The <strong>Unassigned</strong> row at the bottom of Projects lists any URL not yet in
@@ -260,6 +263,13 @@ export default function DocsPage() {
               min&rdquo;), whether the contact form is working, and SSL validity. No reason codes, run
               modes, notes, or full URLs ever appear.
             </P>
+            <Note>
+              When the crawler simply can&apos;t <strong>locate a contact page</strong> to test, the
+              client page treats the form as <em>not monitored</em> rather than &ldquo;needs
+              attention&rdquo; — telling a client their form is broken when we merely couldn&apos;t find
+              a page to test would be a false alarm. Internally it stays a real signal: the team still
+              sees the reason on the dashboard, and it still counts toward the internal overall.
+            </Note>
             <UL>
               <LI>
                 Open a project, expand it, and use <strong>Public status page → Create link</strong>.
