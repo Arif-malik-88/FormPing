@@ -80,6 +80,7 @@ function buildHealth(
         level: fs.lastStatus
           ? runVerdict(fs.lastReasonCode ?? '', fs.lastFormFound ?? false, fs.lastStatus).level
           : 'pending',
+        reasonCode: fs.lastReasonCode ?? undefined,
         label: fs.lastStatus
           ? runVerdict(fs.lastReasonCode ?? '', fs.lastFormFound ?? false, fs.lastStatus).label
           : 'Pending first run',
@@ -89,7 +90,7 @@ function buildHealth(
       };
     } else if (fr) {
       const v = runVerdict(fr.reasonCode, fr.formFound, fr.status === 'error' ? 'error' : undefined);
-      form = { monitored: false, stopped: true, level: v.level, label: v.label, mode: fr.mode, lastRunAt: fr.ranAt };
+      form = { monitored: false, stopped: true, level: v.level, reasonCode: fr.reasonCode, label: v.label, mode: fr.mode, lastRunAt: fr.ranAt };
     } else {
       form = { monitored: false };
     }

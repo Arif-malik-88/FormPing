@@ -97,9 +97,22 @@ function series(daily: SiteDaily[], windowDays: number | null): { uptime: Uptime
   return { uptime, response };
 }
 
-function formWorking(h: UrlHealth): boolean | null {
+/**
+ * Reason codes that mean "we couldn't LOCATE a contact page/form to test" — as
+ * opposed to "we tested the form and it's broken". Telling a client their
+ * "contact form needs attention" for these is a false alarm: the honest state is
+ * that there's nothing to report. So on the CLIENT page they read as
+ * not-monitored; internally they stay a real signal (the team still sees the
+ * "No contact page found" detail on the dashboard, and it still degrades the
+ * internal overall).
+ */
+const NOT_LOCATABLE = new Set(['CONTACT_PAGE_NOT_FOUND', 'CONTACT_PAGE_AMBIGUOUS']);
+
+function formWorking(h: UrlHealth, internal: boolean): boolean | null {
   if (!h.form.monitored) return null;
   if (h.form.level === 'healthy') return true;
+  // Client page: "couldn't find a contact page" is not a form failure.
+  if (!internal && h.form.reasonCode && NOT_LOCATABLE.has(h.form.reasonCode)) return null;
   if (h.form.level === 'attention' || h.form.level === 'failing') return false;
   return null;
 }
@@ -156,7 +169,7 @@ export async function buildClientStatus(
         dailyUptime,
         incidents: incidentDays(win),
         ssl,
-        formWorking: formWorking(h),
+        formWorking: formWorking(h, internal),
       };
 
       if (internal) {

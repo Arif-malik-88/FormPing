@@ -13,6 +13,7 @@
  */
 
 import type { ChangeReport, MonitorConfig, MonitorSSEEvent, SnapshotResult } from '@/types';
+import { shouldPromptForProject } from '@/lib/projects/membershipClient';
 
 export interface MonitorRunState {
   reports: ChangeReport[];
@@ -105,6 +106,16 @@ export async function stop(url: string, config: MonitorConfig): Promise<void> {
   }
 }
 
+/**
+ * Queue the "add to a project?" prompt for a URL — but ONLY if it is genuinely
+ * unassigned (FR-23). This is the authoritative gate: an already-grouped URL is
+ * never even queued, so the prompt cannot appear for it regardless of what the
+ * modal does. Runs at a calm moment (a run just finished), not mid-stream.
+ */
+async function maybePrompt(target: string): Promise<void> {
+  if (await shouldPromptForProject(target)) set({ pendingAssign: [target] });
+}
+
 /** Start a snapshot/compare/watch run and stream it into this store. Safe to
  *  leave the page while it runs. `target` is the normalized URL. */
 export async function startRun(target: string, config: MonitorConfig): Promise<void> {
@@ -151,15 +162,15 @@ export async function startRun(target: string, config: MonitorConfig): Promise<v
           const event = JSON.parse(line.slice(6)) as MonitorSSEEvent;
           if (event.type === 'snapshot') {
             set({ snapshot: event.result, refreshKey: state.refreshKey + 1 });
-            if (!prompted) { prompted = true; set({ pendingAssign: [target] }); }
+            if (!prompted) { prompted = true; void maybePrompt(target); }
           } else if (event.type === 'report') {
             set({ reports: [event.report], refreshKey: state.refreshKey + 1 });
-            if (!prompted) { prompted = true; set({ pendingAssign: [target] }); }
+            if (!prompted) { prompted = true; void maybePrompt(target); }
           } else if (event.type === 'log') {
             set({ logs: [...state.logs.slice(-99), event.message] });
           } else if (event.type === 'done' || event.type === 'error') {
             if (event.type === 'error') set({ logs: [...state.logs, `⚠ ${event.message}`] });
-            else if (!prompted) { prompted = true; set({ pendingAssign: [target] }); }
+            else if (!prompted) { prompted = true; void maybePrompt(target); }
             set({ running: false });
             if (config.monitorMode !== 'watch') set({ watchDetached: false });
           }

@@ -8,6 +8,7 @@ import { SnapshotsManager } from '@/components/monitor/SnapshotsManager';
 import { ProjectAssignQueue } from '@/components/projects/ProjectAssignQueue';
 import { checkUrl } from '@/lib/urlCheck';
 import * as monitorRun from '@/lib/monitorRun';
+import { markCleared, unmarkCleared, wasCleared } from '@/lib/clearedInput';
 import type { MonitorConfig, ChangeReport } from '@/types';
 
 const DEFAULT_CONFIG: MonitorConfig = {
@@ -52,7 +53,8 @@ export default function MonitorPage() {
   // ── Restore URL + config from localStorage on first mount ─────────────
   useEffect(() => {
     try {
-      const savedUrl = window.localStorage.getItem(STORAGE_KEY_URL);
+      // Respect a deliberate clear: don't restore the URL if the user emptied it.
+      const savedUrl = wasCleared('monitor') ? null : window.localStorage.getItem(STORAGE_KEY_URL);
       if (savedUrl) setUrl(savedUrl);
       const savedConfigRaw = window.localStorage.getItem(STORAGE_KEY_CONFIG);
       if (savedConfigRaw) {
@@ -82,6 +84,9 @@ export default function MonitorPage() {
 
   // ── On mount: auto-fill URL from active watches if URL is empty ──
   useEffect(() => {
+    // A deliberate clear wins: never auto-fill from a running watch after the
+    // user has emptied the input — that was a source of "Clear didn't stick".
+    if (wasCleared('monitor')) return;
     let cancelled = false;
     (async () => {
       try {
@@ -161,6 +166,7 @@ export default function MonitorPage() {
   const handleClearView = useCallback(() => {
     setUrl('');
     monitorRun.clearView();
+    markCleared('monitor'); // keep it empty until the user types again
     try { window.localStorage.removeItem(STORAGE_KEY_URL); } catch { /* ignore */ }
   }, []);
 
@@ -209,6 +215,7 @@ export default function MonitorPage() {
               url={url}
               onChange={(u) => {
                 setUrl(u);
+                if (u) unmarkCleared('monitor'); // user is filling it again
                 forceRef.current = false;
                 setPreflight(null);
               }}

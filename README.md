@@ -248,6 +248,13 @@ Content changes are internal-only by design: a diff is a technical QA signal, an
 intentional edits. It is enforced by types — `changes` exists only on
 `InternalStatus`, and the public route returns `ClientStatus`, so it cannot leak.
 
+Similarly, when the crawler simply **can't locate a contact page** to test
+(`CONTACT_PAGE_NOT_FOUND` / `CONTACT_PAGE_AMBIGUOUS`), the **client** page treats
+it as *not monitored* rather than "contact form needs attention" — telling a
+client their form is broken when we merely couldn't find a page to test is a
+false alarm. Internally it stays a real signal: the team still sees the reason on
+the dashboard, and it still counts toward the internal overall.
+
 Both carry a **Today / 7 days / 30 days / All-time** filter (`?window=`).
 
 ### Slack notifications (optional, free)

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ProjectChooser } from './ProjectChooser';
+import { shouldPromptForProject } from '@/lib/projects/membershipClient';
 
 /**
  * Popup shown after a monitor is added in Form/Site Watch: "Add this URL to a
@@ -27,18 +28,21 @@ export function AddToProjectModal({ url, onClose }: { url: string; onClose: () =
     onCloseRef.current = onClose;
   });
 
+  // Final gate before showing the prompt. The stores already only queue
+  // genuinely-unassigned URLs (FR-23), but re-check here too as a safety net
+  // against a stale queue — and, critically, PROMPT ONLY ON POSITIVE
+  // CONFIRMATION that the URL is unassigned. On any error we close silently
+  // rather than nag: the old code did the opposite (`catch → show popup`), which
+  // is why a membership hiccup during the change-tracking stream surfaced an
+  // "add to project?" popup for a URL that was already grouped.
   useEffect(() => {
     let alive = true;
-    fetch(`/api/projects/membership?url=${encodeURIComponent(url)}`, { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((d) => {
-        if (!alive) return;
-        if (d?.inProject || d?.dismissed) onCloseRef.current();
-        else setPhase('ask');
-      })
-      .catch(() => {
-        if (alive) setPhase('ask');
-      });
+    (async () => {
+      const promptable = await shouldPromptForProject(url); // fails closed
+      if (!alive) return;
+      if (promptable) setPhase('ask');
+      else onCloseRef.current();
+    })();
     return () => {
       alive = false;
     };
@@ -73,34 +77,58 @@ export function AddToProjectModal({ url, onClose }: { url: string; onClose: () =
       >
         <h3 className="text-sm font-semibold text-slate-100">Add this URL to a project?</h3>
         <p className="mt-1 text-xs text-slate-400">
-          Group <span className="font-mono text-slate-300 break-all">{url}</span> under a client so it
-          shows in Projects and its alerts route correctly.
-        </p>
-        <p className="mt-1.5 text-[11px] text-slate-500">
-          <strong className="text-slate-400">Decide later</strong> keeps it in{' '}
-          <strong className="text-slate-400">Unassigned</strong> (assign or dismiss it there anytime).{' '}
-          <strong className="text-slate-400">No, don&apos;t track</strong> hides it from Projects.
+          <span className="font-mono text-slate-300 break-all">{url}</span>
         </p>
 
-        <div className="mt-3 rounded-lg border border-slate-800 bg-slate-950/40 p-1.5">
+        {/* Option 1 — add to a project */}
+        <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          Add to a client
+        </p>
+        <p className="mt-0.5 text-[11px] text-slate-500">
+          Group it under a client — it shows in Projects with its health, dashboard, shareable status
+          page, and alerts.
+        </p>
+        <div className="mt-2 rounded-lg border border-slate-800 bg-slate-950/40 p-1.5">
           <ProjectChooser url={url} onAssigned={onClose} />
         </div>
 
-        <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-800 pt-3">
+        {/* Options 2 & 3 — not now / never. Styled as clearly-clickable cards. */}
+        <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          Or, not now
+        </p>
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="group flex flex-col rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2.5 text-left ring-1 ring-inset ring-white/5 transition hover:border-indigo-500/60 hover:bg-slate-800 active:scale-[0.99]"
+          >
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-100">
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 text-slate-400 group-hover:text-indigo-400">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v4a1 1 0 00.293.707l2.5 2.5a1 1 0 001.414-1.414L11 9.586V7z" clipRule="evenodd" />
+              </svg>
+              Decide later
+            </span>
+            <span className="mt-1 block text-[11px] leading-snug text-slate-400">
+              Keeps it in <strong className="text-slate-300">Unassigned</strong> — assign or dismiss it
+              from Projects anytime. We may ask again next time you test it.
+            </span>
+          </button>
           <button
             type="button"
             disabled={busy}
             onClick={() => void dismiss()}
-            className="text-xs text-slate-400 hover:text-red-300 disabled:opacity-40"
+            className="group flex flex-col rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2.5 text-left ring-1 ring-inset ring-white/5 transition hover:border-red-500/60 hover:bg-red-500/10 active:scale-[0.99] disabled:opacity-40"
           >
-            No, don&apos;t track in Projects
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-xs text-slate-500 hover:text-slate-300"
-          >
-            Decide later
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-100">
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 text-slate-400 group-hover:text-red-400">
+                <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+              </svg>
+              Don&apos;t track this URL
+            </span>
+            <span className="mt-1 block text-[11px] leading-snug text-slate-400">
+              Hides it from Projects and <strong className="text-slate-300">won&apos;t ask again</strong>.
+              Testing it later brings it back.
+            </span>
           </button>
         </div>
       </div>

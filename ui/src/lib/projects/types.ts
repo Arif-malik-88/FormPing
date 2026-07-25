@@ -37,6 +37,9 @@ export interface UrlHealth {
      *  (the monitor was stopped/deleted; the result stays until project delete). */
     stopped?: boolean;
     level?: FormHealthLevel;
+    /** Raw reason code of the last run — lets the client status page distinguish
+     *  "we couldn't find a contact page to test" from "the form is broken". */
+    reasonCode?: string;
     /** What happened on the last run (e.g. "Form healthy — filled, not submitted"). */
     label?: string;
     /** Which test ran: 'live' | 'safe' | 'detect-only'. */

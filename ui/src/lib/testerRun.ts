@@ -17,6 +17,7 @@
  */
 
 import type { SiteResult, RunConfig, SSEEvent, RunProgress } from '@/types';
+import { filterPromptable } from '@/lib/projects/membershipClient';
 
 const STORAGE_KEY_RESULTS = 'fp:tester:results';
 const STORAGE_KEY_LOGS = 'fp:tester:logs';
@@ -167,9 +168,14 @@ export async function startRun(urls: string[], config: RunConfig): Promise<void>
           } else if (event.type === 'error') {
             set({ logs: [...state.logs, `⚠ ${event.message}`], running: false, progress: null });
           } else if (event.type === 'done') {
-            // Run finished — offer to file each tested URL under a project
-            // (the modal self-skips ones already grouped or dismissed).
-            set({ pendingAssign: urls, running: false, progress: null });
+            // Run finished. Offer to file tested URLs under a project — but ONLY
+            // the ones genuinely unassigned (FR-23). Gating here, at a calm
+            // moment, means an already-grouped URL is never queued, so the prompt
+            // can't appear for it. Done async; pendingAssign is set a beat later.
+            set({ running: false, progress: null });
+            void filterPromptable(urls).then((promptable) => {
+              if (promptable.length) set({ pendingAssign: promptable });
+            });
           }
         } catch {
           // malformed SSE line — skip
