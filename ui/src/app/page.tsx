@@ -7,6 +7,7 @@ import { ResultsPanel } from '@/components/ResultsPanel';
 import { ProjectAssignQueue } from '@/components/projects/ProjectAssignQueue';
 import { checkUrl } from '@/lib/urlCheck';
 import * as testerRun from '@/lib/testerRun';
+import { markCleared, unmarkCleared, wasCleared } from '@/lib/clearedInput';
 import type { RunConfig } from '@/types';
 
 const DEFAULT_CONFIG: RunConfig = {
@@ -52,7 +53,8 @@ export default function Home() {
   useEffect(() => {
     testerRun.hydrate();
     try {
-      const u = window.localStorage.getItem(STORAGE_KEY_URL);
+      // Respect a deliberate clear: don't restore the URL if the user emptied it.
+      const u = wasCleared('tester') ? null : window.localStorage.getItem(STORAGE_KEY_URL);
       if (u) setUrlInput(u);
     } catch {
       /* localStorage unavailable (private mode) — silent fallback */
@@ -76,6 +78,7 @@ export default function Home() {
     setUrlInput('');
     setPreflight(null);
     forceRef.current = false;
+    markCleared('tester'); // keep it empty until the user types again
     try {
       window.localStorage.removeItem(STORAGE_KEY_URL);
     } catch { /* ignore */ }
@@ -141,6 +144,7 @@ export default function Home() {
               value={urlInput}
               onChange={(v) => {
                 setUrlInput(v);
+                if (v) unmarkCleared('tester'); // user is filling it again
                 forceRef.current = false;
                 setPreflight(null);
               }}
