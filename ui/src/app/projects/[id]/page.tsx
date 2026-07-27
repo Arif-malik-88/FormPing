@@ -20,6 +20,7 @@ import {
 import { ShareStatusControl } from '@/components/projects/ShareStatusControl';
 import { ProjectForm } from '@/components/projects/ProjectForm';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useMe, canRole } from '@/lib/auth/useMe';
 
 const FORM_WORD: Record<string, string> = { healthy: 'Healthy', attention: 'Attention', failing: 'Failing', pending: 'Pending' };
 function expiryTone(days: number | null): Tone | undefined {
@@ -37,6 +38,10 @@ export default function ProjectDetailPage() {
   const [state, setState] = useState<'loading' | 'ready' | 'notfound'>('loading');
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const me = useMe();
+  const canEdit = canRole(me.role, 'member');
+  const canDelete = canRole(me.role, 'admin');
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -58,7 +63,21 @@ export default function ProjectDetailPage() {
   }, [load]);
 
   async function doDelete() {
-    await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+    // Check the response — a 403 (not admin) or any error must NOT silently
+    // navigate away as if it worked. Only a real success leaves the page.
+    setDeleteError(null);
+    let res: Response;
+    try {
+      res = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+    } catch {
+      setDeleteError('Network error — could not reach the server. Please try again.');
+      return;
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setDeleteError(body.error ?? 'Could not delete this project. Please try again.');
+      return; // keep the dialog open so the reason is visible
+    }
     router.push('/projects');
   }
 
@@ -121,8 +140,12 @@ export default function ProjectDetailPage() {
             <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden><path d="M3 3a1 1 0 011 1v11h13a1 1 0 110 2H4a2 2 0 01-2-2V4a1 1 0 011-1z" /><path d="M7 11l3-3 2 1.5 3.5-4 1.5 1.2-4.4 5-2-1.5L8.4 12 7 11z" /></svg>
             Open dashboard
           </Link>
-          <button onClick={() => setEditing(true)} className="rounded-lg border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:text-slate-100">Edit</button>
-          <button onClick={() => setConfirmDelete(true)} className="rounded-lg border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:border-rose-800/60 hover:text-rose-300">Delete</button>
+          {canEdit && (
+            <button onClick={() => setEditing(true)} className="rounded-lg border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:text-slate-100">Edit</button>
+          )}
+          {canDelete && (
+            <button onClick={() => setConfirmDelete(true)} className="rounded-lg border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:border-rose-800/60 hover:text-rose-300">Delete</button>
+          )}
         </div>
       </div>
 
@@ -158,7 +181,7 @@ export default function ProjectDetailPage() {
       {/* Client status page */}
       <section id="share" className="mt-7 scroll-mt-6">
         <SectionHeader title="Client status page" help="A live, non-technical page you can share with the client — no login needed." />
-        <ShareStatusControl projectId={project.id} initialToken={project.shareToken} />
+        <ShareStatusControl projectId={project.id} initialToken={project.shareToken} canManage={canEdit} />
       </section>
 
       {editing && (
@@ -191,10 +214,15 @@ export default function ProjectDetailPage() {
               <strong className="text-slate-300">does remove the results from Projects</strong>.{' '}
               <strong className="text-red-300">Can&apos;t be undone.</strong>
             </span>
+            {deleteError && (
+              <span className="mt-3 block rounded-md border border-rose-800/50 bg-rose-500/10 px-3 py-2 text-rose-300">
+                {deleteError}
+              </span>
+            )}
           </>
         }
         onConfirm={doDelete}
-        onCancel={() => setConfirmDelete(false)}
+        onCancel={() => { setConfirmDelete(false); setDeleteError(null); }}
       />
     </main>
   );
