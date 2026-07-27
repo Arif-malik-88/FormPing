@@ -6,6 +6,7 @@ const SECTIONS = [
   { id: 'layout', label: 'How it is organized' },
   { id: 'projects', label: 'Projects' },
   { id: 'status-page', label: 'Status page (public)' },
+  { id: 'access', label: 'Access & roles' },
   { id: 'overview', label: 'Change tracking — overview' },
   { id: 'storage', label: 'Storage layout' },
   { id: 'snapshot-data', label: 'What gets saved' },
@@ -299,6 +300,53 @@ export default function DocsPage() {
               hand to a client. Only projects where you&apos;ve explicitly created a link are exposed.
             </Note>
 
+            {/* ── Access & roles ────────────────────────────────── */}
+            <H2 id="access">Access &amp; roles</H2>
+            <P>
+              Signing in is limited to allow-listed Google domains (<Code>ALLOWED_AUTH_DOMAINS</Code>).
+              On top of <em>who can get in</em>, every user has a <strong>role</strong> that controls{' '}
+              <em>what they can do</em>. Google proves your identity (the email); the role is
+              FormPing&apos;s, stored in the <Code>app_users</Code> table. A new allow-listed login
+              defaults to <strong>Member</strong>.
+            </P>
+            <Table
+              headers={['Role', 'Can']}
+              rows={[
+                [
+                  <strong key="0">Owner</strong>,
+                  'Everything — plus manage admins and transfer ownership. Exactly one exists.',
+                ],
+                [
+                  <strong key="0">Admin</strong>,
+                  'Full app including deleting projects and managing members/viewers.',
+                ],
+                [
+                  <strong key="0">Member</strong>,
+                  'Add URLs, create/run/edit monitors, view everything. No delete, no user management. (The default.)',
+                ],
+                [<strong key="0">Viewer</strong>, 'Read-only.'],
+              ]}
+            />
+            <P>
+              Enforcement is <strong>server-side</strong> on privileged routes — deleting a project,
+              for example, requires Admin+. The role is read fresh from the database on every request,
+              so a promotion or demotion takes effect immediately (it is never baked into your session).
+            </P>
+            <Note>
+              <strong>You can&apos;t get locked out.</strong> There is always exactly one Owner: the
+              Owner is never demoted, only <em>transferred</em> (an atomic swap — successor becomes
+              Owner, previous Owner becomes Admin). The <Code>OWNER_EMAIL</Code> env is{' '}
+              <em>break-glass</em>: it re-seeds an Owner only when the table has none, so the app can
+              never be left with no administrator — yet a real transfer still sticks.
+            </Note>
+            <Note tone="warn">
+              <strong>The app role is not the infrastructure.</strong> Transferring ownership in-app
+              only rewrites the role table — it never touches projects or data. GitHub, Railway, and
+              Supabase are owned separately at the account level. A full handoff is: transfer the Owner
+              role in-app → update <Code>OWNER_EMAIL</Code> in Railway → make sure the successor has
+              GitHub/Railway/Supabase access.
+            </Note>
+
             {/* ── Change tracking — overview ────────────────────── */}
             <H2 id="overview">Change tracking — overview</H2>
             <P>
@@ -331,7 +379,8 @@ export default function DocsPage() {
               durable per-URL results: <Code>form_watch_results</Code>,{' '}
               <Code>site_watch_results</Code>; daily rollup: <Code>site_watch_daily</Code> (powers the
               dashboard&apos;s 7d/30d/all-time charts); change-tracking runs:{' '}
-              <Code>change_events</Code> (one slim row per snapshot/compare/watch run). Confirm the live backend and environment at{' '}
+              <Code>change_events</Code> (one slim row per snapshot/compare/watch run); access roles:{' '}
+              <Code>app_users</Code> (email → role). Confirm the live backend and environment at{' '}
               <Code>/api/health</Code> (<Code>schema</Code> is <Code>public</Code> in production,{' '}
               <Code>dev</Code> locally). The change-monitor <em>snapshots</em> below remain file-based.
             </Note>

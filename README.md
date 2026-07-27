@@ -257,6 +257,46 @@ the dashboard, and it still counts toward the internal overall.
 
 Both carry a **Today / 7 days / 30 days / All-time** filter (`?window=`).
 
+### Access privileges — roles
+
+Signing in is gated to allow-listed Google domains (`ALLOWED_AUTH_DOMAINS`). On
+top of *who can get in*, each user has a **role** that controls *what they can
+do*, stored in the `app_users` table (keyed by their Google email):
+
+| Role | Can |
+|---|---|
+| **Owner** (exactly one) | Everything, **+ manage admins + transfer ownership** |
+| **Admin** | Full app incl. **delete projects** + manage members/viewers |
+| **Member** (default) | Add URLs, create/run/edit monitors, view everything — **no delete, no user management** |
+| **Viewer** | Read-only |
+
+Google proves *who you are* (the email); the role is FormPing's, assigned in the
+table. A new allow-listed login defaults to **Member**. Enforcement is
+**server-side** on privileged routes (e.g. deleting a project is Admin+); the
+role is read fresh from the DB per request, so a promotion/demotion takes effect
+immediately.
+
+**Env:**
+```
+OWNER_EMAIL=you@apexure.com          # break-glass owner (see below)
+ADMIN_EMAILS=manager@…,pm@…          # optional: start these as Admin on first login
+```
+
+**Lockout safety.** There is always exactly one Owner — the Owner can't be
+demoted, only **transferred** (an atomic action that swaps the successor to Owner
+and the old Owner to Admin). `OWNER_EMAIL` is *break-glass*: it re-seeds an Owner
+**only when the table has none**, so the app can never end up with no
+administrator, yet a real transfer still sticks. A database single-owner index
+backs the app-level checks.
+
+**Handoff (when the person who runs it leaves).** The in-app "Transfer ownership"
+changes only the role table — it never touches projects or data, so it can't lock
+the app or lose anything. But the app role is *not* the infrastructure: GitHub,
+Railway, and Supabase are owned at the account level (separately). A full handoff
+is: transfer the Owner role in-app → update `OWNER_EMAIL` in Railway → ensure the
+successor has GitHub/Railway/Supabase access. As long as those account owners
+persist, the app can't be stranded.
+
 ### Slack notifications (optional, free)
 
 Set `SLACK_WEBHOOK_URL` to a [Slack Incoming Webhook](https://api.slack.com/messaging/webhooks)
