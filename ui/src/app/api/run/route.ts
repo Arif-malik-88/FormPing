@@ -4,11 +4,16 @@ import { writeFileSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import { recordRun } from '@/lib/onDemandRunStore';
+import { requireRole } from '@/lib/auth/authorize';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 min cap for batch runs
 
 export async function POST(request: NextRequest) {
+  // Running a form test is Member+ — viewers are read-only.
+  const denied = await requireRole(request, 'member');
+  if (denied) return denied;
+
   const body = await request.json() as {
     urls: string[];
     mode: string;

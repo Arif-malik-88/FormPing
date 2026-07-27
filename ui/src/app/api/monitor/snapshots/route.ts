@@ -11,6 +11,7 @@ import {
   dirSize,
   removeSnapshotsForHost,
 } from '@/lib/snapshotFiles';
+import { requireRole } from '@/lib/auth/authorize';
 
 export const runtime = 'nodejs';
 
@@ -50,6 +51,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const denied = await requireRole(request, 'member');
+  if (denied) return denied;
+
   const body = (await request.json().catch(() => null)) as { url?: string } | null;
   if (!body?.url) {
     return Response.json({ error: 'url required' }, { status: 400 });

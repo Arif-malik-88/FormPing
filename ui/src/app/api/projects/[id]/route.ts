@@ -38,6 +38,10 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
 /** PATCH /api/projects/[id] — update name / urls / notes. */
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+  // Editing a project (name/URLs/notes) is Member+ — viewers are read-only.
+  const denied = await requireRole(request, 'member');
+  if (denied) return denied;
+
   let body: { name?: unknown; urls?: unknown; notes?: unknown; contact?: unknown };
   try {
     body = await request.json();

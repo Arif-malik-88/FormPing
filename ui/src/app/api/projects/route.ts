@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { projectStore } from '@/lib/projects/projectStore';
 import { rollupsForUrlSets, listUnassignedUrls } from '@/lib/projects/health';
+import { requireRole } from '@/lib/auth/authorize';
 import type { ProjectWithRollup } from '@/lib/projects/types';
 
 export const runtime = 'nodejs';
@@ -45,6 +46,10 @@ export async function GET(request: NextRequest) {
 
 /** POST /api/projects — create. Body: { name: string, urls?: string[], notes?: string } */
 export async function POST(request: NextRequest) {
+  // Creating a project is day-to-day work — Member+ (viewers are read-only).
+  const denied = await requireRole(request, 'member');
+  if (denied) return denied;
+
   let body: { name?: unknown; urls?: unknown; notes?: unknown; contact?: unknown };
   try {
     body = await request.json();

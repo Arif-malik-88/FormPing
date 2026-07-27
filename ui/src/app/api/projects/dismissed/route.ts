@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { addDismissed, listDismissedUrls, removeDismissed } from '@/lib/projects/dismissedStore';
+import { requireRole } from '@/lib/auth/authorize';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,6 +13,9 @@ export async function GET() {
 
 /** DELETE /api/projects/dismissed — un-dismiss a URL. Body: { url: string }. */
 export async function DELETE(request: NextRequest) {
+  const denied = await requireRole(request, 'member');
+  if (denied) return denied;
+
   let body: { url?: unknown };
   try {
     body = await request.json();
@@ -31,6 +35,9 @@ export async function DELETE(request: NextRequest) {
  * the Unassigned bucket.
  */
 export async function POST(request: NextRequest) {
+  const denied = await requireRole(request, 'member');
+  if (denied) return denied;
+
   let body: { url?: unknown };
   try {
     body = await request.json();

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listSchedules, upsertSchedule } from '@/lib/siteWatch/scheduleStore';
 import { kickSiteWatchTicker } from '@/lib/siteWatch/ticker';
+import { requireRole } from '@/lib/auth/authorize';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,6 +12,9 @@ export const dynamic = 'force-dynamic';
  * (unlike Stop, which removes them). On resume we check promptly.
  */
 export async function POST(request: NextRequest) {
+  const denied = await requireRole(request, 'member');
+  if (denied) return denied;
+
   let body: { id?: unknown; paused?: unknown };
   try {
     body = await request.json();

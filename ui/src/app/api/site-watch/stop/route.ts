@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { removeSchedule } from '@/lib/siteWatch/scheduleStore';
+import { requireRole } from '@/lib/auth/authorize';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /** POST /api/site-watch/stop — remove a monitor by id. History is preserved. */
 export async function POST(request: NextRequest) {
+  const denied = await requireRole(request, 'member');
+  if (denied) return denied;
+
   let body: { id?: unknown };
   try {
     body = await request.json();

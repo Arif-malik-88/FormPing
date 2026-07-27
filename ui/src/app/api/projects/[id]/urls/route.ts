@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { projectStore, urlKey } from '@/lib/projects/projectStore';
+import { requireRole } from '@/lib/auth/authorize';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,6 +13,10 @@ export const dynamic = 'force-dynamic';
  * race vs sending the whole array to PATCH).
  */
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+  // Adding a URL to a project is Member+ — viewers are read-only.
+  const denied = await requireRole(request, 'member');
+  if (denied) return denied;
+
   let body: { url?: unknown };
   try {
     body = await request.json();
