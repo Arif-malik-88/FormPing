@@ -5,6 +5,7 @@ import {
   removeActiveWatch,
   isProcessAlive,
 } from '@/lib/activeWatchesStore';
+import { requireRole } from '@/lib/auth/authorize';
 
 export const runtime = 'nodejs';
 
@@ -21,6 +22,9 @@ export const runtime = 'nodejs';
  * server start doesn't auto-resume the killed watch.
  */
 export async function POST(request: NextRequest) {
+  const denied = await requireRole(request, 'member');
+  if (denied) return denied;
+
   let body: { url?: unknown };
   try {
     body = await request.json();

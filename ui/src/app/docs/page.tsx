@@ -328,10 +328,20 @@ export default function DocsPage() {
               ]}
             />
             <P>
-              Enforcement is <strong>server-side</strong> on privileged routes — deleting a project,
-              for example, requires Admin+. The role is read fresh from the database on every request,
-              so a promotion or demotion takes effect immediately (it is never baked into your session).
+              Enforcement is <strong>server-side</strong> on <strong>every mutating route</strong>: a
+              Viewer is blocked from all writes (genuinely read-only), a Member can create/run/edit
+              monitors and projects but can&apos;t delete a project or manage users (Admin+), and only
+              the Owner manages admins or transfers ownership. The role is read fresh from the database
+              on every request, so a change takes effect immediately (it is never baked into your
+              session). The UI mirrors this — buttons hide for roles that can&apos;t use them, viewers
+              see a read-only banner, and a blocked action shows a clear message instead of failing
+              silently — but the server is the real gate.
             </P>
+            <Note>
+              <strong>Team tab.</strong> Admins and the Owner get a <Code>/team</Code> page to list
+              users, change roles (within the ownership rules), remove users, and — Owner only —
+              transfer ownership. Members and viewers don&apos;t see it.
+            </Note>
             <Note>
               <strong>You can&apos;t get locked out.</strong> There is always exactly one Owner: the
               Owner is never demoted, only <em>transferred</em> (an atomic swap — successor becomes

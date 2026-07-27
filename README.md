@@ -272,9 +272,21 @@ do*, stored in the `app_users` table (keyed by their Google email):
 
 Google proves *who you are* (the email); the role is FormPing's, assigned in the
 table. A new allow-listed login defaults to **Member**. Enforcement is
-**server-side** on privileged routes (e.g. deleting a project is Admin+); the
-role is read fresh from the DB per request, so a promotion/demotion takes effect
-immediately.
+**server-side** on **every mutating route** (`requireRole`): a Viewer is blocked
+from all writes (genuinely read-only), a Member can create/run/edit monitors and
+projects but **can't delete a project or manage users** (Admin+), and only the
+Owner manages admins or transfers ownership. The role is read fresh from the DB
+per request, so a promotion/demotion takes effect immediately.
+
+The UI mirrors this — action buttons hide for roles that can't use them, viewers
+see a read-only banner, and any blocked action surfaces a clear message rather
+than failing silently. But the **server is the real gate**; the UI is only
+convenience.
+
+**Team management.** Admins and the Owner get a **Team** tab (`/team`) to list
+users, change roles (respecting the ownership rules), remove users, and — Owner
+only — **transfer ownership**. The rules live in one place (`userStore`), enforced
+by both the API and the DB single-owner index.
 
 **Env:**
 ```

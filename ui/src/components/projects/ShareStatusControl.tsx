@@ -11,9 +11,13 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 export function ShareStatusControl({
   projectId,
   initialToken,
+  canManage = true,
 }: {
   projectId: string;
   initialToken?: string | null;
+  /** When false (viewers), the create/regenerate/turn-off controls are hidden;
+   *  an existing link stays visible + copyable. */
+  canManage?: boolean;
 }) {
   const [token, setToken] = useState<string | null>(initialToken ?? null);
   const [busy, setBusy] = useState(false);
@@ -58,15 +62,20 @@ export function ShareStatusControl({
   if (!token) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/50 px-4 py-3.5">
-        <p className="text-xs text-slate-500">No public link yet — create one to share this client&apos;s live health.</p>
-        <button
-          type="button"
-          onClick={generate}
-          disabled={busy}
-          className="shrink-0 rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-40"
-        >
-          {busy ? 'Creating…' : 'Create link'}
-        </button>
+        <p className="text-xs text-slate-500">
+          No public link yet
+          {canManage ? ' — create one to share this client’s live health.' : '.'}
+        </p>
+        {canManage && (
+          <button
+            type="button"
+            onClick={generate}
+            disabled={busy}
+            className="shrink-0 rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-40"
+          >
+            {busy ? 'Creating…' : 'Create link'}
+          </button>
+        )}
       </div>
     );
   }
@@ -77,10 +86,12 @@ export function ShareStatusControl({
         <p className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-300">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Live · anyone with the link can view
         </p>
-        <div className="flex items-center gap-3">
-          <button type="button" onClick={generate} disabled={busy} title="Generate a new link and invalidate the old one" className="text-[11px] text-slate-500 hover:text-slate-300 disabled:opacity-40">Regenerate</button>
-          <button type="button" onClick={() => setConfirmRevoke(true)} disabled={busy} className="text-[11px] text-slate-500 hover:text-rose-300 disabled:opacity-40">Turn off</button>
-        </div>
+        {canManage && (
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={generate} disabled={busy} title="Generate a new link and invalidate the old one" className="text-[11px] text-slate-500 hover:text-slate-300 disabled:opacity-40">Regenerate</button>
+            <button type="button" onClick={() => setConfirmRevoke(true)} disabled={busy} className="text-[11px] text-slate-500 hover:text-rose-300 disabled:opacity-40">Turn off</button>
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-2">
         <input

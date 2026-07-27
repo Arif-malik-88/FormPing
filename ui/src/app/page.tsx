@@ -5,6 +5,7 @@ import { UrlInputPanel } from '@/components/UrlInputPanel';
 import { ConfigPanel } from '@/components/ConfigPanel';
 import { ResultsPanel } from '@/components/ResultsPanel';
 import { ProjectAssignQueue } from '@/components/projects/ProjectAssignQueue';
+import { ReadOnlyBanner } from '@/components/ReadOnlyBanner';
 import { checkUrl } from '@/lib/urlCheck';
 import * as testerRun from '@/lib/testerRun';
 import { markCleared, unmarkCleared, wasCleared } from '@/lib/clearedInput';
@@ -137,6 +138,7 @@ export default function Home() {
             mode) submit to confirm it actually works.
           </p>
         </div>
+        <ReadOnlyBanner />
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
           {/* Left — input + config */}
           <div className="lg:col-span-2 space-y-4 lg:sticky lg:top-20">

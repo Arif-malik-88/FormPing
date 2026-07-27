@@ -3,6 +3,7 @@ import { listSchedules, upsertSchedule, findScheduleByUrl } from '@/lib/siteWatc
 import { kickSiteWatchTicker } from '@/lib/siteWatch/ticker';
 import { removeDismissed } from '@/lib/projects/dismissedStore';
 import { checkUptime, hostResolves } from '@/lib/siteWatch/checks';
+import { requireRole } from '@/lib/auth/authorize';
 import type { SiteSchedule } from '@/lib/siteWatch/types';
 
 export const runtime = 'nodejs';
@@ -31,6 +32,10 @@ export async function GET() {
  * Body: { url: string, intervalMinutes?: number }
  */
 export async function POST(request: NextRequest) {
+  // Creating a site monitor is Member+ — viewers are read-only.
+  const denied = await requireRole(request, 'member');
+  if (denied) return denied;
+
   let body: { url?: unknown; intervalMinutes?: unknown; force?: unknown };
   try {
     body = await request.json();

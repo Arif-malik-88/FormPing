@@ -5,11 +5,16 @@ import {
   saveActiveWatch,
   loadAliveActiveWatches,
 } from '@/lib/activeWatchesStore';
+import { requireRole } from '@/lib/auth/authorize';
 
 export const runtime = 'nodejs';
 export const maxDuration = 600; // up to 10 min for watch cycles
 
 export async function POST(request: NextRequest) {
+  // Starting a change-monitor run is Member+ — viewers are read-only.
+  const denied = await requireRole(request, 'member');
+  if (denied) return denied;
+
   const body = (await request.json()) as {
     url: string;
     monitorMode: 'snapshot' | 'compare' | 'watch';

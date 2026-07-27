@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { listSchedules, upsertSchedule, findScheduleByUrl } from '@/lib/formWatch/scheduleStore';
 import { kickFormWatchTicker } from '@/lib/formWatch/ticker';
 import { removeDismissed } from '@/lib/projects/dismissedStore';
+import { requireRole } from '@/lib/auth/authorize';
 import type { FormSchedule, FormWatchMode } from '@/lib/formWatch/types';
 
 export const runtime = 'nodejs';
@@ -59,6 +60,10 @@ export async function GET() {
  * Body: { url: string, intervalMs?: number, intervalDays?: number, mode?: FormWatchMode }
  */
 export async function POST(request: NextRequest) {
+  // Creating a form-watch schedule is Member+ — viewers are read-only.
+  const denied = await requireRole(request, 'member');
+  if (denied) return denied;
+
   let body: {
     url?: unknown;
     intervalMs?: unknown;

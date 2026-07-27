@@ -1,13 +1,9 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState, useTransition } from 'react';
-
-interface Profile {
-  user: string;
-  name: string | null;
-  picture: string | null;
-}
+import { useTransition } from 'react';
+import { useMe, canRole } from '@/lib/auth/useMe';
+import { ROLE_LABEL } from '@/lib/auth/roles';
 
 interface SubTab {
   href: string;
@@ -63,28 +59,26 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+// The Team (user management) tab — only shown to Admin+ (see below). Kept out of
+// NAV_GROUPS so it never appears for members/viewers.
+const TEAM_GROUP: NavGroup = {
+  label: 'Team',
+  href: '/team',
+  match: ['/team'],
+  subTabs: [],
+  hint: 'Roles & access',
+};
+
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const activeGroup = NAV_GROUPS.find((g) => g.match.includes(pathname));
   const [pending, startTransition] = useTransition();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const me = useMe();
 
-  // Load the signed-in user's profile (name + avatar) for the header chip.
-  useEffect(() => {
-    let active = true;
-    fetch('/api/auth/me')
-      .then((r) => r.json())
-      .then((d) => {
-        if (active && d && d.user) setProfile(d as Profile);
-      })
-      .catch(() => {
-        /* not signed in or auth disabled — show nothing */
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+  // Admin+ (or open-gate dev) also sees the Team tab.
+  const navGroups = canRole(me.role, 'admin') ? [...NAV_GROUPS, TEAM_GROUP] : NAV_GROUPS;
+  const activeGroup = navGroups.find((g) => g.match.includes(pathname));
+  const profile = me.email ? { user: me.email, name: me.name, picture: me.picture } : null;
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -126,7 +120,7 @@ export function Header() {
             On mobile it drops to its own full-width row below the brand/sign-out, with
             the pills sharing the width evenly. */}
         <nav className="order-last w-full sm:order-none sm:w-auto flex items-center gap-1 bg-slate-900/70 rounded-xl p-1 ring-1 ring-slate-800 shadow-inner shadow-black/20">
-          {NAV_GROUPS.map((group) => {
+          {navGroups.map((group) => {
             const active = group.match.includes(pathname);
             return (
               <Link
@@ -163,6 +157,14 @@ export function Header() {
               <span className="text-xs font-medium text-slate-200 max-w-[140px] truncate">
                 {profile.name || profile.user}
               </span>
+              {me.role && (
+                <span
+                  title={`Your access level: ${ROLE_LABEL[me.role]}`}
+                  className="text-[10px] font-semibold uppercase tracking-wide text-indigo-300 bg-indigo-500/15 ring-1 ring-indigo-500/25 rounded-full px-1.5 py-0.5"
+                >
+                  {ROLE_LABEL[me.role]}
+                </span>
+              )}
             </div>
           )}
           <button

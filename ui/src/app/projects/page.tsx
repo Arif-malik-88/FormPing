@@ -6,6 +6,8 @@ import { ProjectCard } from '@/components/projects/ProjectCard';
 import { ProjectForm } from '@/components/projects/ProjectForm';
 import { UnassignedRow } from '@/components/projects/UnassignedRow';
 import { overallStatus } from '@/components/projects/uiKit';
+import { useMe, canRole } from '@/lib/auth/useMe';
+import { ReadOnlyBanner } from '@/components/ReadOnlyBanner';
 
 interface Unassigned {
   urls: string[];
@@ -18,6 +20,8 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [showAdd, setShowAdd] = useState(false);
+  const me = useMe();
+  const canManage = canRole(me.role, 'member'); // viewers are read-only
 
   const load = useCallback(async (q: string) => {
     try {
@@ -72,15 +76,19 @@ export default function ProjectsPage() {
               <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
             </svg>
           </div>
-          <button
-            onClick={() => setShowAdd((s) => !s)}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-          >
-            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden><path d="M10 5a.75.75 0 01.75.75v3.5h3.5a.75.75 0 010 1.5h-3.5v3.5a.75.75 0 01-1.5 0v-3.5h-3.5a.75.75 0 010-1.5h3.5v-3.5A.75.75 0 0110 5z" /></svg>
-            Add client
-          </button>
+          {canManage && (
+            <button
+              onClick={() => setShowAdd((s) => !s)}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden><path d="M10 5a.75.75 0 01.75.75v3.5h3.5a.75.75 0 010 1.5h-3.5v3.5a.75.75 0 01-1.5 0v-3.5h-3.5a.75.75 0 010-1.5h3.5v-3.5A.75.75 0 0110 5z" /></svg>
+              Add client
+            </button>
+          )}
         </div>
       </div>
+
+      <ReadOnlyBanner />
 
       {/* Fleet summary */}
       {!loading && fleet.total > 0 && (
@@ -95,7 +103,7 @@ export default function ProjectsPage() {
       )}
 
       {/* Add form */}
-      {showAdd && (
+      {showAdd && canManage && (
         <div className="mb-5 rounded-xl border border-slate-800 bg-slate-900 p-5">
           <h3 className="mb-4 text-sm font-semibold text-slate-200">Add a client</h3>
           <ProjectForm onSaved={() => { setShowAdd(false); void load(query); }} onCancel={() => setShowAdd(false)} />
@@ -125,19 +133,21 @@ export default function ProjectsPage() {
       {!loading && projects.length === 0 && !(unassigned && unassigned.urls.length > 0) && (
         <div className="rounded-xl border border-dashed border-slate-800 px-4 py-16 text-center">
           <p className="text-sm text-slate-400">{query ? 'No projects match your search.' : 'No clients yet.'}</p>
-          <p className="mt-1 text-xs text-slate-600">{query ? 'Try a different name or URL.' : 'Click “Add client” to add your first one.'}</p>
+          <p className="mt-1 text-xs text-slate-600">{query ? 'Try a different name or URL.' : canManage ? 'Click “Add client” to add your first one.' : 'No clients have been added yet.'}</p>
         </div>
       )}
 
       {!loading && projects.length > 0 && (
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((p, i) => <ProjectCard key={p.id} project={p} index={i} />)}
-          <button
-            onClick={() => setShowAdd(true)}
-            className="flex min-h-[140px] items-center justify-center rounded-xl border border-dashed border-slate-800 text-slate-500 transition-colors hover:border-indigo-500 hover:text-indigo-300"
-          >
-            <span className="text-center"><span className="text-xl">+</span><span className="mt-1 block text-xs font-semibold">Add a client</span></span>
-          </button>
+          {canManage && (
+            <button
+              onClick={() => setShowAdd(true)}
+              className="flex min-h-[140px] items-center justify-center rounded-xl border border-dashed border-slate-800 text-slate-500 transition-colors hover:border-indigo-500 hover:text-indigo-300"
+            >
+              <span className="text-center"><span className="text-xl">+</span><span className="mt-1 block text-xs font-semibold">Add a client</span></span>
+            </button>
+          )}
         </div>
       )}
 

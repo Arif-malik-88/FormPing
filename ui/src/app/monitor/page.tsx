@@ -6,6 +6,7 @@ import { MonitorConfigPanel } from '@/components/monitor/MonitorConfigPanel';
 import { MonitorResultsPanel } from '@/components/monitor/MonitorResultsPanel';
 import { SnapshotsManager } from '@/components/monitor/SnapshotsManager';
 import { ProjectAssignQueue } from '@/components/projects/ProjectAssignQueue';
+import { ReadOnlyBanner } from '@/components/ReadOnlyBanner';
 import { checkUrl } from '@/lib/urlCheck';
 import * as monitorRun from '@/lib/monitorRun';
 import { markCleared, unmarkCleared, wasCleared } from '@/lib/clearedInput';
@@ -207,6 +208,8 @@ export default function MonitorPage() {
             Snapshot a site, compare it later, and see exactly what changed — content, SEO, forms, scripts, performance.
           </p>
         </div>
+
+        <ReadOnlyBanner />
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
           {/* Left — input + config */}

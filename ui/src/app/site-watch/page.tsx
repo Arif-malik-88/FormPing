@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { SiteCard } from '@/components/siteWatch/SiteCard';
 import { ProjectUrlPicker } from '@/components/projects/ProjectUrlPicker';
 import { AddToProjectModal } from '@/components/projects/AddToProjectModal';
+import { ReadOnlyBanner } from '@/components/ReadOnlyBanner';
 import type { SiteSchedule } from '@/lib/siteWatch/types';
 
 type Unit = 'min' | 'hour' | 'day';
@@ -137,6 +138,8 @@ export default function SiteWatchPage() {
             alert when a site goes down or comes back, and a warning weeks before a cert expires.
           </p>
         </div>
+
+        <ReadOnlyBanner />
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
           {/* Left — add a monitor */}
