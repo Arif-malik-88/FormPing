@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ScheduleCard } from '@/components/formWatch/ScheduleCard';
 import { ProjectUrlPicker } from '@/components/projects/ProjectUrlPicker';
 import { AddToProjectModal } from '@/components/projects/AddToProjectModal';
+import { ReadOnlyBanner } from '@/components/ReadOnlyBanner';
 import type { FormSchedule, FormWatchMode } from '@/lib/formWatch/types';
 
 const INTERVAL_PRESETS = [
@@ -137,6 +138,8 @@ export default function FormWatchPage() {
             changes, and sends a Slack alert (success and failure) with the URL.
           </p>
         </div>
+
+        <ReadOnlyBanner />
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
           {/* Left — add a schedule */}
