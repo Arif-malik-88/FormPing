@@ -13,6 +13,7 @@ import {
   resolveOrigin,
   OAUTH_STATE_COOKIE,
 } from '@/lib/googleOAuth';
+import { ensureUser } from '@/lib/auth/userStore';
 
 export const runtime = 'nodejs';
 // Must run per-request: reads OAuth code/state, cookies and request headers.
@@ -84,6 +85,15 @@ export async function GET(request: NextRequest) {
   // ── The core requirement: only allow-listed domains get in ──
   if (!isEmailDomainAllowed(email)) {
     return loginError(request, 'domain_not_allowed');
+  }
+
+  // Ensure the user has a role row (FR-24). New allow-listed logins default to
+  // Member; the OWNER_EMAIL break-glass / ADMIN_EMAILS seed apply here. Best-
+  // effort — a role-store hiccup must never block a legitimate login.
+  try {
+    await ensureUser(email, { name, picture });
+  } catch (err) {
+    console.warn(`[auth/callback] ensureUser failed (login continues): ${err}`);
   }
 
   // Success — mint the SAME signed session cookie the rest of the app trusts,

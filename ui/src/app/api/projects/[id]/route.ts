@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { projectStore } from '@/lib/projects/projectStore';
+import { requireRole } from '@/lib/auth/authorize';
 import { urlHealthFor } from '@/lib/projects/health';
 import {
   findScheduleByUrl as findFormByUrl,
@@ -95,7 +96,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
  * deleting a project row directly in the database will NOT run any of this.
  * Always delete through the app.
  */
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+  // Deleting a project is the irreversible cascade — Admin+ only (FR-24). Members
+  // and viewers (devs/QA) can add URLs and run tests, but not delete a client.
+  const denied = await requireRole(request, 'admin');
+  if (denied) return denied;
+
   const project = await projectStore.get(params.id);
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
 

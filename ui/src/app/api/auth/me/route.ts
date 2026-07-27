@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession, SESSION_COOKIE_NAME } from '@/lib/session';
+import { getRole } from '@/lib/auth/userStore';
 
 export const runtime = 'nodejs';
 // Reads the per-request session cookie — never cache.
@@ -20,9 +21,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ user: null });
   }
 
+  // Role is read fresh from the DB (not the token), so the UI reflects a
+  // promotion/demotion immediately (FR-24).
+  const role = await getRole(session.user);
+
   return NextResponse.json({
     user: session.user,
     name: session.name ?? null,
     picture: session.picture ?? null,
+    role,
   });
 }
