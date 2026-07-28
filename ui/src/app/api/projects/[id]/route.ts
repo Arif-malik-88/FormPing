@@ -14,6 +14,7 @@ import { removeRun } from '@/lib/onDemandRunStore';
 import { removeResult as removeFormResult } from '@/lib/formWatch/resultStore';
 import { removeResult as removeSiteResult } from '@/lib/siteWatch/resultStore';
 import { removeDaily } from '@/lib/siteWatch/dailyStore';
+import { removeDismissed } from '@/lib/projects/dismissedStore';
 import { removeReports } from '@/lib/reportStore';
 import { removeChangeEvents } from '@/lib/changeEventStore';
 import { removeAlertsForSite } from '@/lib/alerts/store';
@@ -74,6 +75,19 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   const updated = await projectStore.update(params.id, patch);
   if (!updated) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+
+  // URLs now in the project are being tracked — clear any stale "don't track"
+  // dismissal so the two states can't contradict. Best-effort per URL.
+  if (patch.urls?.length) {
+    await Promise.all(
+      patch.urls.map((u) =>
+        removeDismissed(u).catch((err) =>
+          console.warn(`[projects/${params.id}] removeDismissed failed for ${u} (edit still succeeded): ${err}`),
+        ),
+      ),
+    );
+  }
+
   return NextResponse.json({ project: updated });
 }
 

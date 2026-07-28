@@ -62,6 +62,38 @@ export function urlKey(url: string): string {
   );
 }
 
+/**
+ * A stricter identity for "is this the SAME page?" comparisons — for MATCHING
+ * ONLY, never as a stored key.
+ *
+ * `urlKey` (above) is the app's persisted key: it is written into `url_key`
+ * columns across five tables (results, runs, daily rollups, dismissals), so its
+ * FORMAT MUST NOT CHANGE or existing rows go orphaned. But for the "is this URL
+ * already in a project?" popup gate it is too lax — it keeps the scheme, the
+ * query string and the fragment, so `http` vs `https`, a `?utm=…` tag, or a
+ * `#section` made an already-tracked page look brand-new and re-prompted
+ * (FR-25). `matchKey` closes those gaps WITHOUT touching any stored key:
+ *
+ *   - scheme-agnostic (http == https)      - strips ?query and #fragment
+ *   - strips www, lowercases               - drops the trailing slash
+ *   - KEEPS the path (a page is its own identity — FR-25 model (B))
+ *
+ * Use it only where two URLs are compared in memory (membership, owner lookup),
+ * NOT for anything persisted.
+ */
+export function matchKey(url: string): string {
+  const raw = url.trim();
+  try {
+    const u = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+    const host = u.hostname.toLowerCase().replace(/^www\./, '');
+    const path = u.pathname.replace(/\/+$/, ''); // drop trailing slash(es)
+    return `${host}${path}`.toLowerCase(); // no scheme, no query, no fragment
+  } catch {
+    // Unparseable — fall back to the persisted key so we still compare *something*.
+    return urlKey(raw);
+  }
+}
+
 // ── Supabase implementation ──────────────────────────────────────────────────
 // Real row-level CRUD against the `projects` table. `updated_at` is maintained
 // by a DB trigger.

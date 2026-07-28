@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { projectStore, urlKey } from '@/lib/projects/projectStore';
+import { projectStore, matchKey } from '@/lib/projects/projectStore';
 import { isDismissed } from '@/lib/projects/dismissedStore';
 
 export const runtime = 'nodejs';
@@ -14,11 +14,14 @@ export async function GET(request: NextRequest) {
   const url = (request.nextUrl.searchParams.get('url') ?? '').trim();
   if (!url) return NextResponse.json({ error: 'url required' }, { status: 400 });
 
+  // `isDismissed` MUST keep using the persisted `urlKey` (it reads the stored
+  // `dismissed_urls.url_key`), so leave that path untouched. The in-project match,
+  // by contrast, is a pure in-memory comparison of project URLs vs the target —
+  // so use the stricter `matchKey` here to close the http/https, query-string and
+  // fragment gaps that made an already-tracked page re-prompt (FR-25).
   const [projects, dismissed] = await Promise.all([projectStore.list(), isDismissed(url)]);
-  // Match on the canonical key (case-insensitive) — comparing on normalizeUrl
-  // alone made this disagree with Projects and re-prompt for URLs already in one.
-  const target = urlKey(url);
-  const inProject = projects.some((p) => p.urls.some((u) => urlKey(u) === target));
+  const target = matchKey(url);
+  const inProject = projects.some((p) => p.urls.some((u) => matchKey(u) === target));
 
   return NextResponse.json({ inProject, dismissed });
 }
