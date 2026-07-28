@@ -8,9 +8,18 @@ import type { ProjectWithRollup } from '@/lib/projects/types';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/** Reject obviously-bad URLs. (We don't probe here — projects just group URLs.) */
+/**
+ * Reject malformed URLs. (We don't probe reachability here — that's a soft,
+ * client-side warning; the server just guarantees a well-formed http(s) URL with
+ * a real domain, so garbage like "https://" or "https://foo" can't be stored.)
+ */
 function badUrl(u: string): boolean {
-  return !/^https?:\/\//i.test(u);
+  try {
+    const url = new URL(u);
+    return !/^https?:$/.test(url.protocol) || !url.hostname.includes('.');
+  } catch {
+    return true;
+  }
 }
 
 /**

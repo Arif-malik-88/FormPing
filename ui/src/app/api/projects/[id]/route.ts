@@ -25,8 +25,14 @@ import { removeSnapshotsForHost } from '@/lib/snapshotFiles';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+/** Reject malformed URLs — well-formed http(s) with a real domain, or it's bad. */
 function badUrl(u: string): boolean {
-  return !/^https?:\/\//i.test(u);
+  try {
+    const url = new URL(u);
+    return !/^https?:$/.test(url.protocol) || !url.hostname.includes('.');
+  } catch {
+    return true;
+  }
 }
 
 /** GET /api/projects/[id] — the project plus per-URL health (form + uptime/SSL). */
