@@ -67,6 +67,23 @@ export function supabaseAdmin(): AdminClient {
   cached = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
     db: { schema: supabaseSchema() },
+    global: {
+      // Force every Supabase request to bypass Next.js's Data Cache.
+      //
+      // In a Next.js PRODUCTION build, `fetch()` GETs are cached in the Data
+      // Cache by default. supabase-js issues its REST reads through `fetch`, so
+      // a query like `projects.select()` could be served from a STALE cached
+      // snapshot — a row added after the cache was populated stays invisible
+      // until revalidation. That surfaced as: the "add to project?" popup
+      // re-appearing on prod for a URL that WAS in a project, because the
+      // membership check read a stale project list (old rows resolved, new ones
+      // didn't). Local dev doesn't use this cache, so it only showed live.
+      //
+      // FormPing is a live monitoring tool — reads must reflect the latest
+      // writes — so `no-store` is the correct default for every query. Writes
+      // (POST/PATCH/DELETE) are never cached anyway, so this only affects reads.
+      fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
+    },
   });
   return cached;
 }
