@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { projectStore, urlKey } from '@/lib/projects/projectStore';
+import { removeDismissed } from '@/lib/projects/dismissedStore';
 import { requireRole } from '@/lib/auth/authorize';
 
 export const runtime = 'nodejs';
@@ -41,6 +42,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const updated = exists
     ? project
     : await projectStore.update(params.id, { urls: [...project.urls, url] });
+
+  // Adding a URL to a project is the opposite of "don't track" — so clear any
+  // lingering dismissal for it. Without this a URL could be both in a project
+  // AND dismissed (contradictory), and would vanish from Unassigned if later
+  // removed from the project. Best-effort: a hiccup here must not fail the add.
+  try {
+    await removeDismissed(url);
+  } catch (err) {
+    console.warn(`[projects/urls] removeDismissed failed (add still succeeded): ${err}`);
+  }
 
   return NextResponse.json({ project: updated });
 }

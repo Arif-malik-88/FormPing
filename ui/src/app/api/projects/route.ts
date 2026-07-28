@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { projectStore } from '@/lib/projects/projectStore';
 import { rollupsForUrlSets, listUnassignedUrls } from '@/lib/projects/health';
+import { removeDismissed } from '@/lib/projects/dismissedStore';
 import { requireRole } from '@/lib/auth/authorize';
 import type { ProjectWithRollup } from '@/lib/projects/types';
 
@@ -74,5 +75,16 @@ export async function POST(request: NextRequest) {
   const notes = typeof body.notes === 'string' ? body.notes : undefined;
   const contact = typeof body.contact === 'string' ? body.contact : undefined;
   const project = await projectStore.create({ name, urls, notes, contact });
+
+  // Any URL grouped under a client is being tracked — clear a stale "don't track"
+  // dismissal so the two states can't contradict. Best-effort per URL.
+  await Promise.all(
+    urls.map((u) =>
+      removeDismissed(u).catch((err) =>
+        console.warn(`[projects] removeDismissed failed for ${u} (create still succeeded): ${err}`),
+      ),
+    ),
+  );
+
   return NextResponse.json({ project }, { status: 201 });
 }
