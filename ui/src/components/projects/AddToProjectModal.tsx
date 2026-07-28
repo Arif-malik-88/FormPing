@@ -109,8 +109,8 @@ export function AddToProjectModal({ url, onClose }: { url: string; onClose: () =
               Decide later
             </span>
             <span className="mt-1 block text-[11px] leading-snug text-slate-400">
-              Keeps it in <strong className="text-slate-300">Unassigned</strong> — assign or dismiss it
-              from Projects anytime. We may ask again next time you test it.
+              Keeps it in Projects → <strong className="text-slate-300">Unassigned</strong>. Assign or
+              dismiss it anytime.
             </span>
           </button>
           <button
@@ -126,8 +126,8 @@ export function AddToProjectModal({ url, onClose }: { url: string; onClose: () =
               Don&apos;t track this URL
             </span>
             <span className="mt-1 block text-[11px] leading-snug text-slate-400">
-              Hides it from Projects and <strong className="text-slate-300">won&apos;t ask again</strong>.
-              Testing it later brings it back.
+              Hides it from Projects and <strong className="text-slate-300">stops asking</strong>. Existing
+              results stay saved; testing it again brings it back.
             </span>
           </button>
         </div>
