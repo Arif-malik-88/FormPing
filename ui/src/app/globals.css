@@ -64,6 +64,37 @@ body {
   }
 }
 
+/* Toast entrance — rise + fade from the bottom (FR-26 "where did it go?" notices). */
+@keyframes fp-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.fp-toast-in {
+  animation: fp-toast-in 200ms ease-out;
+}
+
+/* Profile dropdown entrance — scale + fade from the top-right (FR-26). */
+@keyframes fp-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.fp-menu-in {
+  transform-origin: top right;
+  animation: fp-menu-in 140ms ease-out;
+}
+
 /* Content entrance — a subtle rise+fade, reused across tabs (cards, sections).
    Stagger with an inline animation-delay. */
 @keyframes fp-rise {
