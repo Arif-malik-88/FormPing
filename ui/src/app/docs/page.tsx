@@ -7,7 +7,7 @@ const SECTIONS = [
   { id: 'projects', label: 'Projects' },
   { id: 'status-page', label: 'Status page (public)' },
   { id: 'access', label: 'Access & roles' },
-  { id: 'overview', label: 'Change tracking — overview' },
+  { id: 'overview', label: 'Content Changes — overview' },
   { id: 'storage', label: 'Storage layout' },
   { id: 'snapshot-data', label: 'What gets saved' },
   { id: 'comparison', label: 'How comparison works' },
@@ -16,9 +16,9 @@ const SECTIONS = [
   { id: 'scaling', label: 'What scales' },
   { id: 'tradeoffs', label: 'Trade-offs' },
   { id: 'math', label: 'Scaling math' },
-  { id: 'form-tester', label: 'Forms · Test a form' },
-  { id: 'form-watch', label: 'Forms · Scheduled monitors' },
-  { id: 'site-watch', label: 'Site · Uptime & SSL' },
+  { id: 'form-tester', label: 'Contact Forms · Form Tester' },
+  { id: 'form-watch', label: 'Contact Forms · Form Scheduler' },
+  { id: 'site-watch', label: 'Site Health · Uptime & SSL' },
 ];
 
 // ─── Styled primitives ─────────────────────────────────────────────────────
@@ -165,23 +165,23 @@ export default function DocsPage() {
             <H2 id="layout">How FormPing is organized</H2>
             <P>
               FormPing is organized around <strong>Projects</strong> (a client + their URLs), plus
-              two tool areas — <strong>Forms</strong> (is the client&apos;s contact form working?)
-              and <strong>Site</strong> (is the client&apos;s website up and unchanged?) — and these
+              two tool areas — <strong>Contact Forms</strong> (is the client&apos;s contact form working?)
+              and <strong>Site Health</strong> (is the client&apos;s website up and unchanged?) — and these
               Docs:
             </P>
             <Table
               headers={['Area', 'View', 'What it does']}
               rows={[
                 ['Projects', 'Per client', 'Group a client + their URLs; see form, uptime and SSL health together.'],
-                ['Forms', 'Test a form', 'Run an on-demand form test now (find → fill → optionally submit).'],
-                ['Forms', 'Scheduled monitors', 'Re-test a form on a schedule; Slack alerts on change or break.'],
-                ['Site', 'Uptime & SSL', 'Monitor availability + TLS-certificate expiry on a schedule; Slack alerts.'],
-                ['Site', 'Change tracking', 'Snapshot pages and report content/SEO/form/script changes over time.'],
+                ['Contact Forms', 'Form Tester', 'Run an on-demand form test now (find → fill → optionally submit).'],
+                ['Contact Forms', 'Form Scheduler', 'Re-test a form on a schedule; Slack alerts on change or break.'],
+                ['Site Health', 'Uptime & SSL', 'Monitor availability + TLS-certificate expiry on a schedule; Slack alerts.'],
+                ['Site Health', 'Content Changes', 'Snapshot pages and report content/SEO/form/script changes over time.'],
               ]}
             />
             <Note>
-              Before any browser-based run (<strong>Test a form</strong>,{' '}
-              <strong>Change tracking</strong>) or adding a scheduled monitor, FormPing validates the
+              Before any browser-based run (<strong>Form Tester</strong>,{' '}
+              <strong>Content Changes</strong>) or adding a scheduled monitor, FormPing validates the
               URL and does a quick reachability check first — so a typo or a dead host fails fast
               instead of spinning up a browser for nothing.
             </Note>
@@ -196,18 +196,18 @@ export default function DocsPage() {
               URL.
             </P>
             <P>
-              You still add the actual monitors in the <strong>Forms</strong> and{' '}
-              <strong>Site</strong> tabs — Projects groups and surfaces them. Open a project, expand
+              You still add the actual monitors in the <strong>Contact Forms</strong> and{' '}
+              <strong>Site Health</strong> tabs — Projects groups and surfaces them. Open a project, expand
               a URL, and everything that URL has been through is shown together, each tagged by its
               source:
             </P>
             <Table
               headers={['Source', 'What it shows', 'Comes from']}
               rows={[
-                [<Code key="0">Form Watch</Code>, 'Scheduled contact-form health — mode, verdict, cadence, last run.', 'Forms → Scheduled monitors'],
-                [<Code key="0">Site Watch</Code>, 'Uptime + SSL — status, response time, days to expiry, cadence.', 'Site → Uptime & SSL'],
-                [<Code key="0">Change Monitor</Code>, 'Latest content-change report — changes found, when checked.', 'Site → Change tracking'],
-                [<Code key="0">Form Tester</Code>, 'Your last manual run — same mode-aware verdict as Form Watch.', 'Forms → Test a form'],
+                [<Code key="0">Form Watch</Code>, 'Scheduled contact-form health — mode, verdict, cadence, last run.', 'Contact Forms → Form Scheduler'],
+                [<Code key="0">Site Watch</Code>, 'Uptime + SSL — status, response time, days to expiry, cadence.', 'Site Health → Uptime & SSL'],
+                [<Code key="0">Change Monitor</Code>, 'Latest content-change report — changes found, when checked.', 'Site Health → Content Changes'],
+                [<Code key="0">Form Tester</Code>, 'Your last manual run — same mode-aware verdict as Form Watch.', 'Contact Forms → Form Tester'],
               ]}
             />
             <P>
@@ -357,8 +357,8 @@ export default function DocsPage() {
               GitHub/Railway/Supabase access.
             </Note>
 
-            {/* ── Change tracking — overview ────────────────────── */}
-            <H2 id="overview">Change tracking — overview</H2>
+            {/* ── Content Changes — overview ────────────────────── */}
+            <H2 id="overview">Content Changes — overview</H2>
             <P>
               The monitor takes a <em>snapshot</em> of a site (homepage + a few important pages),
               saves it to disk, and later compares the current state of the site against the most
@@ -395,7 +395,7 @@ export default function DocsPage() {
               <Code>dev</Code> locally). The change-monitor <em>snapshots</em> below remain file-based.
             </Note>
             <Note>
-              <strong>Change tracking shows up in Projects.</strong> Every Change Monitor run —{' '}
+              <strong>Content Changes shows up in Projects.</strong> Every Change Monitor run —{' '}
               <Code>snapshot</Code>, <Code>compare</Code> and <Code>watch</Code> — is recorded as an
               event, so a URL you have baselined reads{' '}
               <em className="text-slate-400">&ldquo;Baseline captured · awaiting first compare&rdquo;</em>{' '}
@@ -410,7 +410,7 @@ export default function DocsPage() {
             <Note>
               <strong>Seeing what actually changed.</strong> A timeline row that found changes is
               expandable — click <em className="text-slate-400">&ldquo;what changed?&rdquo;</em> and it loads
-              that run&apos;s page-by-page breakdown (the same view the Change tracking tab shows), so you
+              that run&apos;s page-by-page breakdown (the same view the Content Changes tab shows), so you
               never have to leave the project to answer &ldquo;84 changes — of what?&rdquo;. The heavy
               per-page detail is kept for the most recent runs only; older rows stay in the timeline and
               say the detail is no longer retained. The raw whole-site <em>snapshots</em> remain files on
@@ -752,7 +752,7 @@ export default function DocsPage() {
             </Note>
 
             {/* ── Form Tester ─────────────────────────────────── */}
-            <H2 id="form-tester">Forms → Test a form</H2>
+            <H2 id="form-tester">Contact Forms → Form Tester</H2>
             <P>
               The original feature: discovers a site&apos;s contact page, finds the main contact
               form, fills it with test data, optionally submits, and verifies the thank-you state.
@@ -803,12 +803,12 @@ export default function DocsPage() {
               Results (and the URL) <strong>stay on screen</strong> when you switch tabs or refresh —
               they&apos;re remembered in your browser. A <strong>Clear</strong> button wipes the view
               and the URL box, but <strong>not</strong> the saved result the Projects tab uses. The
-              same Clear button is on <strong>Site → Change tracking</strong>. (&ldquo;Clear = wipe
+              same Clear button is on <strong>Site Health → Content Changes</strong>. (&ldquo;Clear = wipe
               the view, keep the data.&rdquo;)
             </Note>
 
             {/* ── Form Watch ──────────────────────────────────── */}
-            <H2 id="form-watch">Forms → Scheduled monitors</H2>
+            <H2 id="form-watch">Contact Forms → Form Scheduler</H2>
             <P>
               Form Watch automatically re-tests a contact form on a fixed schedule and alerts you
               when it changes or breaks — so you catch a silently-broken client form within one
