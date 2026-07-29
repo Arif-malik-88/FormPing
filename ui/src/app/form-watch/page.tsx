@@ -5,6 +5,8 @@ import { ScheduleCard } from '@/components/formWatch/ScheduleCard';
 import { ProjectUrlPicker } from '@/components/projects/ProjectUrlPicker';
 import { AddToProjectModal } from '@/components/projects/AddToProjectModal';
 import { ReadOnlyBanner } from '@/components/ReadOnlyBanner';
+import { Toaster } from '@/components/Toaster';
+import { showToast } from '@/lib/toast';
 import type { FormSchedule, FormWatchMode } from '@/lib/formWatch/types';
 
 const INTERVAL_PRESETS = [
@@ -112,6 +114,7 @@ export default function FormWatchPage() {
         body: JSON.stringify({ id }),
       });
       await load();
+      showToast('Monitor stopped — its last results stay in Projects.');
     },
     [load],
   );
@@ -132,7 +135,7 @@ export default function FormWatchPage() {
     <div className="min-h-screen bg-slate-950">
       <main className="max-w-7xl mx-auto px-4 pb-16 pt-8">
         <div className="mb-6">
-          <h2 className="text-xl font-bold text-slate-100">Scheduled monitors</h2>
+          <h2 className="text-xl font-bold text-slate-100">Form Scheduler</h2>
           <p className="text-sm text-slate-400 mt-1">
             Automatically test contact forms on a schedule. Each run checks form health, detects
             changes, and sends a Slack alert (success and failure) with the URL.
@@ -265,6 +268,7 @@ export default function FormWatchPage() {
 
           {/* Right — schedule list */}
           <div className="lg:col-span-3 space-y-3">
+            <Toaster />
             {loading && (
               <div className="space-y-3">
                 {[0, 1].map((i) => (

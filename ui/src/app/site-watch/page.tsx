@@ -5,6 +5,8 @@ import { SiteCard } from '@/components/siteWatch/SiteCard';
 import { ProjectUrlPicker } from '@/components/projects/ProjectUrlPicker';
 import { AddToProjectModal } from '@/components/projects/AddToProjectModal';
 import { ReadOnlyBanner } from '@/components/ReadOnlyBanner';
+import { Toaster } from '@/components/Toaster';
+import { showToast } from '@/lib/toast';
 import type { SiteSchedule } from '@/lib/siteWatch/types';
 
 type Unit = 'min' | 'hour' | 'day';
@@ -112,6 +114,7 @@ export default function SiteWatchPage() {
         body: JSON.stringify({ id }),
       });
       await load();
+      showToast('Monitor stopped — its last results stay in Projects.');
     },
     [load],
   );
@@ -263,6 +266,7 @@ export default function SiteWatchPage() {
 
           {/* Right — monitor list */}
           <div className="lg:col-span-3 space-y-3">
+            <Toaster />
             {loading && (
               <div className="space-y-3">
                 {[0, 1].map((i) => (

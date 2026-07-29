@@ -7,9 +7,11 @@ import { MonitorResultsPanel } from '@/components/monitor/MonitorResultsPanel';
 import { SnapshotsManager } from '@/components/monitor/SnapshotsManager';
 import { ProjectAssignQueue } from '@/components/projects/ProjectAssignQueue';
 import { ReadOnlyBanner } from '@/components/ReadOnlyBanner';
+import { Toaster } from '@/components/Toaster';
 import { checkUrl } from '@/lib/urlCheck';
 import * as monitorRun from '@/lib/monitorRun';
 import { markCleared, unmarkCleared, wasCleared } from '@/lib/clearedInput';
+import { showToast } from '@/lib/toast';
 import type { MonitorConfig, ChangeReport } from '@/types';
 
 const DEFAULT_CONFIG: MonitorConfig = {
@@ -169,6 +171,7 @@ export default function MonitorPage() {
     monitorRun.clearView();
     markCleared('monitor'); // keep it empty until the user types again
     try { window.localStorage.removeItem(STORAGE_KEY_URL); } catch { /* ignore */ }
+    showToast('Cleared from view — change history is still tracked in Projects.');
   }, []);
 
   const handleRun = useCallback(async () => {
@@ -203,7 +206,7 @@ export default function MonitorPage() {
     <div className="min-h-screen bg-slate-950">
       <main className="max-w-7xl mx-auto px-4 pb-16 pt-8">
         <div className="mb-6">
-          <h2 className="text-xl font-bold text-slate-100">Change tracking</h2>
+          <h2 className="text-xl font-bold text-slate-100">Content Changes</h2>
           <p className="text-sm text-slate-400 mt-1">
             Snapshot a site, compare it later, and see exactly what changed — content, SEO, forms, scripts, performance.
           </p>
@@ -238,6 +241,7 @@ export default function MonitorPage() {
 
           {/* Right — results */}
           <div className="lg:col-span-3">
+            <Toaster />
             <MonitorResultsPanel
               reports={reports}
               snapshot={snapshot}
