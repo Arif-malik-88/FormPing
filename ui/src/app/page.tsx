@@ -6,9 +6,11 @@ import { ConfigPanel } from '@/components/ConfigPanel';
 import { ResultsPanel } from '@/components/ResultsPanel';
 import { ProjectAssignQueue } from '@/components/projects/ProjectAssignQueue';
 import { ReadOnlyBanner } from '@/components/ReadOnlyBanner';
+import { Toaster } from '@/components/Toaster';
 import { checkUrl } from '@/lib/urlCheck';
 import * as testerRun from '@/lib/testerRun';
 import { markCleared, unmarkCleared, wasCleared } from '@/lib/clearedInput';
+import { showToast } from '@/lib/toast';
 import type { RunConfig } from '@/types';
 
 const DEFAULT_CONFIG: RunConfig = {
@@ -83,6 +85,7 @@ export default function Home() {
     try {
       window.localStorage.removeItem(STORAGE_KEY_URL);
     } catch { /* ignore */ }
+    showToast('Cleared from view — your test results are still saved in Projects.');
   }, []);
 
   const handleRun = useCallback(async () => {
@@ -132,7 +135,7 @@ export default function Home() {
     <div className="min-h-screen bg-slate-950">
       <main className="max-w-7xl mx-auto px-4 pb-16 pt-8">
         <div className="mb-6">
-          <h2 className="text-xl font-bold text-slate-100">Test a form</h2>
+          <h2 className="text-xl font-bold text-slate-100">Form Tester</h2>
           <p className="text-sm text-slate-400 mt-1">
             Run an on-demand check on one or more contact forms — find the form, fill it, and (in live
             mode) submit to confirm it actually works.
@@ -170,6 +173,7 @@ export default function Home() {
 
           {/* Right — results */}
           <div className="lg:col-span-3">
+            <Toaster />
             <ResultsPanel
               results={results}
               progress={progress}

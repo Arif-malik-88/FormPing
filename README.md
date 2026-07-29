@@ -12,8 +12,8 @@ The web UI is organized around **Projects** (a client + their URLs), plus two to
 |------|-------|
 | **Projects** | Group a client's URLs into a project; see their form, uptime & SSL health in one place (a thin overlay over the monitors). URLs you've tested or monitored but not grouped appear in an **Unassigned** bucket to **assign** or **dismiss**. |
 | **Status page** | Per-client health page built from the same data. **Internal** ops view (`/projects/<id>/status`, auth-gated, with technical detail) + an opt-in **public** shareable link (`/status/<token>`, no login, client-safe only). Uptime history, 24h/7d/30d, response-time trend, SSL & form status. |
-| **Forms** | *Test a form* (on-demand — results persist across tabs/refresh, with a **Clear** button) · *Scheduled monitors* (recurring form tests + Slack alerts) |
-| **Site** | *Uptime & SSL* (availability + cert-expiry monitoring + Slack) · *Change tracking* (content / SEO / form / script changes over time) |
+| **Contact Forms** | *Form Tester* (on-demand — results persist across tabs/refresh, with a **Clear** button) · *Form Scheduler* (recurring form tests + Slack alerts) |
+| **Site Health** | *Uptime & SSL* (availability + cert-expiry monitoring + Slack) · *Content Changes* (content / SEO / form / script changes over time) |
 
 ### Form testing (original)
 
@@ -195,7 +195,7 @@ The schema lives in `supabase/migrations/` — see that folder's `README.md` for
 the dual-apply process (each migration is schema-agnostic and runs against BOTH
 `public` and `dev`). Tables are named after the app's tools:
 
-- **Phase 1 (core)** — `projects`, `form_tester_runs` (Test a form),
+- **Phase 1 (core)** — `projects`, `form_tester_runs` (Form Tester),
   `form_watch_schedules` (Form Watch), `site_watch_schedules` (Site Watch),
   `dismissed_urls` (Projects "Don't track").
 - **Phase 2 (history + reports)** — `form_watch_runs` (Form Watch run history),

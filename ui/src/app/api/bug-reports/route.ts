@@ -1,0 +1,103 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase';
+import { currentUser } from '@/lib/auth/authorize';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+interface Report {
+  name: string | null;
+  email: string | null;
+  message: string;
+  page: string | null;
+  reporter: string | null;
+}
+
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** Best-effort Slack ping so a report is seen immediately. Never throws. */
+async function pingSlack(r: Report): Promise<void> {
+  // Bug reports go to their OWN channel if BUG_REPORT_SLACK_WEBHOOK_URL is set;
+  // otherwise they fall back to the main alerts webhook so nothing is lost.
+  const webhook = process.env.BUG_REPORT_SLACK_WEBHOOK_URL || process.env.SLACK_WEBHOOK_URL;
+  if (!webhook) return;
+
+  // Structured message: a red bar (no emoji) + Name / Email / Message laid out so
+  // it's clear WHO reported it and WHAT they need. Slack caps a section at 3000
+  // chars, so the message is trimmed well under.
+  const message = esc(r.message).slice(0, 2800);
+  const payload = {
+    attachments: [
+      {
+        color: '#dc2626', // red bar
+        blocks: [
+          { type: 'header', text: { type: 'plain_text', text: 'New bug report', emoji: false } },
+          {
+            type: 'section',
+            fields: [
+              { type: 'mrkdwn', text: `*Name*\n${r.name ? esc(r.name) : '—'}` },
+              { type: 'mrkdwn', text: `*Email*\n${r.email ? esc(r.email) : '—'}` },
+            ],
+          },
+          { type: 'section', text: { type: 'mrkdwn', text: `*Message*\n${message}` } },
+          {
+            type: 'context',
+            elements: [
+              { type: 'mrkdwn', text: `Page: ${r.page ? esc(r.page) : 'n/a'}${r.reporter ? `  ·  signed in as ${esc(r.reporter)}` : ''}` },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  try {
+    await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    /* best-effort — the row is still stored */
+  }
+}
+
+/**
+ * POST /api/bug-reports — the footer "Report a bug" form.
+ * Body: { name?, email?, message, page? }. Stores a row (durable) AND pings
+ * Slack (immediate). Any signed-in user may report a bug (no role gate). The
+ * middleware already ensures the caller is authenticated.
+ */
+export async function POST(request: NextRequest) {
+  let body: { name?: unknown; email?: unknown; message?: unknown; page?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const message = typeof body.message === 'string' ? body.message.trim() : '';
+  if (!message) return NextResponse.json({ error: 'A description is required' }, { status: 400 });
+
+  const str = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+  const actor = await currentUser(request).catch(() => null);
+
+  const report: Report = {
+    name: str(body.name, 200),
+    email: str(body.email, 200),
+    message: message.slice(0, 5000),
+    page: str(body.page, 300),
+    reporter: actor?.email ?? null,
+  };
+
+  // Durable record (best-effort — a store hiccup must not lose the Slack ping).
+  try {
+    const { error } = await supabaseAdmin().from('bug_reports').insert(report);
+    if (error) console.warn(`[bug-reports] insert: ${error.message}`);
+  } catch (err) {
+    console.warn(`[bug-reports] insert failed: ${err}`);
+  }
+
+  await pingSlack(report);
+
+  return NextResponse.json({ ok: true });
+}
