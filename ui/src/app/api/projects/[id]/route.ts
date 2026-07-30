@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { projectStore } from '@/lib/projects/projectStore';
+import { projectStore, matchKey } from '@/lib/projects/projectStore';
+import { removeUrlShareByKey } from '@/lib/projects/urlShareStore';
 import { requireRole } from '@/lib/auth/authorize';
 import { urlHealthFor } from '@/lib/projects/health';
 import {
@@ -79,8 +80,38 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (typeof body.notes === 'string') patch.notes = body.notes;
   if (typeof body.contact === 'string') patch.contact = body.contact;
 
+  // Capture the URLs BEFORE the update so we can tell which ones are being
+  // removed (to revoke their per-URL share links — FR-27).
+  const before = patch.urls !== undefined ? await projectStore.get(params.id) : null;
+
+  // Removing the LAST URL leaves an empty, useless project — delete it instead
+  // (FR-27). The URLs keep their data (they drop to Unassigned); only their
+  // per-URL share links are revoked. Same end-state as deleting the last URL.
+  if (patch.urls !== undefined && patch.urls.length === 0) {
+    if (!before) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    await Promise.all(
+      before.urls.map((u) => removeUrlShareByKey(params.id, matchKey(u)).catch(() => {})),
+    );
+    await projectStore.remove(params.id);
+    return NextResponse.json({ projectDeleted: true });
+  }
+
   const updated = await projectStore.update(params.id, patch);
   if (!updated) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+
+  // A URL removed from the project must not keep a live public share link
+  // (FR-27). Revoke the per-URL token for every URL that left. Best-effort.
+  if (before && patch.urls) {
+    const kept = new Set(patch.urls.map(matchKey));
+    const removedKeys = before.urls.map(matchKey).filter((k) => !kept.has(k));
+    await Promise.all(
+      removedKeys.map((k) =>
+        removeUrlShareByKey(params.id, k).catch((err) =>
+          console.warn(`[projects/${params.id}] revoke url share for ${k} failed: ${err}`),
+        ),
+      ),
+    );
+  }
 
   // URLs now in the project are being tracked — clear any stale "don't track"
   // dismissal so the two states can't contradict. Best-effort per URL.

@@ -9,6 +9,7 @@
  */
 
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import type {
   FormHealthLevel,
   ProjectRollup,
@@ -218,7 +219,19 @@ function SourceTag({ label, dim = false }: { label: string; dim?: boolean }) {
  * Unchanged behaviour from the old ProjectRow.UrlDetailRow; relocated here so the
  * detail page and the Unassigned bucket share ONE implementation.
  */
-export function UrlHealthDetail({ h }: { h: UrlHealth }) {
+export function UrlHealthDetail({
+  h,
+  dashboardHref,
+  onRemove,
+  onDelete,
+}: {
+  h: UrlHealth;
+  dashboardHref?: string;
+  /** When provided (Member+), a NON-destructive "remove from project" (→ Unassigned, keeps data). */
+  onRemove?: () => void;
+  /** When provided (admins), a DESTRUCTIVE "delete this URL + all its data" button. */
+  onDelete?: () => void;
+}) {
   const formTone = h.form.level ? FORM_TONE[h.form.level] : 'slate';
   const upTone = h.site.upState ? UP_TONE[h.site.upState] : 'slate';
   const ssl = sslText(h.site.sslDaysRemaining);
@@ -243,16 +256,18 @@ export function UrlHealthDetail({ h }: { h: UrlHealth }) {
   const runTone: Tone = runV ? FORM_TONE[runV.level] : 'slate';
 
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-3.5 space-y-2">
-      <a
-        href={h.url}
-        target="_blank"
-        rel="noreferrer"
-        className="block truncate font-mono text-xs font-medium text-indigo-200 hover:text-indigo-300"
-        title={h.url}
-      >
-        {h.url}
-      </a>
+    <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-3.5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1 space-y-2">
+          <a
+            href={h.url}
+            target="_blank"
+            rel="noreferrer"
+            className="block max-w-full truncate font-mono text-xs font-medium text-indigo-200 hover:text-indigo-300"
+            title={h.url}
+          >
+            {h.url}
+          </a>
 
       {/* Form Watch */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
@@ -341,6 +356,45 @@ export function UrlHealthDetail({ h }: { h: UrlHealth }) {
           <span className="text-slate-600">· {rel(h.lastRun.ranAt)}</span>
         </div>
       )}
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          {(onRemove || onDelete) && (
+            <div className="flex items-center gap-2">
+              {onRemove && (
+                <button
+                  type="button"
+                  onClick={onRemove}
+                  title="Remove from project (keeps its data — moves to Unassigned)"
+                  className="inline-flex items-center rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] font-semibold text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200"
+                >
+                  Remove
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  title="Delete this URL and all its data (can't be undone)"
+                  aria-label="Delete this URL and all its data"
+                  className="inline-flex items-center rounded-md border border-slate-700 bg-slate-900 p-1.5 text-slate-500 transition-colors hover:border-rose-800/60 hover:text-rose-300"
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                </button>
+              )}
+            </div>
+          )}
+          {dashboardHref && (
+            <Link
+              href={dashboardHref}
+              className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] font-semibold text-slate-300 transition-colors hover:border-indigo-600/60 hover:text-indigo-200"
+              title="Open this URL's dashboard"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3" aria-hidden><path d="M3 3a1 1 0 011 1v11h13a1 1 0 110 2H4a2 2 0 01-2-2V4a1 1 0 011-1z" /><path d="M7 11l3-3 2 1.5 3.5-4 1.5 1.2-4.4 5-2-1.5L8.4 12 7 11z" /></svg>
+              Dashboard
+            </Link>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

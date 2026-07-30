@@ -33,7 +33,7 @@ export function ProjectForm({
   onCancel,
 }: {
   project?: Project | null;
-  onSaved: () => void;
+  onSaved: (result?: { projectDeleted?: boolean }) => void;
   onCancel: () => void;
 }) {
   const editing = Boolean(project);
@@ -81,7 +81,8 @@ export function ProjectForm({
         setError(data?.error || (editing ? 'Could not save changes' : 'Could not create project'));
         return;
       }
-      onSaved();
+      // Editing a project down to zero URLs deletes it (FR-27) — signal the parent.
+      onSaved(data?.projectDeleted ? { projectDeleted: true } : undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Request failed');
     } finally {
@@ -289,9 +290,16 @@ export function ProjectForm({
               ))}
             </ul>
             <p className="mt-2">
-              Nothing is deleted — their monitors keep running and results are kept. The URLs move to{' '}
-              <strong className="text-slate-300">Unassigned</strong>, where you can reassign or dismiss them.
+              Nothing is deleted — their monitors keep running and results are kept. Any that have been
+              tested or monitored move to <strong className="text-slate-300">Unassigned</strong> (on the
+              Projects page) to reassign or dismiss; ones with no activity yet just drop off.
             </p>
+            {filledUrls.length === 0 && (
+              <p className="mt-2 rounded-md border border-amber-800/50 bg-amber-500/10 px-3 py-2 text-amber-200">
+                This removes <strong>every URL</strong> — the now-empty project will be deleted (its
+                URLs still keep their data).
+              </p>
+            )}
           </>
         }
         onConfirm={doSave}

@@ -299,6 +299,15 @@ export default function DocsPage() {
               The page auto-refreshes and carries no app navigation or sign-out — it&apos;s built to
               hand to a client. Only projects where you&apos;ve explicitly created a link are exposed.
             </Note>
+            <Note>
+              <strong>Per-URL dashboards &amp; sharing.</strong> Every URL row in a project has a{' '}
+              <strong>Dashboard</strong> link → an internal single-URL view at{' '}
+              <Code>/projects/&lt;id&gt;/url/&lt;key&gt;</Code>, with its own <strong>client share
+              link</strong> (<Code>/status/u/&lt;token&gt;</Code>) that shows just that one URL&apos;s
+              client-safe status. Per-URL links are generated/revoked independently of the whole-client
+              link, and are automatically revoked when the URL leaves the project or the project is
+              deleted (no orphan public links).
+            </Note>
 
             {/* ── Access & roles ────────────────────────────────── */}
             <H2 id="access">Access &amp; roles</H2>

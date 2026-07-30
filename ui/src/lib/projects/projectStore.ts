@@ -94,6 +94,18 @@ export function matchKey(url: string): string {
   }
 }
 
+/**
+ * Reduce a project to just the ONE URL matching `urlKey` (canonical matchKey),
+ * returning a project subset with `urls: [thatUrl]` — or null if the project has
+ * no such URL. Lets the per-URL status pages reuse `buildClientStatus` unchanged
+ * (it builds from `project.urls`), so a single-URL project yields a single-site
+ * status. (FR-27.)
+ */
+export function projectForUrlKey(project: Project, urlKey: string): Project | null {
+  const url = project.urls.find((u) => matchKey(u) === urlKey);
+  return url ? { ...project, urls: [url] } : null;
+}
+
 // ── Supabase implementation ──────────────────────────────────────────────────
 // Real row-level CRUD against the `projects` table. `updated_at` is maintained
 // by a DB trigger.
