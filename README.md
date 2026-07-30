@@ -12,6 +12,7 @@ The web UI is organized around **Projects** (a client + their URLs), plus two to
 |------|-------|
 | **Projects** | Group a client's URLs into a project; see their form, uptime & SSL health in one place (a thin overlay over the monitors). URLs you've tested or monitored but not grouped appear in an **Unassigned** bucket to **assign** or **dismiss**. |
 | **Status page** | Per-client health page built from the same data. **Internal** ops view (`/projects/<id>/status`, auth-gated, with technical detail) + an opt-in **public** shareable link (`/status/<token>`, no login, client-safe only). Uptime history, 24h/7d/30d, response-time trend, SSL & form status. |
+| **Per-URL dashboard** | Each URL row in a project has a **Dashboard** link → an internal single-URL view (`/projects/<id>/url/<key>`) with its own **client share link** (`/status/u/<token>`, client-safe, one URL only). Per-URL tokens generate/revoke independently and are auto-revoked when the URL leaves the project (or the project is deleted). |
 | **Contact Forms** | *Form Tester* (on-demand — results persist across tabs/refresh, with a **Clear** button) · *Form Scheduler* (recurring form tests + Slack alerts) |
 | **Site Health** | *Uptime & SSL* (availability + cert-expiry monitoring + Slack) · *Content Changes* (content / SEO / form / script changes over time) |
 

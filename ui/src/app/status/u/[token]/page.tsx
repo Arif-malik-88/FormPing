@@ -1,0 +1,57 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import type { ClientStatus } from '@/lib/status/types';
+import { StatusView, type WindowId } from '@/components/status/StatusView';
+
+/** PUBLIC per-URL status page (auth-exempt via middleware) — the single-URL
+ *  sibling of /status/[token]. Fetches by per-URL share token; renders the same
+ *  client-safe StatusView (one site). */
+export default function PublicUrlStatusPage() {
+  const params = useParams<{ token: string }>();
+  const token = params?.token;
+  const [data, setData] = useState<ClientStatus | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'notfound'>('loading');
+  const [win, setWin] = useState<WindowId>('30d');
+
+  const load = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/status/u/${token}?window=${win}`, { cache: 'no-store' });
+      if (!res.ok) {
+        setState('notfound');
+        return;
+      }
+      setData((await res.json()) as ClientStatus);
+      setState('ready');
+    } catch {
+      setState('notfound');
+    }
+  }, [token, win]);
+
+  useEffect(() => {
+    void load();
+    const t = setInterval(() => void load(), 60000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  return (
+    <main className="max-w-3xl mx-auto px-4 py-10 sm:py-14">
+      {state === 'loading' && (
+        <div className="space-y-4">
+          <div className="fp-skeleton h-8 w-56 rounded" />
+          <div className="fp-skeleton h-16 rounded-2xl" />
+          <div className="fp-skeleton h-52 rounded-2xl" />
+        </div>
+      )}
+      {state === 'notfound' && (
+        <div className="text-center py-20">
+          <h1 className="text-lg font-semibold text-slate-200">Status page not found</h1>
+          <p className="text-sm text-slate-500 mt-2">This status link is invalid or has been turned off.</p>
+        </div>
+      )}
+      {state === 'ready' && data && <StatusView data={data} window={win} onWindow={setWin} />}
+    </main>
+  );
+}

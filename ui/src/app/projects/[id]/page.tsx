@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { ProjectWithHealth } from '@/lib/projects/types';
 import { rollupFromHealth } from '@/lib/projects/rollup';
+import { matchKey } from '@/lib/projects/projectStore';
+import { encodeUrlKey } from '@/lib/projects/urlKeyRoute';
 import {
   overallStatus,
   Monogram,
@@ -39,7 +41,12 @@ export default function ProjectDetailPage() {
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
+  const [deleteUrlError, setDeleteUrlError] = useState<string | null>(null);
+  const [removeUrl, setRemoveUrl] = useState<string | null>(null);
+  const [removeUrlError, setRemoveUrlError] = useState<string | null>(null);
   const me = useMe();
+  const canManage = canRole(me.role, 'member');
   const canEdit = canRole(me.role, 'member');
   const canDelete = canRole(me.role, 'admin');
 
@@ -79,6 +86,58 @@ export default function ProjectDetailPage() {
       return; // keep the dialog open so the reason is visible
     }
     router.push('/projects');
+  }
+
+  // Destructive per-URL delete (Admin+): purge one URL + all its data, then
+  // reload. Distinct from Edit→remove (which is non-destructive).
+  async function doDeleteUrl() {
+    if (!deleteUrl || !project) return;
+    setDeleteUrlError(null);
+    const keyParam = encodeUrlKey(matchKey(deleteUrl));
+    let res: Response;
+    try {
+      res = await fetch(`/api/projects/${project.id}/url/${keyParam}`, { method: 'DELETE' });
+    } catch {
+      setDeleteUrlError('Network error — please try again.');
+      return;
+    }
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setDeleteUrlError(body.error ?? 'Could not delete this URL. Please try again.');
+      return;
+    }
+    setDeleteUrl(null);
+    // If that was the only URL, the project was removed too — go back to the grid.
+    if (body.projectDeleted) router.push('/projects');
+    else void load();
+  }
+
+  // Non-destructive per-URL remove (Member+): take the URL out of the project
+  // (its data is kept → Unassigned) via PATCH. If it was the last URL, the API
+  // deletes the now-empty project.
+  async function doRemoveUrl() {
+    if (!removeUrl || !project) return;
+    setRemoveUrlError(null);
+    const nextUrls = project.urls.filter((u) => u !== removeUrl);
+    let res: Response;
+    try {
+      res = await fetch(`/api/projects/${project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: nextUrls }),
+      });
+    } catch {
+      setRemoveUrlError('Network error — please try again.');
+      return;
+    }
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setRemoveUrlError(body.error ?? 'Could not remove this URL. Please try again.');
+      return;
+    }
+    setRemoveUrl(null);
+    if (body.projectDeleted) router.push('/projects');
+    else void load();
   }
 
   if (state === 'loading') {
@@ -173,7 +232,15 @@ export default function ProjectDetailPage() {
           </p>
         ) : (
           <div className="space-y-2.5">
-            {project.health.map((h) => <UrlHealthDetail key={h.url} h={h} />)}
+            {project.health.map((h) => (
+              <UrlHealthDetail
+                key={h.url}
+                h={h}
+                dashboardHref={`/projects/${project.id}/url/${encodeUrlKey(matchKey(h.url))}`}
+                onRemove={canManage ? () => { setRemoveUrlError(null); setRemoveUrl(h.url); } : undefined}
+                onDelete={canDelete ? () => { setDeleteUrlError(null); setDeleteUrl(h.url); } : undefined}
+              />
+            ))}
           </div>
         )}
       </section>
@@ -188,7 +255,7 @@ export default function ProjectDetailPage() {
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4" onMouseDown={() => setEditing(false)}>
           <div className="mt-10 w-full max-w-2xl rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
             <h3 className="mb-4 text-sm font-semibold text-slate-100">Edit project</h3>
-            <ProjectForm project={project} onSaved={() => { setEditing(false); void load(); }} onCancel={() => setEditing(false)} />
+            <ProjectForm project={project} onSaved={(r) => { setEditing(false); if (r?.projectDeleted) router.push('/projects'); else void load(); }} onCancel={() => setEditing(false)} />
           </div>
         </div>
       )}
@@ -223,6 +290,73 @@ export default function ProjectDetailPage() {
         }
         onConfirm={doDelete}
         onCancel={() => { setConfirmDelete(false); setDeleteError(null); }}
+      />
+
+      <ConfirmDialog
+        open={deleteUrl !== null}
+        variant="danger"
+        title="Delete this URL and all its data?"
+        confirmLabel="Delete URL"
+        message={
+          <>
+            <p className="break-all font-mono text-[11px] text-slate-300">{deleteUrl}</p>
+            <p className="mt-2">Permanently deletes everything for this one URL:</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-400">
+              <li><strong className="text-slate-300">Stops</strong> its Form Watch &amp; Site Watch and clears their history</li>
+              <li>Deletes its last results and uptime history</li>
+              <li>Deletes its change tracking — reports, timeline and snapshots (unless another URL shares the same site)</li>
+              <li>Turns off any client share link for this URL</li>
+            </ul>
+            {project && project.urls.length <= 1 && (
+              <span className="mt-2 block rounded-md border border-amber-800/50 bg-amber-500/10 px-3 py-2 text-amber-200">
+                This is the <strong>only URL</strong> in this project — deleting it will remove the
+                whole project too.
+              </span>
+            )}
+            <span className="mt-2 block">
+              This is <strong className="text-slate-300">not</strong> the same as removing it via Edit
+              (which just moves it to Unassigned and keeps the data).{' '}
+              <strong className="text-red-300">Can&apos;t be undone.</strong>
+            </span>
+            {deleteUrlError && (
+              <span className="mt-3 block rounded-md border border-rose-800/50 bg-rose-500/10 px-3 py-2 text-rose-300">
+                {deleteUrlError}
+              </span>
+            )}
+          </>
+        }
+        onConfirm={doDeleteUrl}
+        onCancel={() => { setDeleteUrl(null); setDeleteUrlError(null); }}
+      />
+
+      <ConfirmDialog
+        open={removeUrl !== null}
+        variant="edit"
+        title="Remove this URL from the project?"
+        confirmLabel="Remove URL"
+        message={
+          <>
+            <p className="break-all font-mono text-[11px] text-slate-300">{removeUrl}</p>
+            <p className="mt-2">
+              Takes it out of this project but <strong className="text-slate-300">keeps all its data</strong> —
+              its monitors keep running and it moves to <strong className="text-slate-300">Unassigned</strong>{' '}
+              (if it has any test/monitor activity), where you can reassign it later.
+            </p>
+            {project && project.urls.length <= 1 && (
+              <span className="mt-2 block rounded-md border border-amber-800/50 bg-amber-500/10 px-3 py-2 text-amber-200">
+                This is the <strong>only URL</strong> — removing it will delete the (now-empty) project.
+                Its data is still kept.
+              </span>
+            )}
+            {removeUrlError && (
+              <span className="mt-3 block rounded-md border border-rose-800/50 bg-rose-500/10 px-3 py-2 text-rose-300">
+                {removeUrlError}
+              </span>
+            )}
+          </>
+        }
+        onConfirm={doRemoveUrl}
+        onCancel={() => { setRemoveUrl(null); setRemoveUrlError(null); }}
       />
     </main>
   );
