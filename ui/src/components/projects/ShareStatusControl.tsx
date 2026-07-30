@@ -4,9 +4,10 @@ import { useState } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 /**
- * Manage a project's PUBLIC status-page share link (generate / copy / revoke).
- * Lives in the project's expanded detail. The link opens /status/<token> with
- * no login required — safe to hand to the client.
+ * Manage a project's GLOBAL public status-page share link (generate / copy /
+ * revoke) — one page covering ALL of the client's URLs. Lives in the project's
+ * detail. The link opens /status/<token> with no login required — safe to hand
+ * to the client. The per-URL equivalent is UrlShareControl (/status/u/<token>).
  */
 export function ShareStatusControl({
   projectId,
@@ -63,8 +64,8 @@ export function ShareStatusControl({
     return (
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/50 px-4 py-3.5">
         <p className="text-xs text-slate-500">
-          No public link yet
-          {canManage ? ' — create one to share this client’s live health.' : '.'}
+          No global link yet
+          {canManage ? ' — create one public page covering ALL this client’s URLs.' : '.'}
         </p>
         {canManage && (
           <button
@@ -84,7 +85,7 @@ export function ShareStatusControl({
     <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
       <div className="mb-2.5 flex items-center justify-between gap-2">
         <p className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-300">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Live · anyone with the link can view
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Live · all URLs · anyone with the link can view
         </p>
         {canManage && (
           <div className="flex items-center gap-3">

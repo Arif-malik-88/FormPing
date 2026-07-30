@@ -195,9 +195,9 @@ export default function ProjectDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href={`/projects/${project.id}/status`} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-indigo-500">
+          <Link href={`/projects/${project.id}/status`} title="Live health across ALL of this client's URLs. Each URL also has its own dashboard on its row below." className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-indigo-500">
             <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden><path d="M3 3a1 1 0 011 1v11h13a1 1 0 110 2H4a2 2 0 01-2-2V4a1 1 0 011-1z" /><path d="M7 11l3-3 2 1.5 3.5-4 1.5 1.2-4.4 5-2-1.5L8.4 12 7 11z" /></svg>
-            Open dashboard
+            Global dashboard
           </Link>
           {canEdit && (
             <button onClick={() => setEditing(true)} className="rounded-lg border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:text-slate-100">Edit</button>
@@ -245,9 +245,9 @@ export default function ProjectDetailPage() {
         )}
       </section>
 
-      {/* Client status page */}
+      {/* Global share link — one public page covering ALL the client's URLs */}
       <section id="share" className="mt-7 scroll-mt-6">
-        <SectionHeader title="Client status page" help="A live, non-technical page you can share with the client — no login needed." />
+        <SectionHeader title="Global share link" help="One live, non-technical page covering ALL of this client's URLs — no login needed. To share a single URL instead, use its own dashboard's share link." />
         <ShareStatusControl projectId={project.id} initialToken={project.shareToken} canManage={canEdit} />
       </section>
 
