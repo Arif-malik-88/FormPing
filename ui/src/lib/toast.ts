@@ -19,7 +19,7 @@ function emit() {
 }
 
 /** Show a toast that auto-dismisses after `ms`. Client-only. */
-export function showToast(message: string, ms = 4200): void {
+export function showToast(message: string, ms = 5200): void {
   const id = nextId++;
   toasts = [...toasts, { id, message }];
   emit();
@@ -27,6 +27,12 @@ export function showToast(message: string, ms = 4200): void {
     toasts = toasts.filter((t) => t.id !== id);
     emit();
   }, ms);
+}
+
+/** Manually dismiss a toast (the card's close button). */
+export function dismissToast(id: number): void {
+  toasts = toasts.filter((t) => t.id !== id);
+  emit();
 }
 
 export function subscribe(cb: () => void): () => void {
