@@ -19,7 +19,7 @@ function emit() {
 }
 
 /** Show a toast that auto-dismisses after `ms`. Client-only. */
-export function showToast(message: string, ms = 4200): void {
+export function showToast(message: string, ms = 5200): void {
   const id = nextId++;
   toasts = [...toasts, { id, message }];
   emit();
