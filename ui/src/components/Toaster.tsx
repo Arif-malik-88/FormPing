@@ -1,15 +1,15 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
-import { subscribe, getSnapshot, getServerSnapshot } from '@/lib/toast';
+import { subscribe, getSnapshot, getServerSnapshot, dismissToast } from '@/lib/toast';
 
 /**
  * Action notice (FR-26) — the "your data is still in Projects" reassurance shown
  * on Clear / Stop / Delete. Pinned CENTER-STAGE to the viewport (FR-32) so it's
  * impossible to miss no matter how far the user scrolled down a long list before
- * acting. Big text, strong card styling, an icon badge. The full-screen wrapper
- * is pointer-events-none so it never blocks the page — only the card is
- * interactive. Reads the shared toast store; self-dismisses.
+ * acting. Big text, strong card styling, an icon badge, and a manual close —
+ * self-dismisses on a timer too. The full-screen wrapper is pointer-events-none
+ * so it never blocks the page; only the card is interactive. Shared toast store.
  */
 export function Toaster() {
   const toasts = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
@@ -33,6 +33,16 @@ export function Toaster() {
             <p className="min-w-0 flex-1 text-base font-semibold leading-relaxed text-white sm:text-lg">
               {t.message}
             </p>
+            <button
+              type="button"
+              onClick={() => dismissToast(t.id)}
+              aria-label="Dismiss"
+              className="-mr-1 -mt-1 shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5" aria-hidden>
+                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+              </svg>
+            </button>
           </div>
         ))}
       </div>
