@@ -25,7 +25,17 @@ export function buildSuggestions(record: FormRunRecord, changes: string[]): stri
     case 'FORM_NOT_FOUND':
     case 'CONTACT_PAGE_NOT_FOUND':
       out.push(
-        'No contact form was found this cycle. The contact page may have moved or the form may have been removed — open the page and confirm.',
+        'No form was found this cycle. The contact page may have moved or the form may have been removed — open the page and confirm.',
+      );
+      break;
+    case 'NON_CONTACT_FORM_FOUND':
+      out.push(
+        'A form is present but it did not score as a contact form (see the score + missing fields in the notes). If this IS the contact form (e.g. a quiz or booking form), switch this monitor to Landing-page mode so it tests the form on this URL directly.',
+      );
+      break;
+    case 'THIRD_PARTY_EMBED_FORM':
+      out.push(
+        'The form is a third-party embed (named in the notes) — it works but FormPing can\'t auto-submit through a cross-origin embed. Verify it manually, and consider a provider-native check (e.g. a Typeform/HubSpot test submission) for ongoing assurance.',
       );
       break;
     case 'VALIDATION_ERROR':
