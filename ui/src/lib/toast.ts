@@ -29,6 +29,12 @@ export function showToast(message: string, ms = 5200): void {
   }, ms);
 }
 
+/** Manually dismiss a toast (the card's close button). */
+export function dismissToast(id: number): void {
+  toasts = toasts.filter((t) => t.id !== id);
+  emit();
+}
+
 export function subscribe(cb: () => void): () => void {
   listeners.add(cb);
   return () => listeners.delete(cb);
