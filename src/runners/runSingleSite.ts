@@ -246,7 +246,7 @@ export async function runSingleSite(
       }
 
       // ── Step 3: Find contact form ──────────────────────────────────────────
-      const { form, allForms } = await findContactForm(page, config);
+      const { form, allForms, embeds, acceptedByLandingLeniency } = await findContactForm(page, config);
 
       if (!form) {
         // If the contact page itself looks like a hosting-provider block
@@ -271,6 +271,59 @@ export async function runSingleSite(
             durationMs: Date.now() - start,
           };
         }
+
+        // ── Three-way "no testable contact form" taxonomy (FR-28) ────────────
+        // The old code lumped every miss into FORM_NOT_FOUND ("No contact form
+        // found"), which was misleading when a form clearly existed. Split it:
+
+        // (3) A known third-party embed (Typeform/HubSpot/…) is present. The
+        //     form provably exists; it's just a cross-origin embed we can't fill.
+        //     Report it (Attention, not a hard fail — nothing is actually broken).
+        if (embeds.length > 0) {
+          const names = embeds.map((e) => e.provider).join(', ');
+          return {
+            ...baseResult,
+            finalUrl: page.url(),
+            captchaDetected,
+            finalStatus: 'warn',
+            reasonCode: 'THIRD_PARTY_EMBED_FORM',
+            notes: [
+              ...baseResult.notes,
+              `Found a ${names} embed — the form exists but is a third-party embed FormPing can't auto-fill. Verify it manually; monitoring can't submit through it.`,
+            ],
+            durationMs: Date.now() - start,
+          };
+        }
+
+        // (2) Native <form>(s) exist but none scored as a contact form. Explain
+        //     the best candidate's score + what contact signals are missing, so
+        //     the user can tell "this is a search box" from "detection is off".
+        if (allForms.length > 0) {
+          const b = allForms[0]!; // scored[] is sorted best-first
+          const wanted: [string, string][] = [
+            ['email field', 'email'],
+            ['textarea/message field', 'message'],
+            ['name field', 'name'],
+          ];
+          const missing = wanted.filter(([sig]) => !b.signals.includes(sig)).map(([, label]) => label);
+          const present = b.signals.length ? b.signals.join(', ') : 'no contact signals';
+          return {
+            ...baseResult,
+            finalUrl: page.url(),
+            captchaDetected,
+            finalStatus: 'warn',
+            reasonCode: 'NON_CONTACT_FORM_FOUND',
+            notes: [
+              ...baseResult.notes,
+              `Found ${allForms.length} form(s), but none looks like a contact form — best scored ${b.score} (has: ${present}${missing.length ? `; missing: ${missing.join(', ')}` : ''}).`,
+              ...(b.negativeSignals.length ? [`Flags on the best form: ${b.negativeSignals.join(', ')}.`] : []),
+              'If this IS the contact form (a quiz/booking/assessment form), re-run in Landing-page mode to test it directly.',
+            ],
+            durationMs: Date.now() - start,
+          };
+        }
+
+        // (1) Genuinely nothing: no native form and no known embed on the page.
         return {
           ...baseResult,
           finalUrl: page.url(),
@@ -279,7 +332,7 @@ export async function runSingleSite(
           reasonCode: 'FORM_NOT_FOUND',
           notes: [
             ...baseResult.notes,
-            `${allForms.length} form(s) found but none passed contact form scoring (contact page was ${pageHtml.length}B, ${formTagCount} <form> tags in HTML)`,
+            `No form found on the page (contact page was ${pageHtml.length}B, ${formTagCount} <form> tags in HTML).`,
           ],
           durationMs: Date.now() - start,
         };
@@ -289,6 +342,14 @@ export async function runSingleSite(
       baseResult.formFound = true;
       baseResult.formConfidence = formConfidence;
       baseResult.formIdentifier = form.identifier;
+
+      // Surface WHY this form was accepted (score + signals) in the result, so
+      // the run history explains the detection rather than a bare "found" (FR-28).
+      baseResult.notes.push(
+        acceptedByLandingLeniency
+          ? `Accepted this page's form in Landing-page mode despite a low contact score (${form.score}) — signals: ${form.signals.join(', ') || 'none'}.`
+          : `Contact form detected — score ${form.score} (signals: ${form.signals.join(', ') || 'none'}).`,
+      );
 
       logger.info(`Form found (confidence=${formConfidence.toFixed(2)}): ${JSON.stringify(form.identifier)}`);
 
