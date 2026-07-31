@@ -7,8 +7,9 @@ import { subscribe, getSnapshot, getServerSnapshot } from '@/lib/toast';
  * Action notice (FR-26) — the "your data is still in Projects" reassurance shown
  * on Clear / Stop / Delete. Pinned CENTER-STAGE to the viewport (FR-32) so it's
  * impossible to miss no matter how far the user scrolled down a long list before
- * acting. The full-screen wrapper is pointer-events-none so it never blocks the
- * page — only the card is interactive. Reads the shared toast store; self-dismisses.
+ * acting. Big text, strong card styling, an icon badge. The full-screen wrapper
+ * is pointer-events-none so it never blocks the page — only the card is
+ * interactive. Reads the shared toast store; self-dismisses.
  */
 export function Toaster() {
   const toasts = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
@@ -21,12 +22,17 @@ export function Toaster() {
           <div
             key={t.id}
             role="status"
-            className="fp-toast-in pointer-events-auto flex max-w-sm items-start gap-3 rounded-xl border border-indigo-500/40 bg-slate-900/95 px-4 py-3 text-sm text-slate-100 shadow-xl backdrop-blur"
+            aria-live="polite"
+            className="fp-toast-in pointer-events-auto flex w-full items-start gap-4 rounded-2xl border border-indigo-400/40 bg-slate-900/95 px-6 py-5 shadow-2xl ring-1 ring-black/40 backdrop-blur-md"
           >
-            <svg viewBox="0 0 20 20" fill="currentColor" className="mt-0.5 h-5 w-5 shrink-0 text-indigo-300" aria-hidden>
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-            </svg>
-            <span>{t.message}</span>
+            <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-500/15 ring-1 ring-indigo-400/30">
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-6 w-6 text-indigo-300" aria-hidden>
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </span>
+            <p className="min-w-0 flex-1 text-base font-semibold leading-relaxed text-white sm:text-lg">
+              {t.message}
+            </p>
           </div>
         ))}
       </div>
