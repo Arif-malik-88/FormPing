@@ -2,6 +2,7 @@ import type { Page } from 'playwright';
 import type { AppConfig, FormCandidate, FormIdentifier } from '../types.js';
 import { normalizeText } from '../utils/text.js';
 import { logger } from '../utils/logger.js';
+import { detectEmbeds, type EmbedDetection } from './detectEmbeds.js';
 
 // Patterns that indicate this is NOT a contact form
 const NEGATIVE_SUBMIT_PATTERNS = [/subscribe/i, /newsletter/i, /sign\s*up/i, /register/i, /search/i, /login/i, /log\s*in/i];
@@ -65,17 +66,23 @@ async function extractForms(page: Page): Promise<FormInfo[]> {
       );
       const submitText = submitEls.map((el) => el.textContent?.trim() ?? (el as HTMLInputElement).value ?? '').join(' ').trim();
 
-      // Visibility: walk ancestors for display:none / visibility:hidden / opacity:0,
-      // then check bounding box to catch any remaining "rendered but zero-size" cases.
+      // Visibility: walk ancestors for display:none / visibility:hidden, then
+      // check the bounding box for "rendered but zero-size" cases.
+      //
+      // We deliberately do NOT exclude on opacity. An opacity:0 ancestor is
+      // still laid out and fully interactable — Playwright ignores opacity for
+      // actionability, so a form we'd fill is one we must also detect. Crucially,
+      // opacity-based scroll-reveal animations (AOS, framer-motion, ".reveal")
+      // sit at opacity:0 until scrolled into view and frequently never fire in
+      // headless automation; excluding them silently dropped real contact forms
+      // (e.g. a "Send message" form inside `.reveal` scored ~65 yet was reported
+      // "No contact form found"). Keep display:none / visibility:hidden (those
+      // genuinely remove the element and block interaction) and zero-size. FR-28.
       let formVisible = true;
       let ancestor: Element | null = form;
       while (ancestor && ancestor !== document.body) {
         const s = window.getComputedStyle(ancestor);
-        if (
-          s.display === 'none' ||
-          s.visibility === 'hidden' ||
-          parseFloat(s.opacity) < 0.1
-        ) {
+        if (s.display === 'none' || s.visibility === 'hidden') {
           formVisible = false;
           break;
         }
@@ -178,6 +185,14 @@ export interface FindContactFormResult {
   form: FormCandidate | null;
   allForms: FormCandidate[];
   usedAiFallback: boolean;
+  /** Third-party embed form providers detected on the page (Typeform, HubSpot,
+   *  …). Populated regardless of whether a native form was found, so the caller
+   *  can report an embed even when `form` is null (FR-28). */
+  embeds: EmbedDetection[];
+  /** True when `form` was accepted only because we're in landing-page mode and
+   *  the user asserted the form is on this page — i.e. it scored below the
+   *  contact-form threshold but was taken anyway (FR-28). */
+  acceptedByLandingLeniency: boolean;
 }
 
 export async function findContactForm(
@@ -186,6 +201,14 @@ export async function findContactForm(
 ): Promise<FindContactFormResult> {
   const rawForms = await extractForms(page);
   logger.debug(`Found ${rawForms.length} visible form(s) on contact page`);
+
+  // Detect hosted/third-party embed forms (Typeform, HubSpot, …) up front so
+  // every return path can report them — including the "no native form" case,
+  // where an embed is the whole story (FR-28).
+  const embeds = await detectEmbeds(page);
+  if (embeds.length) {
+    logger.debug(`Third-party embed(s) detected: ${embeds.map((e) => e.provider).join(', ')}`);
+  }
 
   const scored: FormCandidate[] = rawForms.map((form) => {
     const { score, signals, negativeSignals } = scoreForm(form);
@@ -228,13 +251,31 @@ export async function findContactForm(
           form: { ...picked, signals: [...picked.signals, `AI rescue: ${rescue.reasoning}`] },
           allForms: scored,
           usedAiFallback,
+          embeds,
+          acceptedByLandingLeniency: false,
         };
       }
     }
   }
 
   if (!best || best.score < 0) {
-    return { form: null, allForms: scored, usedAiFallback };
+    // Landing-page leniency (FR-28): the user asserted "the form is on THIS
+    // page", so if there IS a visible native form, accept the best-scoring one
+    // even though it didn't clear the contact-form threshold. A quiz /
+    // assessment / booking / non-standard form is still a real form we should
+    // test — better than a false "no contact form found". Non-landing runs keep
+    // the strict threshold (there we're auto-discovering, so precision matters).
+    if (config.landingPage && best) {
+      logger.debug(`Landing-page leniency: accepting best form index=${best.index} score=${best.score} (below threshold)`);
+      return {
+        form: { ...best, signals: [...best.signals, 'accepted in landing-page mode (below contact-form threshold)'] },
+        allForms: scored,
+        usedAiFallback,
+        embeds,
+        acceptedByLandingLeniency: true,
+      };
+    }
+    return { form: null, allForms: scored, usedAiFallback, embeds, acceptedByLandingLeniency: false };
   }
 
   // If ambiguous (two forms within 5 points) and AI is enabled, fall back to AI
@@ -254,5 +295,5 @@ export async function findContactForm(
   }
 
   logger.debug(`Best form: index=${chosen.index} score=${chosen.score} signals=[${chosen.signals.join(', ')}]`);
-  return { form: chosen, allForms: scored, usedAiFallback };
+  return { form: chosen, allForms: scored, usedAiFallback, embeds, acceptedByLandingLeniency: false };
 }

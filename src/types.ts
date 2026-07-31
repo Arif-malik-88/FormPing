@@ -8,6 +8,14 @@ export type ReasonCode =
   | 'CONTACT_PAGE_NOT_FOUND'
   | 'CONTACT_PAGE_AMBIGUOUS'
   | 'FORM_NOT_FOUND'
+  // A <form> exists on the page but none scored as a contact form (e.g. a
+  // search/newsletter/quiz form). Distinct from FORM_NOT_FOUND (nothing at all)
+  // so the user hears "found a form, but not a contact one" — FR-28.
+  | 'NON_CONTACT_FORM_FOUND'
+  // A known third-party embed (Typeform, HubSpot, Calendly, Jotform, Tally, …)
+  // is present: the form provably exists but is a cross-origin embed we can't
+  // auto-fill. Reported so the user knows it's there — FR-28.
+  | 'THIRD_PARTY_EMBED_FORM'
   | 'FORM_AMBIGUOUS'
   | 'BLOCKED_BY_HOST'
   | 'CAPTCHA_DETECTED'

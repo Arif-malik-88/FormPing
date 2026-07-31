@@ -30,6 +30,24 @@ The web UI is organized around **Projects** (a client + their URLs), plus two to
 and runs form detection **directly on the given URL** — for standalone landing pages that have an
 inline form and no separate `/contact` page (which would otherwise fail `CONTACT_PAGE_NOT_FOUND`).
 Off by default. Available on both the Form Tester and Form Watch (remembered per scheduled monitor).
+In landing-page mode detection is also **lenient**: because you asserted the form is on this page,
+the best-scoring form is accepted even if it doesn't clear the classic contact-form threshold (a
+quiz, assessment, or booking form is still a real form).
+
+**When a contact form isn't submitted, the result says *why*** (three-way outcome, not a blunt
+"not found"):
+
+- **`FORM_NOT_FOUND`** — genuinely nothing: no native `<form>` and no known embed on the page.
+- **`NON_CONTACT_FORM_FOUND`** — a form exists but didn't score as a contact form (e.g. search /
+  newsletter / quiz). The notes carry its score and which contact fields are missing.
+- **`THIRD_PARTY_EMBED_FORM`** — a hosted embed (Typeform, HubSpot, Calendly, Jotform, Tally,
+  GoHighLevel/LeadConnector, …) is present. The form exists but is a cross-origin embed FormPing
+  can't auto-fill — it's detected and named so you can verify it manually. Unknown builders are still
+  caught by a generic `/form|survey|quiz|booking/` iframe-path heuristic and reported by host.
+
+Detection also does **not** exclude forms on `opacity:0` ancestors — opacity-based scroll-reveal
+animations (`.reveal` / AOS / framer-motion) often stay transparent in headless automation, and an
+`opacity:0` form is still fillable, so excluding it produced false "no form found" misses.
 
 ### Website Change Monitor (new)
 
@@ -503,7 +521,9 @@ Copy that URL. Anyone visiting it sees the basic-auth login. Only people with th
 |------|---------|
 | `CONTACT_PAGE_NOT_FOUND` | No contact page candidate found |
 | `CONTACT_PAGE_AMBIGUOUS` | Multiple candidates, low confidence |
-| `FORM_NOT_FOUND` | No contact form on the contact page |
+| `FORM_NOT_FOUND` | No form of any kind on the page (no native form, no known embed) |
+| `NON_CONTACT_FORM_FOUND` | A form exists but didn't score as a contact form (score + missing fields in notes) |
+| `THIRD_PARTY_EMBED_FORM` | A hosted embed (Typeform/HubSpot/Calendly/…) is present — exists, not auto-testable |
 | `FORM_AMBIGUOUS` | Multiple forms, low confidence |
 | `CAPTCHA_DETECTED` | CAPTCHA widget found — aborted |
 | `ANTI_BOT_DETECTED` | Anti-bot/challenge page — aborted |

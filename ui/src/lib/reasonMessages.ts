@@ -24,9 +24,19 @@ const MESSAGES: Record<string, ReasonMessage> = {
     severity: 'warn',
   },
   FORM_NOT_FOUND: {
-    title: 'No contact form detected',
-    description: 'A contact page was found but no visible contact form passed the scoring threshold.',
+    title: 'No form on the page',
+    description: 'No form of any kind was found on the tested page — neither a native <form> nor a known third-party embed. The form may have moved, been removed, or sit on a different page.',
     severity: 'error',
+  },
+  NON_CONTACT_FORM_FOUND: {
+    title: 'Found a form — but not a contact form',
+    description: 'The page has a form, but it did not score as a contact form (it may be a search, newsletter, quiz, or booking form). The run notes show its score and which contact fields are missing. If this really is the contact form, re-run in Landing-page mode to test it directly.',
+    severity: 'warn',
+  },
+  THIRD_PARTY_EMBED_FORM: {
+    title: 'Third-party embed form found',
+    description: 'The page embeds a hosted form (Typeform, HubSpot, Calendly, Jotform, Tally, …), named in the run notes. The form exists, but it is a cross-origin embed FormPing cannot auto-fill or submit — verify it manually. Monitoring can confirm the embed is present but not submit through it.',
+    severity: 'warn',
   },
   FORM_AMBIGUOUS: {
     title: 'Multiple candidate forms',

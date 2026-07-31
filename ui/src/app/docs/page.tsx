@@ -801,7 +801,24 @@ export default function DocsPage() {
               page with no separate <Code>/contact</Code>): it skips discovery and tests the form on
               that exact URL, no crawling. Off by default — normal behaviour is unchanged. The same
               toggle exists on Form Watch, and is remembered per scheduled monitor (shown as a{' '}
-              <strong>Landing</strong> badge).
+              <strong>Landing</strong> badge). In Landing-page mode detection is also{' '}
+              <strong>lenient</strong> — since you asserted the form is here, the best form is accepted
+              even if it isn&apos;t a classic contact form (a quiz, assessment, or booking form still
+              counts).
+            </Note>
+            <Note>
+              <strong>When no contact form is submitted, the result tells you why</strong> — three
+              distinct outcomes instead of a blunt &ldquo;no contact form found&rdquo;:{' '}
+              <strong>No form on the page</strong> (genuinely nothing),{' '}
+              <strong>Found a form — not a contact form</strong> (a search/newsletter/quiz form; the
+              run notes show its score and which fields are missing), or{' '}
+              <strong>Third-party embed form found</strong> (a hosted{' '}
+              <Code>Typeform</Code>/<Code>HubSpot</Code>/<Code>Calendly</Code>/<Code>Jotform</Code>/
+              <Code>Tally</Code>/<Code>GoHighLevel</Code> embed, or an unknown builder caught by a
+              generic form-iframe heuristic — the form exists but is a cross-origin embed we can&apos;t
+              auto-fill, so it&apos;s detected and named for you to verify manually). The latter two
+              read as <strong>Needs attention</strong> (amber), not a hard fail — something is there,
+              it just isn&apos;t an auto-testable contact form.
             </Note>
             <Note>
               Each result has a <strong>Monitor…</strong> button that opens the Form Watch tab with

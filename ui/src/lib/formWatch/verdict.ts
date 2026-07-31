@@ -41,11 +41,16 @@ const FAILING = new Set([
   'ERROR',
 ]);
 // Needs a look, but not necessarily a broken form (external blocker / unclear).
+// The two FR-28 codes live here on purpose: something IS on the page (a
+// non-contact form, or a third-party embed) — it just isn't an auto-testable
+// contact form — so it's amber "worth a look", not a red "the form is broken".
 const ATTENTION = new Set([
   'CAPTCHA_DETECTED',
   'ANTI_BOT_DETECTED',
   'BLOCKED_BY_HOST',
   'NO_REDIRECT_NO_SUCCESS',
+  'NON_CONTACT_FORM_FOUND',
+  'THIRD_PARTY_EMBED_FORM',
 ]);
 
 const LABELS: Record<string, string> = {
@@ -54,7 +59,9 @@ const LABELS: Record<string, string> = {
   PASS: 'Submitted successfully',
   SAFE_MODE_NO_SUBMIT: 'Form healthy — filled, not submitted',
   DETECT_ONLY: 'Form detected',
-  FORM_NOT_FOUND: 'No contact form found',
+  FORM_NOT_FOUND: 'No form found on the page',
+  NON_CONTACT_FORM_FOUND: 'Found a form — not a contact form',
+  THIRD_PARTY_EMBED_FORM: 'Third-party embed form found',
   CONTACT_PAGE_NOT_FOUND: 'No contact page found',
   CONTACT_PAGE_AMBIGUOUS: 'Contact page ambiguous',
   FORM_AMBIGUOUS: 'Multiple forms — ambiguous',
