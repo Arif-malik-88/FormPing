@@ -17,6 +17,6 @@ export function AppChrome() {
   // No app nav on the login screen, the public landing page (FR-29), or PUBLIC
   // client status pages — those are unauthenticated / client-facing and carry
   // their own chrome, not the internal tabs/sign-out.
-  if (pathname === '/login' || pathname === '/welcome' || pathname.startsWith('/status/')) return null;
+  if (pathname === '/login' || pathname === '/welcome' || pathname === '/docs' || pathname.startsWith('/status/')) return null;
   return <Header />;
 }

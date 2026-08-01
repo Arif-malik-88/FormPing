@@ -68,6 +68,13 @@ what FormPing does plus a few **real, animated volume metrics** from the public
 delivered; no client, URL, or result data, and no client/site counts). `Sign in`
 → Google auth → the tool.
 
+The **`/docs`** knowledge center is also **public** (allow-listed in middleware,
+FR-33): a grouped, scroll-spy documentation site covering what FormPing is, why
+to use it, and how to use every feature. It is **product documentation only** —
+deliberately carries no infrastructure, storage, env, account, or ops detail, so
+it's safe to read without login. It renders its own header/footer (the app chrome
+is suppressed on `/docs`), and everything else stays behind the login gate.
+
 ---
 
 ## Ethical usage — read this first

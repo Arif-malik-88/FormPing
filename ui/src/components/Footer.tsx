@@ -15,8 +15,9 @@ import { BugReportModal } from './BugReportModal';
 export function Footer() {
   const pathname = usePathname();
   const [bugOpen, setBugOpen] = useState(false);
-  // The public landing page (FR-29) carries its own footer — suppress the app one.
-  if (pathname === '/welcome') return null;
+  // The public landing page (FR-29) and docs knowledge center (FR-33) carry
+  // their own footer — suppress the app one there.
+  if (pathname === '/welcome' || pathname === '/docs') return null;
   const isPublic = pathname === '/login' || pathname.startsWith('/status/');
 
   return (
