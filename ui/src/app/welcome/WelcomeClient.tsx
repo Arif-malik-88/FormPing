@@ -278,7 +278,10 @@ export default function WelcomeClient() {
         </div>
       </footer>
 
-      <style jsx>{STYLES}</style>
+      {/* Plain server-rendered <style> (not styled-jsx): the CSS ships in the
+          initial HTML so there's no flash of unstyled content on load. Safe to
+          be page-global because every selector is scoped under `.welcome-root`. */}
+      <style dangerouslySetInnerHTML={{ __html: STYLES }} />
     </div>
   );
 }
@@ -388,7 +391,7 @@ const STYLES = `
   .welcome-root .hero-cta .btn { padding:12px 20px; font-size:0.92rem; border-radius:11px; }
   .welcome-root .meta-row { display:flex; gap:22px; margin-top:32px; flex-wrap:wrap; }
   .welcome-root .meta { display:flex; align-items:center; gap:8px; font-size:0.82rem; color:var(--muted); }
-  .welcome-root .meta :global(svg) { color:var(--ok); flex-shrink:0; }
+  .welcome-root .meta svg { color:var(--ok); flex-shrink:0; }
 
   .welcome-root .card { position:relative; background:linear-gradient(180deg, var(--panel-2), var(--panel)); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:0 40px 80px -44px rgba(0,0,0,0.85); }
   .welcome-root .card-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:15px; }
@@ -418,15 +421,15 @@ const STYLES = `
   .welcome-root .spark-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
   .welcome-root .spark-top .t { font-family:var(--font-mono); font-size:0.64rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted-2); }
   .welcome-root .spark-top .v { font-family:var(--font-mono); font-size:0.78rem; color:var(--ok-t); font-variant-numeric:tabular-nums; }
-  .welcome-root .spark :global(svg) { width:100%; height:44px; display:block; overflow:visible; }
-  .welcome-root .spark :global(path.line) { fill:none; stroke:var(--ok); stroke-width:2; stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:620; stroke-dashoffset:620; }
-  .welcome-root .reveal-on .spark :global(path.line) { animation:draw 1.5s .5s cubic-bezier(0.2,0.7,0.2,1) forwards; }
+  .welcome-root .spark svg { width:100%; height:44px; display:block; overflow:visible; }
+  .welcome-root .spark path.line { fill:none; stroke:var(--ok); stroke-width:2; stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:620; stroke-dashoffset:620; }
+  .welcome-root .reveal-on .spark path.line { animation:draw 1.5s .5s cubic-bezier(0.2,0.7,0.2,1) forwards; }
   @keyframes draw { to { stroke-dashoffset:0; } }
-  .welcome-root .spark :global(circle.dot) { fill:var(--ok); opacity:0; }
-  .welcome-root .reveal-on .spark :global(circle.dot) { animation:dotin .5s 1.8s cubic-bezier(0.2,0.7,0.2,1) forwards; }
+  .welcome-root .spark circle.dot { fill:var(--ok); opacity:0; }
+  .welcome-root .reveal-on .spark circle.dot { animation:dotin .5s 1.8s cubic-bezier(0.2,0.7,0.2,1) forwards; }
   @keyframes dotin { from{opacity:0;r:0;} to{opacity:1;r:3;} }
-  .welcome-root .spark :global(circle.halo) { fill:none; stroke:var(--ok); opacity:0; }
-  .welcome-root .reveal-on .spark :global(circle.halo) { animation:halo 2.2s 2.3s ease-out infinite; }
+  .welcome-root .spark circle.halo { fill:none; stroke:var(--ok); opacity:0; }
+  .welcome-root .reveal-on .spark circle.halo { animation:halo 2.2s 2.3s ease-out infinite; }
   @keyframes halo { 0%{opacity:.5;r:3;} 100%{opacity:0;r:11;} }
 
   .welcome-root .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin:12px 0 8px; padding:26px; border-radius:16px; border:1px solid var(--line); background:linear-gradient(180deg, rgba(15,23,42,0.6), rgba(15,23,42,0.3)); text-align:center; }
@@ -480,7 +483,7 @@ const STYLES = `
   @media (prefers-reduced-motion: reduce) {
     .welcome-root *, .welcome-root *::before, .welcome-root *::after { animation:none !important; transition:none !important; }
     .welcome-root .reveal { opacity:1; transform:none; }
-    .welcome-root .spark :global(path.line) { stroke-dashoffset:0; }
-    .welcome-root .spark :global(circle.dot) { opacity:1; }
+    .welcome-root .spark path.line { stroke-dashoffset:0; }
+    .welcome-root .spark circle.dot { opacity:1; }
   }
 `;
