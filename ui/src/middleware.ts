@@ -50,6 +50,13 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Public product documentation (FR-33) — the /docs knowledge center is
+  // readable without login (it carries only how-to content, no client data or
+  // infra detail), so anyone evaluating FormPing can read it.
+  if (pathname === '/docs') {
+    return NextResponse.next();
+  }
+
   // Public SEO/brand assets (favicon + social share images). These must be
   // reachable WITHOUT a session so external crawlers (Slackbot, Twitter,
   // Google) can fetch the Open Graph image and favicon to render link
