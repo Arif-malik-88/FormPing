@@ -180,6 +180,12 @@ export default function DocsPage() {
               ]}
             />
             <Note>
+              Logged-out visitors first land on a public <strong>/welcome</strong> page (what
+              FormPing does + a few live metrics) with a <strong>Sign in</strong> button; signing in
+              brings you straight here to the app. You&apos;ll only see it if you visit while signed
+              out.
+            </Note>
+            <Note>
               Before any browser-based run (<strong>Form Tester</strong>,{' '}
               <strong>Content Changes</strong>) or adding a scheduled monitor, FormPing validates the
               URL and does a quick reachability check first — so a typo or a dead host fails fast
