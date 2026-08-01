@@ -57,6 +57,17 @@ animations (`.reveal` / AOS / framer-motion) often stay transparent in headless 
 4. Detects content, SEO, form, and technical changes
 5. Optional AI summary turns the diff into a human-readable paragraph
 
+### Landing page & access (FR-29)
+
+A public **`/welcome`** landing page sits in front of the login wall. The auth
+middleware sends an **unauthenticated visitor at the root `/` → `/welcome`**
+(deep links still go to `/login?redirect=…` so users bounce back to where they
+were headed), and **logged-in users skip `/welcome` → the app**. The page shows
+what FormPing does plus a few **real, animated volume metrics** from the public
+`GET /api/stats` (row counts only — forms tested, uptime/SSL checks, alerts
+delivered; no client, URL, or result data, and no client/site counts). `Sign in`
+→ Google auth → the tool.
+
 ---
 
 ## Ethical usage — read this first
