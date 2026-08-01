@@ -43,6 +43,13 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Public aggregate stats for the landing page — row COUNTS only, no client or
+  // result data (see /api/stats). Must be reachable without a session so the
+  // /welcome count-up works before login (FR-29).
+  if (pathname === '/api/stats') {
+    return NextResponse.next();
+  }
+
   // Public SEO/brand assets (favicon + social share images). These must be
   // reachable WITHOUT a session so external crawlers (Slackbot, Twitter,
   // Google) can fetch the Open Graph image and favicon to render link
@@ -53,13 +60,37 @@ export async function middleware(req: NextRequest) {
 
   const cookie = req.cookies.get(SESSION_COOKIE_NAME)?.value;
   const session = await verifySession(cookie);
+
+  // Public landing page (FR-29). Logged-OUT visitors see it; logged-IN users
+  // skip it and go straight to the app. Handled here (not in the public block
+  // above) precisely because the outcome depends on the session.
+  if (pathname === '/welcome') {
+    if (session) {
+      const app = req.nextUrl.clone();
+      app.pathname = '/';
+      app.search = '';
+      return NextResponse.redirect(app);
+    }
+    return NextResponse.next();
+  }
+
   if (session) return NextResponse.next();
 
   // Not authenticated. For API routes, return 401 JSON so client code can
-  // detect it cleanly. For page navigations, redirect to /login with the
-  // current path as ?redirect=... so we can bounce them back after login.
+  // detect it cleanly.
   if (pathname.startsWith('/api/')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // The front door (FR-29): an unauthenticated visitor to the ROOT sees the
+  // public landing page instead of the bare login form. Only the root is
+  // redirected here — deep links still go to /login with ?redirect= so we can
+  // bounce them back to exactly where they were headed after they sign in.
+  if (pathname === '/') {
+    const welcome = req.nextUrl.clone();
+    welcome.pathname = '/welcome';
+    welcome.search = '';
+    return NextResponse.redirect(welcome);
   }
 
   const loginUrl = req.nextUrl.clone();
