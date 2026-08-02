@@ -139,6 +139,14 @@ export async function getRole(emailRaw: string): Promise<Role> {
   return DEFAULT_ROLE;
 }
 
+/** The user's display name (Google auth), or null if unknown. Used for project
+ *  attribution — "added by / edited by" (FR-30). */
+export async function getUserName(emailRaw: string): Promise<string | null> {
+  const { data, error } = await supabaseAdmin().from('app_users').select('name').eq('email', norm(emailRaw)).maybeSingle();
+  if (error || !data) return null;
+  return (data as { name: string | null }).name ?? null;
+}
+
 /** All users, for the Team page (PR 2). Owner first, then by email. */
 export async function listUsers(): Promise<AppUser[]> {
   const { data, error } = await supabaseAdmin().from('app_users').select(COLS);
