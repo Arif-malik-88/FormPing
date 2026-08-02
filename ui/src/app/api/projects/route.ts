@@ -2,8 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { projectStore } from '@/lib/projects/projectStore';
 import { rollupsForUrlSets, listUnassignedUrls } from '@/lib/projects/health';
 import { removeDismissed } from '@/lib/projects/dismissedStore';
-import { requireRole } from '@/lib/auth/authorize';
+import { requireRole, currentUser } from '@/lib/auth/authorize';
+import { getUserName } from '@/lib/auth/userStore';
 import type { ProjectWithRollup } from '@/lib/projects/types';
+
+/** The acting user's display name (falls back to email) for attribution (FR-30). */
+async function actorName(request: NextRequest): Promise<string | null> {
+  const actor = await currentUser(request).catch(() => null);
+  if (!actor) return null;
+  return (await getUserName(actor.email).catch(() => null)) ?? actor.email;
+}
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -83,7 +91,8 @@ export async function POST(request: NextRequest) {
 
   const notes = typeof body.notes === 'string' ? body.notes : undefined;
   const contact = typeof body.contact === 'string' ? body.contact : undefined;
-  const project = await projectStore.create({ name, urls, notes, contact });
+  const createdBy = await actorName(request);
+  const project = await projectStore.create({ name, urls, notes, contact, createdBy });
 
   // Any URL grouped under a client is being tracked — clear a stale "don't track"
   // dismissal so the two states can't contradict. Best-effort per URL.

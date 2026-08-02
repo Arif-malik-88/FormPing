@@ -243,6 +243,7 @@ export default function DocsContent() {
                   <LI>Any URL you’ve tested or monitored but not yet grouped shows up in an <strong className="text-slate-200">Unassigned</strong> bucket, with <strong>Assign to project</strong> and <strong>Dismiss</strong> actions — so nothing is a dead end.</LI>
                   <LI><strong className="text-slate-200">Remove</strong> a URL from a project → it drops to Unassigned and <em>keeps</em> its data and monitors. <strong>Delete</strong> a URL (or a whole project) is a complete, confirmed, irreversible removal of its monitors and results.</LI>
                   <LI>Each project can hold a <strong>contact</strong> — who to notify for that client.</LI>
+                  <LI>Each project shows <strong>who added it and who last edited it</strong> (with the time), so accountability is clear at a glance.</LI>
                 </UL>
               </Section>
 

@@ -14,10 +14,11 @@ import { supabaseAdmin } from '@/lib/supabase';
 export interface ProjectStore {
   list(): Promise<Project[]>;
   get(id: string): Promise<Project | null>;
-  create(input: { name: string; urls: string[]; notes?: string; contact?: string }): Promise<Project>;
+  create(input: { name: string; urls: string[]; notes?: string; contact?: string; createdBy?: string | null }): Promise<Project>;
   update(
     id: string,
     patch: Partial<Pick<Project, 'name' | 'urls' | 'notes' | 'contact'>>,
+    updatedBy?: string | null,
   ): Promise<Project | null>;
   remove(id: string): Promise<boolean>;
   /** Generate (or regenerate) the public status-page token; returns the updated project. */
@@ -118,8 +119,10 @@ interface ProjectRow {
   share_token: string | null;
   created_at: string;
   updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
 }
-const PROJECT_COLS = 'id, name, urls, notes, contact, share_token, created_at, updated_at';
+const PROJECT_COLS = 'id, name, urls, notes, contact, share_token, created_at, updated_at, created_by, updated_by';
 
 function toProject(r: ProjectRow): Project {
   return {
@@ -131,6 +134,8 @@ function toProject(r: ProjectRow): Project {
     shareToken: r.share_token,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    createdBy: r.created_by,
+    updatedBy: r.updated_by,
   };
 }
 
@@ -161,7 +166,7 @@ export const projectStore: ProjectStore = {
     return data ? toProject(data as ProjectRow) : null;
   },
 
-  async create({ name, urls, notes, contact }) {
+  async create({ name, urls, notes, contact, createdBy }) {
     const { data, error } = await supabaseAdmin()
       .from('projects')
       .insert({
@@ -169,6 +174,7 @@ export const projectStore: ProjectStore = {
         urls: urls.map(normalizeUrl).filter(Boolean),
         notes: notes?.trim() || null,
         contact: contact?.trim() || null,
+        created_by: createdBy ?? null,
       })
       .select(PROJECT_COLS)
       .single();
@@ -176,13 +182,16 @@ export const projectStore: ProjectStore = {
     return toProject(data as ProjectRow);
   },
 
-  async update(id, patch) {
+  async update(id, patch, updatedBy) {
     const upd: Record<string, unknown> = {};
     if (patch.name !== undefined) upd.name = patch.name.trim();
     if (patch.urls !== undefined) upd.urls = patch.urls.map(normalizeUrl).filter(Boolean);
     if (patch.notes !== undefined) upd.notes = patch.notes.trim() || null;
     if (patch.contact !== undefined) upd.contact = patch.contact.trim() || null;
+    // Nothing actually changed → don't touch updated_at/updated_by.
     if (Object.keys(upd).length === 0) return this.get(id);
+    // A real field changed → stamp who did it (attribution, FR-30).
+    if (updatedBy !== undefined) upd.updated_by = updatedBy;
     const { data, error } = await supabaseAdmin()
       .from('projects')
       .update(upd)

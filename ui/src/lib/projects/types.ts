@@ -22,6 +22,10 @@ export interface Project {
   shareToken?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Display name (snapshot) of whoever created the project — attribution (FR-30). */
+  createdBy?: string | null;
+  /** Display name (snapshot) of whoever last edited it — attribution (FR-30). */
+  updatedBy?: string | null;
 }
 
 export type FormHealthLevel = 'healthy' | 'attention' | 'failing' | 'pending';

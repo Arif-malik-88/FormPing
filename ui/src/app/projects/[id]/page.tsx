@@ -20,6 +20,7 @@ import {
   type Tone,
 } from '@/components/projects/uiKit';
 import { ShareStatusControl } from '@/components/projects/ShareStatusControl';
+import { Attribution } from '@/components/projects/Attribution';
 import { ProjectForm } from '@/components/projects/ProjectForm';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useMe, canRole } from '@/lib/auth/useMe';
@@ -192,6 +193,7 @@ export default function ProjectDetailPage() {
               <span className="text-xs text-slate-500">{count} URL{count === 1 ? '' : 's'}{project.contact ? ` · ${project.contact}` : ''}</span>
             </div>
             {project.notes && <p className="mt-2 max-w-[60ch] text-xs italic text-slate-500">{project.notes}</p>}
+            <Attribution project={project} variant="chips" className="mt-3" />
           </div>
         </div>
         <div className="flex flex-wrap gap-2">

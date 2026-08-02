@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import type { ProjectWithRollup } from '@/lib/projects/types';
+import { Attribution } from './Attribution';
 import {
   overallStatus,
   Monogram,
@@ -59,13 +60,14 @@ export function ProjectCard({ project, index = 0 }: { project: ProjectWithRollup
         aria-hidden
       />
 
-      <div className="flex items-center gap-3 px-4 pb-3 pt-4">
+      <div className="flex items-center gap-3 px-5 pb-4 pt-5">
         <Monogram name={project.name} tone={st.tone} />
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold text-slate-100">{project.name}</div>
           <div className="mt-0.5 truncate text-[11.5px] text-slate-500">
             {hostOf(project.urls[0])} · {count} URL{count === 1 ? '' : 's'}
           </div>
+          <Attribution project={project} className="mt-1 text-[11px] text-slate-500" />
         </div>
       </div>
 
@@ -95,7 +97,7 @@ export function ProjectCard({ project, index = 0 }: { project: ProjectWithRollup
         </Stat>
       </div>
 
-      <div className="flex items-center justify-between border-t border-slate-800/70 bg-slate-950/40 px-4 py-2.5">
+      <div className="flex items-center justify-between border-t border-slate-800/70 bg-slate-950/40 px-5 py-3">
         <StatusPill tone={st.tone} pulse={st.pulse}>{st.word}</StatusPill>
         <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-indigo-300 group-hover:text-indigo-200">
           Open
@@ -110,7 +112,7 @@ export function ProjectCard({ project, index = 0 }: { project: ProjectWithRollup
 
 function Stat({ k, children, last }: { k: string; children: React.ReactNode; last?: boolean }) {
   return (
-    <div className={`px-3.5 py-2.5 ${last ? '' : 'border-r border-slate-800/70'}`}>
+    <div className={`px-4 py-3 ${last ? '' : 'border-r border-slate-800/70'}`}>
       <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">{k}</div>
       <div className="mt-1 text-[12.5px] font-medium">{children}</div>
     </div>

@@ -112,7 +112,7 @@ export default function ProjectsPage() {
 
       {/* Card grid */}
       {loading && (
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/40">
               <div className="flex items-center gap-3 px-4 pb-3 pt-4">
@@ -138,7 +138,7 @@ export default function ProjectsPage() {
       )}
 
       {!loading && projects.length > 0 && (
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {projects.map((p, i) => <ProjectCard key={p.id} project={p} index={i} />)}
           {canManage && (
             <button
