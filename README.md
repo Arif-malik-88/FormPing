@@ -80,6 +80,11 @@ footer (stored durably + pinged to Slack). Admins triage them in an inbox on the
 **Team** page — mark **resolved** / **reopen** (stamped with who + when) or **delete**
 (hard delete, confirmed). Admin+ gated, same as Team &amp; access.
 
+**Project attribution (FR-30).** Each project records **who created it** and **who
+last edited it** (display name, snapshot at the time of the action), surfaced as
+"Added by X · edited by Y · Nd ago" on the project card and detail. Additive —
+pre-existing projects read "Added · …" until next edited.
+
 ---
 
 ## Ethical usage — read this first
