@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
-import { currentUser } from '@/lib/auth/authorize';
+import { currentUser, requireRole } from '@/lib/auth/authorize';
+import {
+  insertBugReport,
+  listBugReports,
+  setBugReportStatus,
+  deleteBugReport,
+  type BugStatus,
+} from '@/lib/bugReportStore';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -91,8 +97,7 @@ export async function POST(request: NextRequest) {
 
   // Durable record (best-effort — a store hiccup must not lose the Slack ping).
   try {
-    const { error } = await supabaseAdmin().from('bug_reports').insert(report);
-    if (error) console.warn(`[bug-reports] insert: ${error.message}`);
+    await insertBugReport(report);
   } catch (err) {
     console.warn(`[bug-reports] insert failed: ${err}`);
   }
@@ -100,4 +105,82 @@ export async function POST(request: NextRequest) {
   await pingSlack(report);
 
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * GET /api/bug-reports — the admin inbox list (FR-31). Admin+ only. Returns all
+ * reports newest-first, each with its triage status + resolver stamps.
+ */
+export async function GET(request: NextRequest) {
+  const denied = await requireRole(request, 'admin');
+  if (denied) return denied;
+  try {
+    const reports = await listBugReports();
+    return NextResponse.json({ reports });
+  } catch (err) {
+    console.warn(`[bug-reports] list failed: ${err}`);
+    return NextResponse.json({ error: 'Could not load bug reports' }, { status: 500 });
+  }
+}
+
+/**
+ * PATCH /api/bug-reports — resolve or reopen a report (FR-31). Admin+ only.
+ * Body: { id, status: 'open' | 'resolved' }. Resolving stamps the acting admin
+ * + timestamp; reopening clears them.
+ */
+export async function PATCH(request: NextRequest) {
+  const denied = await requireRole(request, 'admin');
+  if (denied) return denied;
+
+  let body: { id?: unknown; status?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const id = typeof body.id === 'string' ? body.id : '';
+  const status: BugStatus | null =
+    body.status === 'resolved' ? 'resolved' : body.status === 'open' ? 'open' : null;
+  if (!id || !status) {
+    return NextResponse.json({ error: 'id and status ("open" | "resolved") are required' }, { status: 400 });
+  }
+
+  const actor = await currentUser(request).catch(() => null);
+  try {
+    const ok = await setBugReportStatus(id, status, status === 'resolved' ? actor?.email ?? null : null);
+    if (!ok) return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.warn(`[bug-reports] status update failed: ${err}`);
+    return NextResponse.json({ error: 'Could not update the report' }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE /api/bug-reports — hard-delete a report (FR-31). Admin+ only. These
+ * are disposable (unlike monitoring data), so a real delete with a confirm.
+ * Body: { id }.
+ */
+export async function DELETE(request: NextRequest) {
+  const denied = await requireRole(request, 'admin');
+  if (denied) return denied;
+
+  let body: { id?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+  const id = typeof body.id === 'string' ? body.id : '';
+  if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
+
+  try {
+    const ok = await deleteBugReport(id);
+    if (!ok) return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.warn(`[bug-reports] delete failed: ${err}`);
+    return NextResponse.json({ error: 'Could not delete the report' }, { status: 500 });
+  }
 }
