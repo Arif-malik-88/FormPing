@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ROLE_LABEL, type Role } from '@/lib/auth/roles';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { refreshMe } from '@/lib/auth/useMe';
+import { BugInbox } from '@/components/team/BugInbox';
 
 interface TeamUser {
   email: string;
@@ -31,6 +32,7 @@ export default function TeamPage() {
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<TeamUser | null>(null);
   const [confirmTransfer, setConfirmTransfer] = useState<TeamUser | null>(null);
+  const [tab, setTab] = useState<'members' | 'bugs'>('members');
 
   const load = useCallback(async () => {
     try {
@@ -165,14 +167,33 @@ export default function TeamPage() {
 
   return (
     <main className="mx-auto max-w-4xl px-4 pb-20 pt-8">
-      <div className="border-b border-slate-800 pb-5">
+      <div className="border-b border-slate-800 pb-4">
         <h1 className="text-xl font-bold tracking-tight text-slate-100">Team &amp; access</h1>
-        <p className="mt-1 text-sm text-slate-400">
-          Who can do what in FormPing. New sign-ins from an allowed domain start as{' '}
-          <strong className="text-slate-300">Member</strong>. Only the owner manages admins or
-          transfers ownership.
-        </p>
+        <div className="mt-4 inline-flex rounded-lg border border-slate-800 bg-slate-900/60 p-0.5">
+          <button
+            type="button"
+            onClick={() => setTab('members')}
+            className={`rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors ${tab === 'members' ? 'bg-slate-800 text-slate-100 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            Members &amp; roles
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('bugs')}
+            className={`rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors ${tab === 'bugs' ? 'bg-slate-800 text-slate-100 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            Bug reports
+          </button>
+        </div>
       </div>
+
+      {tab === 'members' && (
+      <>
+      <p className="mt-4 text-sm text-slate-400">
+        Who can do what in FormPing. New sign-ins from an allowed domain start as{' '}
+        <strong className="text-slate-300">Member</strong>. Only the owner manages admins or
+        transfers ownership.
+      </p>
 
       {error && (
         <div className="mt-4 rounded-lg border border-rose-800/50 bg-rose-500/10 px-4 py-2.5 text-xs text-rose-300">
@@ -243,7 +264,7 @@ export default function TeamPage() {
                           type="button"
                           onClick={() => setConfirmTransfer(u)}
                           disabled={busy}
-                          className="text-[11px] font-medium text-slate-500 hover:text-amber-300 disabled:opacity-40"
+                          className="inline-flex items-center rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition-colors hover:border-amber-700/60 hover:text-amber-300 disabled:opacity-40"
                           title="Make this person the owner (you become an admin)"
                         >
                           Make owner
@@ -254,7 +275,7 @@ export default function TeamPage() {
                           type="button"
                           onClick={() => setConfirmRemove(u)}
                           disabled={busy}
-                          className="text-[11px] font-medium text-slate-500 hover:text-rose-300 disabled:opacity-40"
+                          className="inline-flex items-center rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition-colors hover:border-rose-800/60 hover:text-rose-300 disabled:opacity-40"
                           title="Remove this user (they revert to Member on next sign-in)"
                         >
                           Remove
@@ -276,6 +297,10 @@ export default function TeamPage() {
         Removing a user only clears their saved role — they can still sign in (as a Member) if their
         email domain is allowed. To block sign-in entirely, change the allowed domains.
       </p>
+      </>
+      )}
+
+      {tab === 'bugs' && <BugInbox />}
 
       <ConfirmDialog
         open={!!confirmRemove}
