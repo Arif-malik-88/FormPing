@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { projectStore, matchKey } from '@/lib/projects/projectStore';
 import { removeUrlShareByKey } from '@/lib/projects/urlShareStore';
-import { requireRole } from '@/lib/auth/authorize';
+import { requireRole, currentUser } from '@/lib/auth/authorize';
+import { getUserName } from '@/lib/auth/userStore';
 import { urlHealthFor } from '@/lib/projects/health';
 import {
   findScheduleByUrl as findFormByUrl,
@@ -34,6 +35,13 @@ function badUrl(u: string): boolean {
   } catch {
     return true;
   }
+}
+
+/** The acting user's display name (falls back to email) for attribution (FR-30). */
+async function actorName(request: NextRequest): Promise<string | null> {
+  const actor = await currentUser(request).catch(() => null);
+  if (!actor) return null;
+  return (await getUserName(actor.email).catch(() => null)) ?? actor.email;
 }
 
 /** GET /api/projects/[id] — the project plus per-URL health (form + uptime/SSL). */
@@ -96,7 +104,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     return NextResponse.json({ projectDeleted: true });
   }
 
-  const updated = await projectStore.update(params.id, patch);
+  const updated = await projectStore.update(params.id, patch, await actorName(request));
   if (!updated) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
 
   // A URL removed from the project must not keep a live public share link
