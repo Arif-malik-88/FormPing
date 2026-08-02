@@ -75,6 +75,11 @@ deliberately carries no infrastructure, storage, env, account, or ops detail, so
 it's safe to read without login. It renders its own header/footer (the app chrome
 is suppressed on `/docs`), and everything else stays behind the login gate.
 
+**Bug reports (FR-31).** Anyone signed in can file a bug via **Report a bug** in the
+footer (stored durably + pinged to Slack). Admins triage them in an inbox on the
+**Team** page — mark **resolved** / **reopen** (stamped with who + when) or **delete**
+(hard delete, confirmed). Admin+ gated, same as Team &amp; access.
+
 ---
 
 ## Ethical usage — read this first

@@ -297,6 +297,9 @@ export default function DocsContent() {
                 <Faq q="Will scheduled Live checks spam the client’s inbox?">
                   Each Live run does submit one real entry, clearly marked as a health check by its test data. Use Safe mode if you only need to confirm the form fills, or Live on forms you’re authorized to monitor.
                 </Faq>
+                <Faq q="Found a bug or have feedback?">
+                  Use <strong>Report a bug</strong> in the footer — it reaches the team instantly. Admins can see and triage every report (resolve, reopen, or delete) from the Team page.
+                </Faq>
               </Section>
 
               <p className="mt-16 border-t border-slate-800 pt-6 text-xs text-slate-600">
