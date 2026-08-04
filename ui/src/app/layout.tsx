@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
-import { AppChrome } from '@/components/AppChrome';
-import { Footer } from '@/components/Footer';
+import { AppShell } from '@/components/shell/AppShell';
 
 // Public base URL used to resolve absolute OG/Twitter image URLs. Defaults to the
 // current Railway domain; override with NEXT_PUBLIC_SITE_URL after a domain change.
@@ -60,10 +59,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           extensions (Grammarly, LastPass, Dark Reader, etc.) that inject
           attributes/divs into the DOM before React hydrates. Doesn't hide
           real bugs in the React tree itself. */}
-      <body className="antialiased min-h-screen bg-slate-950 flex flex-col" suppressHydrationWarning>
-        <AppChrome />
-        <div className="flex-1">{children}</div>
-        <Footer />
+      <body className="antialiased min-h-screen bg-slate-950" suppressHydrationWarning>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );
