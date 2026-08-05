@@ -31,10 +31,14 @@ export function ProjectForm({
   project,
   onSaved,
   onCancel,
+  canRemoveUrls = true,
 }: {
   project?: Project | null;
   onSaved: (result?: { projectDeleted?: boolean }) => void;
   onCancel: () => void;
+  /** Whether the user may remove EXISTING URLs (Admin+ only, FR-37). When false,
+   *  original URL rows are locked (read-only, no remove) but new URLs can be added. */
+  canRemoveUrls?: boolean;
 }) {
   const editing = Boolean(project);
   const [name, setName] = useState(project?.name ?? '');
@@ -52,6 +56,10 @@ export function ProjectForm({
   const [warning, setWarning] = useState<DupWarning | null>(null);
 
   const originalUrls = project?.urls ?? [];
+  const originalKeys = new Set(originalUrls.map(urlKey));
+  // When the user can't remove URLs (Member/viewer), original rows are locked so
+  // they can add but not take existing ones out (the server also enforces this).
+  const lockRemovals = editing && !canRemoveUrls;
   const filledUrls = urls.map((u) => u.trim()).filter(Boolean);
   const removedUrls = editing
     ? originalUrls.filter((o) => !filledUrls.some((n) => urlKey(n) === urlKey(o)))
@@ -164,6 +172,7 @@ export function ProjectForm({
         <div className="space-y-2">
           {urls.map((u, i) => {
             const invalid = showErrors && u.trim().length > 0 && !isValidUrl(u);
+            const locked = lockRemovals && u.trim().length > 0 && originalKeys.has(urlKey(u.trim()));
             return (
               <div key={i}>
                 <div className="flex items-center gap-2">
@@ -171,22 +180,36 @@ export function ProjectForm({
                     value={u}
                     onChange={(e) => setUrlAt(i, e.target.value)}
                     placeholder="https://acme.com/page"
-                    disabled={saving}
+                    disabled={saving || locked}
+                    readOnly={locked}
                     aria-invalid={invalid}
+                    title={locked ? 'Only an admin or owner can remove or change an existing URL' : undefined}
                     className={`${input} font-mono ${invalid ? 'border-red-700 focus:ring-red-500' : ''}`}
                   />
-                  <button
-                    type="button"
-                    onClick={() => removeRow(i)}
-                    disabled={saving}
-                    title="Remove this URL"
-                    aria-label="Remove this URL"
-                    className="shrink-0 rounded-lg border border-slate-700 px-2.5 py-2 text-slate-500 hover:border-red-800/60 hover:text-red-300 disabled:opacity-40"
-                  >
-                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
-                      <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-                    </svg>
-                  </button>
+                  {locked ? (
+                    <span
+                      title="Only an admin or owner can remove a URL"
+                      aria-label="Locked — admins only"
+                      className="flex shrink-0 items-center rounded-lg border border-slate-700 px-2.5 py-2 text-slate-600"
+                    >
+                      <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
+                        <path fillRule="evenodd" d="M10 1a3.5 3.5 0 00-3.5 3.5V7H6a2 2 0 00-2 2v6a2 2 0 002 2h8a2 2 0 002-2V9a2 2 0 00-2-2h-.5V4.5A3.5 3.5 0 0010 1zm2 6V4.5a2 2 0 10-4 0V7h4z" clipRule="evenodd" />
+                      </svg>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => removeRow(i)}
+                      disabled={saving}
+                      title="Remove this URL"
+                      aria-label="Remove this URL"
+                      className="shrink-0 rounded-lg border border-slate-700 px-2.5 py-2 text-slate-500 hover:border-red-800/60 hover:text-red-300 disabled:opacity-40"
+                    >
+                      <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
+                        <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
                 {invalid && (
                   <p className="mt-1 text-[11px] text-red-400">Not a valid URL — use https://domain.com</p>
@@ -208,6 +231,11 @@ export function ProjectForm({
           One field per page or site for this client (homepage, contact page, landing pages…).
           {filledUrls.length > 0 ? ` ${filledUrls.length} URL${filledUrls.length === 1 ? '' : 's'}.` : ''}
         </p>
+        {lockRemovals && (
+          <p className="mt-1 text-[11px] text-amber-300/70">
+            You can add URLs; removing an existing URL is restricted to admins &amp; owners.
+          </p>
+        )}
       </div>
       {error && (
         <div className="rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300 sm:col-span-2">
@@ -289,11 +317,18 @@ export function ProjectForm({
                 <li key={u} className="break-all font-mono text-[11px] text-amber-200/80">{u}</li>
               ))}
             </ul>
-            <p className="mt-2">
-              Nothing is deleted — their monitors keep running and results are kept. Any that have been
-              tested or monitored move to <strong className="text-slate-300">Unassigned</strong> (on the
-              Projects page) to reassign or dismiss; ones with no activity yet just drop off.
-            </p>
+            <p className="mt-2">Nothing is deleted. What happens to each depends on whether it has activity:</p>
+            <ul className="mt-1.5 list-disc space-y-1 pl-5 text-slate-400">
+              <li>
+                <strong className="text-slate-300">Tested or monitored</strong> → keeps all its data and its monitors
+                keep running; it moves to <strong className="text-emerald-300">Unassigned</strong> (on the Projects
+                page) to reassign or dismiss.
+              </li>
+              <li>
+                <strong className="text-slate-300">No activity yet</strong> → simply drops off — there&apos;s nothing to
+                keep, so it won&apos;t appear in Unassigned.
+              </li>
+            </ul>
             {filledUrls.length === 0 && (
               <p className="mt-2 rounded-md border border-amber-800/50 bg-amber-500/10 px-3 py-2 text-amber-200">
                 This removes <strong>every URL</strong> — the now-empty project will be deleted (its
