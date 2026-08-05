@@ -8,21 +8,21 @@ import { rollupFromHealth } from '@/lib/projects/rollup';
 import { matchKey } from '@/lib/projects/projectStore';
 import { encodeUrlKey } from '@/lib/projects/urlKeyRoute';
 import {
-  overallStatus,
-  Monogram,
-  StatusPill,
   SectionHeader,
   Tile,
   UrlHealthDetail,
   FORM_TONE,
   UP_TONE,
   UP_LABEL,
+  monogram,
   type Tone,
 } from '@/components/projects/uiKit';
 import { ShareStatusControl } from '@/components/projects/ShareStatusControl';
 import { Attribution } from '@/components/projects/Attribution';
 import { ProjectForm } from '@/components/projects/ProjectForm';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Button, StatusPill, Modal, cx } from '@/components/ui';
+import { fromProjectRollup, STATUS } from '@/lib/design/status';
 import { useMe, canRole } from '@/lib/auth/useMe';
 
 const FORM_WORD: Record<string, string> = { healthy: 'Healthy', attention: 'Attention', failing: 'Failing', pending: 'Pending' };
@@ -47,9 +47,8 @@ export default function ProjectDetailPage() {
   const [removeUrl, setRemoveUrl] = useState<string | null>(null);
   const [removeUrlError, setRemoveUrlError] = useState<string | null>(null);
   const me = useMe();
-  const canManage = canRole(me.role, 'member');
-  const canEdit = canRole(me.role, 'member');
-  const canDelete = canRole(me.role, 'admin');
+  const canEdit = canRole(me.role, 'member'); // rename / add URLs / notes
+  const canDelete = canRole(me.role, 'admin'); // delete project, remove/delete URLs — admin+ only (FR-37)
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -172,40 +171,59 @@ export default function ProjectDetailPage() {
   }
 
   const rollup = rollupFromHealth(project.health);
-  const st = overallStatus(rollup);
+  const { level, label } = fromProjectRollup(rollup);
   const count = project.urls.length;
+
+  // Does the URL being removed have any data worth keeping? A removed URL only
+  // lands in Unassigned if it has real activity (a monitor, a result, a manual
+  // run, or change-tracking); with none, "remove" just drops it. We know this
+  // per-URL from its health, so the confirm can state the exact outcome (FR-37).
+  const removeHealth = removeUrl ? project.health.find((h) => h.url === removeUrl) : null;
+  const removeHasActivity = Boolean(
+    removeHealth &&
+      (removeHealth.form.monitored ||
+        removeHealth.form.stopped ||
+        removeHealth.site.monitored ||
+        removeHealth.site.stopped ||
+        removeHealth.change?.tracked ||
+        removeHealth.lastRun),
+  );
 
   return (
     <main className="mx-auto max-w-5xl px-4 pb-20 pt-8">
-      <button onClick={() => router.push('/projects')} className="mb-4 inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-slate-200">
+      <button onClick={() => router.push('/projects')} className="mb-4 inline-flex items-center gap-1.5 text-xs font-medium text-ink-muted transition-colors hover:text-accent-soft">
         <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden><path d="M12.7 5.3a1 1 0 00-1.4 0l-4 4a1 1 0 000 1.4l4 4a1 1 0 001.4-1.4L9.4 10l3.3-3.3a1 1 0 000-1.4z" /></svg>
         Back to Projects
       </button>
 
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-800 pb-6">
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-6">
         <div className="flex items-center gap-4">
-          <Monogram name={project.name} tone={st.tone} size="lg" />
+          <span className={cx('flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-sm font-bold ring-1 ring-inset ring-white/10', STATUS[level].soft)}>
+            {monogram(project.name)}
+          </span>
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-100">{project.name}</h1>
+            <h1 className="text-xl font-bold tracking-tight text-ink">{project.name}</h1>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <StatusPill tone={st.tone} pulse={st.pulse}>{st.word}</StatusPill>
-              <span className="text-xs text-slate-500">{count} URL{count === 1 ? '' : 's'}{project.contact ? ` · ${project.contact}` : ''}</span>
+              <StatusPill level={level}>{label}</StatusPill>
+              <span className="text-xs text-ink-faint">{count} URL{count === 1 ? '' : 's'}{project.contact ? ` · ${project.contact}` : ''}</span>
             </div>
-            {project.notes && <p className="mt-2 max-w-[60ch] text-xs italic text-slate-500">{project.notes}</p>}
+            {project.notes && <p className="mt-2 max-w-[60ch] text-xs italic text-ink-faint">{project.notes}</p>}
             <Attribution project={project} variant="chips" className="mt-3" />
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href={`/projects/${project.id}/status`} title="Live health across ALL of this client's URLs. Each URL also has its own dashboard on its row below." className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-indigo-500">
-            <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden><path d="M3 3a1 1 0 011 1v11h13a1 1 0 110 2H4a2 2 0 01-2-2V4a1 1 0 011-1z" /><path d="M7 11l3-3 2 1.5 3.5-4 1.5 1.2-4.4 5-2-1.5L8.4 12 7 11z" /></svg>
+          <Link
+            href={`/projects/${project.id}/status`}
+            title="Live health across ALL of this client's URLs. Each URL also has its own dashboard on its row below."
+            className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-b from-accent to-accent-strong px-3.5 py-2 text-sm font-semibold text-white ring-1 ring-accent-soft/20 transition-colors hover:from-accent-strong hover:to-accent-strong"
+          >
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden><path d="M3 3a1 1 0 011 1v11h13a1 1 0 110 2H4a2 2 0 01-2-2V4a1 1 0 011-1z" /><path d="M7 11l3-3 2 1.5 3.5-4 1.5 1.2-4.4 5-2-1.5L8.4 12 7 11z" /></svg>
             Global dashboard
           </Link>
-          {canEdit && (
-            <button onClick={() => setEditing(true)} className="rounded-lg border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:text-slate-100">Edit</button>
-          )}
+          {canEdit && <Button variant="secondary" onClick={() => setEditing(true)}>Edit</Button>}
           {canDelete && (
-            <button onClick={() => setConfirmDelete(true)} className="rounded-lg border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:border-rose-800/60 hover:text-rose-300">Delete</button>
+            <Button variant="secondary" onClick={() => setConfirmDelete(true)} className="hover:border-danger/60 hover:text-danger">Delete</Button>
           )}
         </div>
       </div>
@@ -239,7 +257,7 @@ export default function ProjectDetailPage() {
                 key={h.url}
                 h={h}
                 dashboardHref={`/projects/${project.id}/url/${encodeUrlKey(matchKey(h.url))}`}
-                onRemove={canManage ? () => { setRemoveUrlError(null); setRemoveUrl(h.url); } : undefined}
+                onRemove={canDelete ? () => { setRemoveUrlError(null); setRemoveUrl(h.url); } : undefined}
                 onDelete={canDelete ? () => { setDeleteUrlError(null); setDeleteUrl(h.url); } : undefined}
               />
             ))}
@@ -253,14 +271,9 @@ export default function ProjectDetailPage() {
         <ShareStatusControl projectId={project.id} initialToken={project.shareToken} canManage={canEdit} />
       </section>
 
-      {editing && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4" onMouseDown={() => setEditing(false)}>
-          <div className="mt-10 w-full max-w-2xl rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
-            <h3 className="mb-4 text-sm font-semibold text-slate-100">Edit project</h3>
-            <ProjectForm project={project} onSaved={(r) => { setEditing(false); if (r?.projectDeleted) router.push('/projects'); else void load(); }} onCancel={() => setEditing(false)} />
-          </div>
-        </div>
-      )}
+      <Modal open={editing} onClose={() => setEditing(false)} title="Edit project" size="lg">
+        <ProjectForm project={project} canRemoveUrls={canDelete} onSaved={(r) => { setEditing(false); if (r?.projectDeleted) router.push('/projects'); else void load(); }} onCancel={() => setEditing(false)} />
+      </Modal>
 
       <ConfirmDialog
         open={confirmDelete}
@@ -339,15 +352,25 @@ export default function ProjectDetailPage() {
         message={
           <>
             <p className="break-all font-mono text-[11px] text-slate-300">{removeUrl}</p>
-            <p className="mt-2">
-              Takes it out of this project but <strong className="text-slate-300">keeps all its data</strong> —
-              its monitors keep running and it moves to <strong className="text-slate-300">Unassigned</strong>{' '}
-              (if it has any test/monitor activity), where you can reassign it later.
-            </p>
+            {removeHasActivity ? (
+              <p className="mt-2">
+                This URL has test/monitor activity, so removing it{' '}
+                <strong className="text-slate-300">keeps all its data</strong> — its monitors keep running and it
+                moves to <strong className="text-emerald-300">Unassigned</strong> (on the Projects page), where you
+                can reassign it to another project later.
+              </p>
+            ) : (
+              <p className="mt-2">
+                This URL has <strong className="text-slate-300">no test or monitor activity yet</strong>, so removing
+                it simply takes it out of the project. There&apos;s nothing to keep, so it{' '}
+                <strong className="text-slate-300">won&apos;t appear in Unassigned</strong> — you&apos;d just add it
+                again if you need it.
+              </p>
+            )}
             {project && project.urls.length <= 1 && (
               <span className="mt-2 block rounded-md border border-amber-800/50 bg-amber-500/10 px-3 py-2 text-amber-200">
                 This is the <strong>only URL</strong> — removing it will delete the (now-empty) project.
-                Its data is still kept.
+                {removeHasActivity ? ' Its data is still kept.' : ''}
               </span>
             )}
             {removeUrlError && (

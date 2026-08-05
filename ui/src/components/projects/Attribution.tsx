@@ -1,4 +1,5 @@
 import type { Project } from '@/lib/projects/types';
+import { cx } from '@/components/ui';
 
 function rel(iso?: string | null): string {
   if (!iso) return '';
@@ -29,41 +30,49 @@ type AttrProject = Pick<Project, 'createdBy' | 'updatedBy' | 'createdAt' | 'upda
 
 function Avatar({ name }: { name: string }) {
   return (
-    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[8px] font-bold text-white">
+    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-strong text-[9px] font-bold text-white">
       {name.charAt(0).toUpperCase()}
     </span>
   );
 }
 
-function ClockIcon() {
+function ClockDot() {
   return (
-    <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden>
-      <path d="M10 1a9 9 0 100 18 9 9 0 000-18zm1 4a1 1 0 10-2 0v5a1 1 0 00.4.8l3 2.2a1 1 0 101.2-1.6L11 9.5z" />
-    </svg>
-  );
-}
-
-/** One metadata chip: [avatar|clock] Label [Name] · when — HubSpot-style. */
-function Chip({ label, name, when }: { label: string; name?: string | null; when?: string | null }) {
-  return (
-    <span
-      title={exact(when)}
-      className="inline-flex items-center gap-1.5 rounded-full border border-slate-800 bg-slate-900/60 px-2.5 py-1 text-xs"
-    >
-      {name ? <Avatar name={name} /> : <ClockIcon />}
-      <span className="text-slate-500">{label}</span>
-      {name && <span className="font-medium text-slate-200">{name}</span>}
-      <span className="text-slate-500">· {rel(when)}</span>
+    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-panel-raised ring-1 ring-inset ring-line-strong">
+      <svg viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3 text-ink-faint" aria-hidden>
+        <path d="M10 1a9 9 0 100 18 9 9 0 000-18zm1 4a1 1 0 10-2 0v5a1 1 0 00.4.8l3 2.2a1 1 0 101.2-1.6L11 9.5z" />
+      </svg>
     </span>
   );
 }
 
 /**
- * Project attribution / audit fields (FR-30): who added it and who last edited
- * it, with timestamps. `variant="chips"` is the HubSpot-style metadata row (avatar
- * chips + exact time on hover) for the project detail; `variant="line"` is the
- * compact single line for the card. Names fall back gracefully for projects
- * created before attribution existed (dates only).
+ * One metadata chip — [avatar|clock] Label [by Name] · when. Exact time on hover.
+ * Name is bold/bright; label + time are muted, so who did it reads first.
+ */
+function Chip({ label, name, when }: { label: string; name?: string | null; when?: string | null }) {
+  return (
+    <span
+      title={exact(when)}
+      className="inline-flex items-center gap-2 rounded-lg border border-line bg-panel/60 px-2.5 py-1.5 text-xs"
+    >
+      {name ? <Avatar name={name} /> : <ClockDot />}
+      <span className="text-ink-faint">
+        {label}
+        {name ? ' by' : ''}
+      </span>
+      {name && <span className="font-semibold text-ink-secondary">{name}</span>}
+      <span className="text-ink-faint">· {rel(when)}</span>
+    </span>
+  );
+}
+
+/**
+ * Project attribution / audit fields (FR-30): who first created it and who last
+ * changed it (any add / remove / edit stamps the updater), with timestamps.
+ * `variant="chips"` is the metadata row on the project detail; `variant="line"` is
+ * the compact single line. Names fall back gracefully for projects created before
+ * attribution existed — those show the date with a clock icon instead of a person.
  */
 export function Attribution({
   project,
@@ -82,7 +91,7 @@ export function Attribution({
 
   if (variant === 'chips') {
     return (
-      <div className={`flex flex-wrap items-center gap-2 ${className}`}>
+      <div className={cx('flex flex-wrap items-center gap-2', className)}>
         <Chip label="Added" name={createdBy} when={createdAt} />
         {wasEdited && <Chip label="Updated" name={updatedBy} when={updatedAt} />}
       </div>
@@ -92,7 +101,7 @@ export function Attribution({
   const added = `Added ${rel(createdAt)}${createdBy ? ` by ${createdBy}` : ''}`;
   const updated = wasEdited ? ` · updated ${rel(updatedAt)}${updatedBy ? ` by ${updatedBy}` : ''}` : '';
   return (
-    <p title={exact(updatedAt || createdAt)} className={`inline-flex max-w-full items-center gap-1.5 ${className}`}>
+    <p title={exact(updatedAt || createdAt)} className={cx('inline-flex max-w-full items-center gap-1.5', className)}>
       <svg viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3 shrink-0 opacity-70" aria-hidden>
         <path d="M10 9a3 3 0 100-6 3 3 0 000 6zM3.5 16.5a6.5 6.5 0 0113 0z" />
       </svg>

@@ -314,14 +314,14 @@ do*, stored in the `app_users` table (keyed by their Google email):
 |---|---|
 | **Owner** (exactly one) | Everything, **+ manage admins + transfer ownership** |
 | **Admin** | Full app incl. **delete projects** + manage members/viewers |
-| **Member** (default) | Add URLs, create/run/edit monitors, view everything — **no delete, no user management** |
+| **Member** (default) | Add URLs, create/run/edit monitors, rename/edit projects, view everything — **can't remove or delete URLs/projects, no user management** |
 | **Viewer** | Read-only |
 
 Google proves *who you are* (the email); the role is FormPing's, assigned in the
 table. A new allow-listed login defaults to **Member**. Enforcement is
 **server-side** on **every mutating route** (`requireRole`): a Viewer is blocked
 from all writes (genuinely read-only), a Member can create/run/edit monitors and
-projects but **can't delete a project or manage users** (Admin+), and only the
+projects but **can't remove a URL, delete a project, or manage users** (Admin+), and only the
 Owner manages admins or transfers ownership. The role is read fresh from the DB
 per request, so a promotion/demotion takes effect immediately.
 
