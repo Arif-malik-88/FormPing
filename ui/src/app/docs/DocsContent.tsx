@@ -241,7 +241,7 @@ export default function DocsContent() {
                 <P>A <strong className="text-slate-200">Project</strong> is a client and their URLs. Open one to see every monitor for that client — form health, uptime, SSL, and content changes — in a single view, plus a per-URL <strong>Dashboard</strong> for any one page.</P>
                 <UL>
                   <LI>Any URL you’ve tested or monitored but not yet grouped shows up in an <strong className="text-slate-200">Unassigned</strong> bucket, with <strong>Assign to project</strong> and <strong>Dismiss</strong> actions — so nothing is a dead end.</LI>
-                  <LI><strong className="text-slate-200">Remove</strong> a URL from a project → it drops to Unassigned and <em>keeps</em> its data and monitors. <strong>Delete</strong> a URL (or a whole project) is a complete, confirmed, irreversible removal of its monitors and results.</LI>
+                  <LI><strong className="text-slate-200">Remove</strong> a URL from a project → if it has test/monitor activity it drops to <strong>Unassigned</strong> keeping its data and monitors; if it has none yet, it simply drops off (nothing to keep). <strong>Delete</strong> a URL (or a whole project) is a complete, confirmed, irreversible removal of its monitors and results. Removing and deleting are limited to <strong className="text-slate-200">Admins &amp; Owners</strong> — Members can add URLs but not take them out.</LI>
                   <LI>Each project can hold a <strong>contact</strong> — who to notify for that client.</LI>
                   <LI>Each project shows <strong>who added it and who last edited it</strong> (with the time), so accountability is clear at a glance.</LI>
                 </UL>
@@ -265,11 +265,11 @@ export default function DocsContent() {
                   rows={[
                     [<b key="0">Owner</b>, 'Everything — plus manage admins and transfer ownership. Exactly one exists.'],
                     [<b key="0">Admin</b>, 'Full app, including deleting projects and managing members/viewers.'],
-                    [<b key="0">Member</b>, 'Add URLs, create/run/edit monitors, view everything. No deleting, no user management. (The default.)'],
+                    [<b key="0">Member</b>, 'Add URLs, create/run/edit monitors, rename & edit projects, view everything. Can’t remove or delete URLs or projects, and no user management. (The default.)'],
                     [<b key="0">Viewer</b>, 'Read-only.'],
                   ]}
                 />
-                <P>Permissions are enforced on the server for every action, not just hidden in the UI — a viewer genuinely can’t write, and only Admins+ can delete. Roles take effect immediately when changed. Admins and the Owner get a <strong>Team</strong> page to manage users and roles.</P>
+                <P>Permissions are enforced on the server for every action, not just hidden in the UI — a viewer genuinely can’t write, and only Admins &amp; Owners can remove or delete URLs and projects. Roles take effect immediately when changed. Admins and the Owner get a <strong>Team</strong> page to manage users and roles.</P>
               </Section>
 
               <Section id="alerts" title="Alerts" eyebrow="Team">
