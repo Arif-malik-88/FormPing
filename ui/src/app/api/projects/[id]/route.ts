@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { projectStore, matchKey } from '@/lib/projects/projectStore';
 import { removeUrlShareByKey } from '@/lib/projects/urlShareStore';
 import { requireRole, currentUser } from '@/lib/auth/authorize';
+import { atLeast } from '@/lib/auth/roles';
 import { getUserName } from '@/lib/auth/userStore';
 import { urlHealthFor } from '@/lib/projects/health';
 import {
@@ -91,6 +92,24 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   // Capture the URLs BEFORE the update so we can tell which ones are being
   // removed (to revoke their per-URL share links — FR-27).
   const before = patch.urls !== undefined ? await projectStore.get(params.id) : null;
+
+  // Removing a URL from a project — including removing the last one, which deletes
+  // the project — is Admin+ ONLY (FR-37). Members/viewers can rename, edit notes
+  // and ADD URLs, but not take existing URLs out. Enforced here, not just in the
+  // UI: compare the incoming set to what's stored and 403 if anything is dropped.
+  if (patch.urls !== undefined && before) {
+    const keptKeys = new Set(patch.urls.map(matchKey));
+    const removesAny = before.urls.some((u) => !keptKeys.has(matchKey(u)));
+    if (removesAny) {
+      const actor = await currentUser(request).catch(() => null);
+      if (!actor || !atLeast(actor.role, 'admin')) {
+        return NextResponse.json(
+          { error: 'Only an admin or owner can remove a URL from a project.' },
+          { status: 403 },
+        );
+      }
+    }
+  }
 
   // Removing the LAST URL leaves an empty, useless project — delete it instead
   // (FR-27). The URLs keep their data (they drop to Unassigned); only their
