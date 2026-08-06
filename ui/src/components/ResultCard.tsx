@@ -6,41 +6,34 @@ import { ConfidenceBar } from './ConfidenceBar';
 import { getReasonMessage, type Severity } from '@/lib/reasonMessages';
 
 const BANNER_STYLES: Record<Severity, { wrap: string; icon: string; title: string }> = {
-  success: { wrap: 'bg-emerald-500/10 border-emerald-500/20', icon: '✓', title: 'text-emerald-300' },
-  info:    { wrap: 'bg-slate-500/10 border-slate-500/20',     icon: 'ℹ', title: 'text-slate-300' },
-  warn:    { wrap: 'bg-amber-500/10 border-amber-500/20',     icon: '⚠', title: 'text-amber-300' },
-  error:   { wrap: 'bg-red-500/10 border-red-500/20',         icon: '✕', title: 'text-red-300' },
+  success: { wrap: 'bg-ok/10 border-ok/20', icon: '✓', title: 'text-ok' },
+  info: { wrap: 'bg-idle/10 border-line-strong', icon: 'ℹ', title: 'text-ink-secondary' },
+  warn: { wrap: 'bg-warn/10 border-warn/20', icon: '⚠', title: 'text-warn' },
+  error: { wrap: 'bg-danger/10 border-danger/20', icon: '✕', title: 'text-danger' },
 };
 
 function FieldRow({ label, value, mono = false }: { label: string; value: string | null; mono?: boolean }) {
   if (!value) return null;
   return (
     <div className="flex gap-2 text-xs">
-      <span className="text-slate-500 w-32 shrink-0">{label}</span>
-      <span className={`text-slate-300 break-all ${mono ? 'font-mono' : ''}`}>{value}</span>
+      <span className="w-32 shrink-0 text-ink-faint">{label}</span>
+      <span className={`break-all text-ink-secondary ${mono ? 'font-mono' : ''}`}>{value}</span>
     </div>
   );
 }
 
 function CheckIcon({ ok }: { ok: boolean }) {
-  return ok
-    ? <span className="text-emerald-400 text-xs">✓</span>
-    : <span className="text-slate-600 text-xs">✗</span>;
+  return ok ? <span className="text-xs text-ok">✓</span> : <span className="text-xs text-ink-faint">✗</span>;
 }
 
 function Pill({ label, active, color }: { label: string; active: boolean; color: string }) {
   if (!active) return null;
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${color}`}>
-      {label}
-    </span>
-  );
+  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${color}`}>{label}</span>;
 }
 
 function getDomain(url: string): string {
   try { return new URL(url).hostname.replace('www.', ''); } catch { return url; }
 }
-
 function formatMs(ms: number): string {
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
 }
@@ -51,142 +44,128 @@ export function ResultCard({ result }: { result: SiteResult }) {
   const domain = getDomain(result.normalizedUrl);
 
   const statusBorder: Record<string, string> = {
-    pass: 'border-emerald-500/20',
-    fail: 'border-red-500/20',
-    warn: 'border-amber-500/20',
-    error: 'border-slate-500/20',
+    pass: 'border-ok/25',
+    fail: 'border-danger/25',
+    warn: 'border-warn/25',
+    error: 'border-line-strong',
   };
-  const border = statusBorder[result.finalStatus] ?? 'border-slate-700';
+  const border = statusBorder[result.finalStatus] ?? 'border-line';
 
   const reason = getReasonMessage(result.reasonCode);
   const banner = BANNER_STYLES[reason.severity];
   const hasErrors = result.errors && result.errors.length > 0;
 
   return (
-    <div className={`rounded-xl border ${border} bg-slate-900 overflow-hidden animate-slide-in`}>
+    <div className={`fp-rise overflow-hidden rounded-xl border ${border} bg-panel`}>
       {/* Header row */}
       <div className="flex items-center justify-between gap-3 px-4 py-3">
-        <div className="flex items-center gap-3 min-w-0">
-          {/* Favicon */}
+        <div className="flex min-w-0 items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
             alt=""
             width={16}
             height={16}
-            className="rounded shrink-0 opacity-70"
+            className="shrink-0 rounded opacity-70"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
           <div className="min-w-0">
-            <p className="font-mono text-sm font-medium text-slate-100 truncate">{domain}</p>
-            <p className="font-mono text-xs text-slate-500 truncate">{result.normalizedUrl}</p>
+            <p className="truncate font-mono text-sm font-medium text-ink">{domain}</p>
+            <p className="truncate font-mono text-xs text-ink-faint">{result.normalizedUrl}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs text-slate-500 font-mono">{formatMs(result.durationMs)}</span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="font-mono text-xs text-ink-faint">{formatMs(result.durationMs)}</span>
           <StatusBadge status={result.finalStatus} />
         </div>
       </div>
 
       {/* Reason banner */}
-      <div className={`mx-4 mb-3 rounded-lg border px-3 py-2.5 flex gap-2.5 items-start ${banner.wrap}`}>
-        <span className={`${banner.title} text-sm font-bold leading-5 shrink-0 mt-0.5`}>{banner.icon}</span>
+      <div className={`mx-4 mb-3 flex items-start gap-2.5 rounded-lg border px-3 py-2.5 ${banner.wrap}`}>
+        <span className={`${banner.title} mt-0.5 shrink-0 text-sm font-bold leading-5`}>{banner.icon}</span>
         <div className="min-w-0">
           <p className={`text-sm font-semibold ${banner.title}`}>{reason.title}</p>
-          {reason.description && (
-            <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">{reason.description}</p>
-          )}
+          {reason.description && <p className="mt-0.5 text-xs leading-relaxed text-ink-muted">{reason.description}</p>}
         </div>
       </div>
 
       {/* Errors list (field-level failures) */}
       {hasErrors && (
-        <div className="mx-4 mb-3 rounded-lg border border-red-500/20 bg-red-500/5">
-          <div className="px-3 py-2 border-b border-red-500/20 flex items-center gap-2">
-            <span className="text-red-400 text-xs font-semibold uppercase tracking-wider">
+        <div className="mx-4 mb-3 rounded-lg border border-danger/20 bg-danger/5">
+          <div className="flex items-center gap-2 border-b border-danger/20 px-3 py-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-danger">
               {result.errors.length} field error{result.errors.length !== 1 ? 's' : ''}
             </span>
           </div>
-          <ul className="px-3 py-2 space-y-1">
+          <ul className="space-y-1 px-3 py-2">
             {result.errors.slice(0, 8).map((err, i) => (
-              <li key={i} className="text-xs font-mono text-red-200/80 break-all">
-                <span className="text-red-400/60 mr-1">·</span>{err}
+              <li key={i} className="break-all font-mono text-xs text-danger/80">
+                <span className="mr-1 text-danger/60">·</span>{err}
               </li>
             ))}
-            {result.errors.length > 8 && (
-              <li className="text-xs text-slate-500 italic">+{result.errors.length - 8} more…</li>
-            )}
+            {result.errors.length > 8 && <li className="text-xs italic text-ink-faint">+{result.errors.length - 8} more…</li>}
           </ul>
         </div>
       )}
 
       {/* Quick status row */}
-      <div className="px-4 pb-3 flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 px-4 pb-3">
         <ReasonCodeBadge code={result.reasonCode} />
-        <Pill label="CAPTCHA" active={result.captchaDetected} color="bg-orange-500/15 text-orange-400" />
-        <Pill label="Anti-Bot" active={result.antiBotDetected} color="bg-red-500/15 text-red-400" />
-        <Pill label="Thank-You ✓" active={result.thankYouDetected} color="bg-emerald-500/15 text-emerald-400" />
-        <Pill label="Inline Success ✓" active={result.inlineSuccessDetected} color="bg-emerald-500/15 text-emerald-400" />
+        <Pill label="CAPTCHA" active={result.captchaDetected} color="bg-warn/15 text-warn" />
+        <Pill label="Anti-Bot" active={result.antiBotDetected} color="bg-danger/15 text-danger" />
+        <Pill label="Thank-You ✓" active={result.thankYouDetected} color="bg-ok/15 text-ok" />
+        <Pill label="Inline Success ✓" active={result.inlineSuccessDetected} color="bg-ok/15 text-ok" />
       </div>
 
       {/* Detection summary */}
-      <div className="px-4 pb-3 grid grid-cols-2 gap-x-4 gap-y-1.5">
-        <div className="flex items-center gap-2 text-xs text-slate-400">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 px-4 pb-3">
+        <div className="flex items-center gap-2 text-xs text-ink-muted">
           <CheckIcon ok={result.contactPageFound} />
           <span>Contact page</span>
           {result.contactPageFound && (
-            <span className="font-mono text-slate-500 truncate max-w-[120px]">
+            <span className="max-w-[120px] truncate font-mono text-ink-faint">
               {result.resolvedContactPage ? new URL(result.resolvedContactPage).pathname : ''}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 text-xs text-slate-400">
+        <div className="flex items-center gap-2 text-xs text-ink-muted">
           <CheckIcon ok={result.formFound} />
           <span>Form detected</span>
-          {result.formIdentifier?.id && (
-            <span className="font-mono text-slate-500">#{result.formIdentifier.id}</span>
-          )}
+          {result.formIdentifier?.id && <span className="font-mono text-ink-faint">#{result.formIdentifier.id}</span>}
         </div>
       </div>
 
       {/* Confidence bars */}
       {(result.contactPageFound || result.formFound) && (
-        <div className="px-4 pb-3 space-y-1.5">
-          {result.contactPageFound && (
-            <ConfidenceBar value={result.contactPageConfidence} label="Contact page" />
-          )}
-          {result.formFound && (
-            <ConfidenceBar value={result.formConfidence} label="Form detection" />
-          )}
+        <div className="space-y-1.5 px-4 pb-3">
+          {result.contactPageFound && <ConfidenceBar value={result.contactPageConfidence} label="Contact page" />}
+          {result.formFound && <ConfidenceBar value={result.formConfidence} label="Form detection" />}
         </div>
       )}
 
       {/* Expand/collapse footer */}
-      <div className="flex items-center border-t border-slate-800 divide-x divide-slate-800">
+      <div className="flex items-center divide-x divide-line border-t border-line">
         <button
           onClick={() => setExpanded(!expanded)}
-          className="flex-1 px-4 py-2 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-colors text-left"
+          className="flex-1 px-4 py-2 text-left text-xs text-ink-muted transition-colors hover:bg-panel-raised hover:text-ink"
         >
           {result.notes.length > 0
             ? `${expanded ? '▲ Hide' : '▼ Show'} ${result.notes.length} note${result.notes.length !== 1 ? 's' : ''}`
-            : (expanded ? '▲ Hide details' : '▼ Show details')}
+            : expanded ? '▲ Hide details' : '▼ Show details'}
         </button>
         <a
           href={`/form-watch?url=${encodeURIComponent(result.normalizedUrl)}`}
-          className="px-4 py-2 text-xs text-slate-400 hover:text-indigo-300 hover:bg-slate-800/50 transition-colors whitespace-nowrap"
-          title="Set up scheduled monitoring — the Form Watch tab opens with this URL prefilled; you pick the mode + frequency"
+          className="whitespace-nowrap px-4 py-2 text-xs text-ink-muted transition-colors hover:bg-panel-raised hover:text-accent-soft"
+          title="Set up scheduled monitoring — the Form Scheduler opens with this URL prefilled; you pick the mode + frequency"
         >
           👁 Monitor…
         </a>
-        <button
-          onClick={() => setShowJson(!showJson)}
-          className="px-4 py-2 text-xs text-slate-500 hover:text-slate-200 hover:bg-slate-800/50 transition-colors font-mono"
-        >
+        <button onClick={() => setShowJson(!showJson)} className="px-4 py-2 font-mono text-xs text-ink-faint transition-colors hover:bg-panel-raised hover:text-ink">
           {showJson ? '{ hide }' : '{ JSON }'}
         </button>
         <button
           onClick={() => navigator.clipboard.writeText(JSON.stringify(result, null, 2))}
-          className="px-4 py-2 text-xs text-slate-500 hover:text-slate-200 hover:bg-slate-800/50 transition-colors"
+          className="px-4 py-2 text-xs text-ink-faint transition-colors hover:bg-panel-raised hover:text-ink"
           title="Copy JSON"
         >
           ⎘ Copy
@@ -195,14 +174,14 @@ export function ResultCard({ result }: { result: SiteResult }) {
 
       {/* Expanded notes + details */}
       {expanded && (
-        <div className="px-4 pb-4 pt-2 border-t border-slate-800 space-y-3 animate-fade-in">
+        <div className="fp-rise space-y-3 border-t border-line px-4 pb-4 pt-2">
           {result.notes.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">Notes</p>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-ink-faint">Notes</p>
               <ul className="space-y-1">
                 {result.notes.map((note, i) => (
-                  <li key={i} className="text-xs text-slate-300 flex gap-2">
-                    <span className="text-slate-600 shrink-0">·</span>
+                  <li key={i} className="flex gap-2 text-xs text-ink-secondary">
+                    <span className="shrink-0 text-ink-faint">·</span>
                     {note}
                   </li>
                 ))}
@@ -210,7 +189,7 @@ export function ResultCard({ result }: { result: SiteResult }) {
             </div>
           )}
           <div className="space-y-1">
-            <p className="text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">Details</p>
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-ink-faint">Details</p>
             <FieldRow label="Mode" value={result.mode} />
             <FieldRow label="Contact page" value={result.resolvedContactPage} mono />
             <FieldRow label="Final URL" value={result.finalUrl} mono />
@@ -223,17 +202,15 @@ export function ResultCard({ result }: { result: SiteResult }) {
                 <FieldRow label="Form method" value={result.formIdentifier.method} mono />
               </>
             )}
-            {result.error && (
-              <FieldRow label="Error" value={result.error} />
-            )}
+            {result.error && <FieldRow label="Error" value={result.error} />}
           </div>
         </div>
       )}
 
       {/* Raw JSON */}
       {showJson && (
-        <div className="border-t border-slate-800 animate-fade-in">
-          <pre className="p-4 text-xs font-mono text-slate-300 overflow-x-auto leading-relaxed whitespace-pre-wrap break-all">
+        <div className="fp-rise border-t border-line">
+          <pre className="overflow-x-auto whitespace-pre-wrap break-all p-4 font-mono text-xs leading-relaxed text-ink-secondary">
             {JSON.stringify(result, null, 2)}
           </pre>
         </div>
