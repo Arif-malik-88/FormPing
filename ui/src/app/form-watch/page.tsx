@@ -1,25 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScheduleCard } from '@/components/formWatch/ScheduleCard';
-import { ProjectUrlPicker } from '@/components/projects/ProjectUrlPicker';
+import { SchedulerCommandBar } from '@/components/formWatch/SchedulerCommandBar';
 import { AddToProjectModal } from '@/components/projects/AddToProjectModal';
 import { ReadOnlyBanner } from '@/components/ReadOnlyBanner';
-import { Toaster } from '@/components/Toaster';
-import { showToast } from '@/lib/toast';
+import { PageHeader, Skeleton } from '@/components/ui';
 import type { FormSchedule, FormWatchMode } from '@/lib/formWatch/types';
-
-const INTERVAL_PRESETS = [
-  { label: 'Daily', days: 1 },
-  { label: 'Every 3 days', days: 3 },
-  { label: 'Weekly', days: 7 },
-];
-
-const MODES: { value: FormWatchMode; label: string; hint: string }[] = [
-  { value: 'live', label: 'Live (submit)', hint: 'Fills and submits — confirms real delivery' },
-  { value: 'safe', label: 'Safe (no submit)', hint: 'Fills the form but does not submit' },
-  { value: 'detect-only', label: 'Detect only', hint: 'Just checks the form exists' },
-];
 
 export default function FormWatchPage() {
   const [schedules, setSchedules] = useState<FormSchedule[]>([]);
@@ -31,8 +18,11 @@ export default function FormWatchPage() {
   const [landingPage, setLandingPage] = useState(false);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /** URL just added — drives the non-blocking "add to a project?" nudge. */
   const [justAdded, setJustAdded] = useState<string | null>(null);
+
+  // While a card is showing its in-place "stopped" confirmation, hold the poll so
+  // a background refresh doesn't yank the card (and its message) out from under it.
+  const pollHold = useRef(0);
 
   const load = useCallback(async () => {
     try {
@@ -47,40 +37,25 @@ export default function FormWatchPage() {
 
   useEffect(() => {
     void load();
-    // Light polling so statuses/next-run update after scheduled runs fire.
-    const t = setInterval(() => void load(), 15000);
+    const t = setInterval(() => { if (pollHold.current === 0) void load(); }, 15000);
     return () => clearInterval(t);
   }, [load]);
 
-  // Prefill the URL from ?url= — e.g. the "Monitor…" action on a Form Tester
-  // result. The user still picks the mode + frequency before adding.
   useEffect(() => {
     try {
       const prefill = new URLSearchParams(window.location.search).get('url');
       if (prefill) setUrl(prefill);
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
   }, []);
 
   const handleAdd = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
       setError(null);
-      // Accept URLs typed without a scheme — prepend https:// automatically.
       let target = url.trim();
-      if (!target) {
-        setError('Enter a URL');
-        return;
-      }
+      if (!target) { setError('Enter a URL'); return; }
       if (!/^https?:\/\//i.test(target)) target = `https://${target}`;
-      try {
-        // eslint-disable-next-line no-new
-        new URL(target);
-      } catch {
-        setError('That doesn’t look like a valid URL');
-        return;
-      }
+      try { new URL(target); } catch { setError('That doesn’t look like a valid URL'); return; }
       setAdding(true);
       try {
         const res = await fetch('/api/form-watch', {
@@ -89,10 +64,7 @@ export default function FormWatchPage() {
           body: JSON.stringify({ url: target, intervalDays: days, mode, landingPage }),
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          setError(data?.error || 'Could not add schedule');
-          return;
-        }
+        if (!res.ok) { setError(data?.error || 'Could not add schedule'); return; }
         setUrl('');
         setLandingPage(false);
         setJustAdded(target);
@@ -106,18 +78,15 @@ export default function FormWatchPage() {
     [url, days, mode, landingPage, load],
   );
 
-  const handleStop = useCallback(
-    async (id: string) => {
-      await fetch('/api/form-watch/stop', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      });
-      await load();
-      showToast('Monitor stopped — its last results stay in Projects.');
-    },
-    [load],
-  );
+  // API only — the card shows the in-place "stopped, kept in Projects" note, then
+  // calls reload() itself when it's done (so the message stays at that card).
+  const handleStop = useCallback(async (id: string) => {
+    await fetch('/api/form-watch/stop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+  }, []);
 
   const handleTogglePause = useCallback(
     async (id: string, paused: boolean) => {
@@ -131,192 +100,85 @@ export default function FormWatchPage() {
     [load],
   );
 
+  const holdPoll = useCallback((active: boolean) => {
+    pollHold.current = Math.max(0, pollHold.current + (active ? 1 : -1));
+  }, []);
+
   return (
-    <div className="min-h-screen bg-slate-950">
-      <main className="max-w-7xl mx-auto px-4 pb-16 pt-8">
-        <div className="mb-6">
-          <h2 className="text-xl font-bold text-slate-100">Form Scheduler</h2>
-          <p className="text-sm text-slate-400 mt-1">
-            Automatically test contact forms on a schedule. Each run checks form health, detects
-            changes, and sends a Slack alert (success and failure) with the URL.
-          </p>
+    <>
+      <main className="mx-auto max-w-5xl px-4 pb-16 pt-8">
+        <PageHeader
+          title="Form Scheduler"
+          description="Automatically re-test contact forms on a schedule. Each run checks form health, detects changes, and sends a Slack alert with the URL."
+        />
+        <div className="mt-5">
+          <ReadOnlyBanner />
         </div>
 
-        <ReadOnlyBanner />
+        {/* Add-monitor command bar */}
+        <div className="mt-5">
+          <SchedulerCommandBar
+            url={url}
+            onUrl={setUrl}
+            days={days}
+            onDays={setDays}
+            mode={mode}
+            onMode={setMode}
+            landingPage={landingPage}
+            onLanding={setLandingPage}
+            onAdd={handleAdd}
+            adding={adding}
+            error={error}
+          />
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
-          {/* Left — add a schedule */}
-          <div className="lg:col-span-2 lg:sticky lg:top-20">
-            <form
-              onSubmit={handleAdd}
-              className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4"
-            >
-              <h3 className="text-sm font-semibold text-slate-200">Add a form to watch</h3>
-
-              <div>
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider">
-                    Form URL
-                  </label>
-                  <ProjectUrlPicker align="right" onPick={(u) => setUrl(u)} />
-                </div>
-                <input
-                  type="text"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="client-site.com/contact"
-                  disabled={adding}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-40"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-                  Check frequency
-                </label>
-                <div className="flex gap-2 mb-2">
-                  {INTERVAL_PRESETS.map((p) => (
-                    <button
-                      key={p.days}
-                      type="button"
-                      onClick={() => setDays(p.days)}
-                      className={`rounded-md px-2.5 py-1.5 text-xs font-medium ${
-                        days === p.days
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2 text-xs text-slate-400">
-                  <span>Every</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={days}
-                    onChange={(e) => setDays(Math.max(1, Number(e.target.value) || 1))}
-                    disabled={adding}
-                    className="w-16 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                  <span>day(s)</span>
+        {/* Monitors — the full-width stage */}
+        <div className="mt-6 space-y-3">
+          {loading && (
+            [0, 1].map((i) => (
+              <div key={i} className="rounded-xl border border-line bg-panel/60 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex-1 space-y-2"><Skeleton className="h-3.5 w-40" /><Skeleton className="h-2.5 w-56" /></div>
+                  <div className="flex gap-2"><Skeleton className="h-8 w-16 rounded-md" /><Skeleton className="h-8 w-16 rounded-md" /></div>
                 </div>
               </div>
+            ))
+          )}
 
-              <div>
-                <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-                  Mode
-                </label>
-                <select
-                  value={mode}
-                  onChange={(e) => setMode(e.target.value as FormWatchMode)}
-                  disabled={adding}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-40"
-                >
-                  {MODES.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-[11px] text-slate-500">
-                  {MODES.find((m) => m.value === mode)?.hint}
-                </p>
-              </div>
+          {!loading && schedules.length > 0 && (
+            <div className="flex items-center gap-2.5 rounded-lg border border-ok/25 bg-ok/10 px-3.5 py-2.5">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ok opacity-60 motion-reduce:animate-none" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-ok" />
+              </span>
+              <span className="text-xs font-medium text-ok">
+                Scheduler running — automatically watching {schedules.length} form{schedules.length === 1 ? '' : 's'}
+              </span>
+            </div>
+          )}
 
-              <div>
-                <label className="flex items-center gap-2.5 cursor-pointer group">
-                  <input
-                    type="checkbox"
-                    checked={landingPage}
-                    onChange={(e) => setLandingPage(e.target.checked)}
-                    disabled={adding}
-                    className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:ring-offset-0"
-                  />
-                  <span className="text-sm text-slate-300 group-hover:text-slate-200 transition-colors">
-                    Landing page
-                  </span>
-                </label>
-                <p className="mt-1 text-[11px] text-slate-500">
-                  Test the form on this exact URL — skip searching for a separate contact page. Turn on
-                  for landing pages with the form on the page itself.
-                </p>
-              </div>
-
-              {error && (
-                <div className="rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300">
-                  {error}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={adding || url.trim().length === 0}
-                className="w-full rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 px-4 py-2.5 text-sm font-semibold text-white"
-              >
-                {adding ? 'Checking URL…' : 'Add to Form Watch'}
-              </button>
-
-              <p className="text-[11px] text-slate-600">
-                The first check runs right away to set a baseline, then repeats on your schedule
-                until you stop it.
-              </p>
-            </form>
-
-          </div>
-
-          {/* Right — schedule list */}
-          <div className="lg:col-span-3 space-y-3">
-            <Toaster />
-            {loading && (
-              <div className="space-y-3">
-                {[0, 1].map((i) => (
-                  <div key={i} className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex-1 space-y-2"><div className="fp-skeleton h-3.5 w-40 rounded" /><div className="fp-skeleton h-2.5 w-56 rounded" /></div>
-                      <div className="flex gap-2"><div className="fp-skeleton h-8 w-16 rounded-md" /><div className="fp-skeleton h-8 w-16 rounded-md" /></div>
-                    </div>
-                    <div className="fp-skeleton mt-3 h-3 w-28 rounded" />
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {!loading && schedules.length > 0 && (
-              <div className="flex items-center gap-2.5 rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-3 py-2">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                </span>
-                <span className="text-xs font-medium text-emerald-300">
-                  Scheduler running — automatically watching {schedules.length} form
-                  {schedules.length === 1 ? '' : 's'}
+          {!loading && schedules.length === 0 && (
+            <div className="flex flex-col items-center rounded-xl border border-dashed border-line bg-panel/40 px-8 py-14 text-center">
+              <div className="relative mb-4 flex h-16 w-16 items-center justify-center">
+                <span className="absolute inline-flex h-11 w-11 animate-ping rounded-full bg-accent/15 [animation-duration:2.2s] motion-reduce:animate-none" aria-hidden />
+                <span className="absolute h-14 w-14 rounded-full border border-accent/15" aria-hidden />
+                <span className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-panel-raised text-accent-soft ring-1 ring-line-strong">
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5" aria-hidden><path d="M10 2a8 8 0 100 16 8 8 0 000-16zm1 4a1 1 0 10-2 0v4a1 1 0 00.4.8l3 2.2a1 1 0 101.2-1.6L11 9.5V6z" /></svg>
                 </span>
               </div>
-            )}
-            {!loading && schedules.length === 0 && (
-              <div className="rounded-xl border border-dashed border-slate-800 p-10 text-center">
-                <p className="text-sm text-slate-400">No forms are being watched yet.</p>
-                <p className="text-xs text-slate-600 mt-1">Add a URL on the left to start monitoring.</p>
-              </div>
-            )}
-            {!loading &&
-              schedules.map((s) => (
-                <ScheduleCard
-                  key={s.id}
-                  schedule={s}
-                  onStop={handleStop}
-                  onTogglePause={handleTogglePause}
-                />
-              ))}
-          </div>
+              <p className="text-sm font-semibold text-ink">No forms are being watched yet</p>
+              <p className="mt-1 text-xs text-ink-muted">Add a URL above to start monitoring on a schedule.</p>
+            </div>
+          )}
+
+          {!loading &&
+            schedules.map((s) => (
+              <ScheduleCard key={s.id} schedule={s} onStop={handleStop} onTogglePause={handleTogglePause} onDone={load} onHold={holdPoll} />
+            ))}
         </div>
       </main>
 
-      {justAdded && (
-        <AddToProjectModal url={justAdded} onClose={() => setJustAdded(null)} />
-      )}
-    </div>
+      {justAdded && <AddToProjectModal url={justAdded} onClose={() => setJustAdded(null)} />}
+    </>
   );
 }

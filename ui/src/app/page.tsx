@@ -1,16 +1,15 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect, useSyncExternalStore } from 'react';
-import { UrlInputPanel } from '@/components/UrlInputPanel';
-import { ConfigPanel } from '@/components/ConfigPanel';
+import { TesterCommandBar } from '@/components/TesterCommandBar';
 import { ResultsPanel } from '@/components/ResultsPanel';
 import { ProjectAssignQueue } from '@/components/projects/ProjectAssignQueue';
 import { ReadOnlyBanner } from '@/components/ReadOnlyBanner';
+import { PageHeader, KeptNotice } from '@/components/ui';
 import { Toaster } from '@/components/Toaster';
 import { checkUrl } from '@/lib/urlCheck';
 import * as testerRun from '@/lib/testerRun';
 import { markCleared, unmarkCleared, wasCleared } from '@/lib/clearedInput';
-import { showToast } from '@/lib/toast';
 import type { RunConfig } from '@/types';
 
 const DEFAULT_CONFIG: RunConfig = {
@@ -51,6 +50,16 @@ export default function Home() {
    *  initial empty state from clobbering the saved copy before restore runs. */
   const [restored, setRestored] = useState(false);
 
+  /** Inline "cleared" confirmation shown IN the results area (not a floating toast),
+   *  so the "still saved in Projects" reassurance appears exactly where it happened. */
+  const [flash, setFlash] = useState<string | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showFlash = useCallback((msg: string) => {
+    setFlash(msg);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(null), 7000);
+  }, []);
+
   // ── Restore the typed URL + the cached run view on first mount ─────────────
   // (results/logs are restored by the store, which owns that cache.)
   useEffect(() => {
@@ -85,8 +94,8 @@ export default function Home() {
     try {
       window.localStorage.removeItem(STORAGE_KEY_URL);
     } catch { /* ignore */ }
-    showToast('Cleared from view — your test results are still saved in Projects.');
-  }, []);
+    showFlash('Cleared from view — your test results are still saved in Projects.');
+  }, [showFlash]);
 
   const handleRun = useCallback(async () => {
     if (running || checking) return;
@@ -132,62 +141,51 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <main className="max-w-7xl mx-auto px-4 pb-16 pt-8">
-        <div className="mb-6">
-          <h2 className="text-xl font-bold text-slate-100">Form Tester</h2>
-          <p className="text-sm text-slate-400 mt-1">
-            Run an on-demand check on one or more contact forms — find the form, fill it, and (in live
-            mode) submit to confirm it actually works.
-          </p>
+    <>
+      <main className="mx-auto max-w-5xl px-4 pb-16 pt-8">
+        <PageHeader
+          title="Form Tester"
+          description="Point it at any contact form and run a real check — find the form, fill it, and (in Live mode) submit to confirm the message actually lands."
+        />
+        <div className="mt-5">
+          <ReadOnlyBanner />
         </div>
-        <ReadOnlyBanner />
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
-          {/* Left — input + config */}
-          <div className="lg:col-span-2 space-y-4 lg:sticky lg:top-20">
-            <UrlInputPanel
-              value={urlInput}
-              onChange={(v) => {
-                setUrlInput(v);
-                if (v) unmarkCleared('tester'); // user is filling it again
-                forceRef.current = false;
-                setPreflight(null);
-              }}
-              onRun={handleRun}
-              onStop={handleStop}
-              running={running}
-            />
-            {(checking || preflight) && (
-              <div
-                className={`rounded-lg border px-3 py-2 text-xs ${
-                  preflight
-                    ? 'border-amber-800/60 bg-amber-950/30 text-amber-200'
-                    : 'border-slate-700 bg-slate-900 text-slate-400'
-                }`}
-              >
-                {checking ? 'Checking URLs…' : preflight}
-              </div>
-            )}
-            <ConfigPanel config={config} onChange={setConfig} disabled={running} />
-          </div>
 
-          {/* Right — results */}
-          <div className="lg:col-span-3">
-            <Toaster />
-            <ResultsPanel
-              results={results}
-              progress={progress}
-              logs={logs}
-              running={running}
-              onClear={handleClear}
-            />
-          </div>
+        {/* Command bar — full width */}
+        <div className="mt-5">
+          <TesterCommandBar
+            value={urlInput}
+            onChange={(v) => {
+              setUrlInput(v);
+              if (v) unmarkCleared('tester'); // user is filling it again
+              forceRef.current = false;
+              setPreflight(null);
+            }}
+            onRun={handleRun}
+            onStop={handleStop}
+            running={running}
+            config={config}
+            onConfig={setConfig}
+            checking={checking}
+            preflight={preflight}
+          />
+        </div>
+
+        {/* Results — the full-width stage */}
+        <div className="mt-6">
+          <Toaster />
+          {flash && (
+            <div className="mb-3">
+              <KeptNotice title={flash} onDismiss={() => setFlash(null)} />
+            </div>
+          )}
+          <ResultsPanel results={results} progress={progress} logs={logs} running={running} onClear={handleClear} />
         </div>
       </main>
 
       {pendingAssign.length > 0 && (
         <ProjectAssignQueue urls={pendingAssign} onDone={testerRun.clearPendingAssign} />
       )}
-    </div>
+    </>
   );
 }

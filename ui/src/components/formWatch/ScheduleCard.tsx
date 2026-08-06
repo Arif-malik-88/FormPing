@@ -1,22 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormSchedule, FormRunRecord } from '@/lib/formWatch/types';
 import { runVerdict, type VerdictLevel } from '@/lib/formWatch/verdict';
 import { TrendBar, type TrendTone } from '@/components/TrendBar';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { cx, KeptNotice } from '@/components/ui';
 
 const LEVEL_STYLE: Record<VerdictLevel | 'pending', { dot: string; text: string; label: string }> = {
-  healthy: { dot: 'bg-emerald-400', text: 'text-emerald-300', label: 'Healthy' },
-  attention: { dot: 'bg-amber-400', text: 'text-amber-300', label: 'Needs attention' },
-  failing: { dot: 'bg-red-400', text: 'text-red-300', label: 'Failing' },
-  pending: { dot: 'bg-slate-500', text: 'text-slate-400', label: 'Pending first run' },
+  healthy: { dot: 'bg-ok', text: 'text-ok', label: 'Healthy' },
+  attention: { dot: 'bg-warn', text: 'text-warn', label: 'Needs attention' },
+  failing: { dot: 'bg-danger', text: 'text-danger', label: 'Failing' },
+  pending: { dot: 'bg-idle', text: 'text-ink-muted', label: 'Pending first run' },
 };
 
 function relativeTime(iso: string | null): string {
   if (!iso) return '—';
-  const then = new Date(iso).getTime();
-  const diff = then - Date.now();
+  const diff = new Date(iso).getTime() - Date.now();
   const abs = Math.abs(diff);
   const mins = Math.round(abs / 60000);
   const hrs = Math.round(abs / 3_600_000);
@@ -24,22 +24,26 @@ function relativeTime(iso: string | null): string {
   const unit = days >= 1 ? `${days}d` : hrs >= 1 ? `${hrs}h` : `${mins}m`;
   return diff >= 0 ? `in ${unit}` : `${unit} ago`;
 }
-
 function intervalLabel(ms: number): string {
   const days = ms / 86_400_000;
   if (days >= 1 && Number.isInteger(days)) return `every ${days} day${days === 1 ? '' : 's'}`;
-  const hrs = Math.round(ms / 3_600_000);
-  return `every ${hrs}h`;
+  return `every ${Math.round(ms / 3_600_000)}h`;
 }
 
 export function ScheduleCard({
   schedule,
   onStop,
   onTogglePause,
+  onDone,
+  onHold,
 }: {
   schedule: FormSchedule;
   onStop: (id: string) => Promise<void>;
   onTogglePause: (id: string, paused: boolean) => Promise<void>;
+  /** Reload the list once this card has finished showing its "stopped" note. */
+  onDone: () => void;
+  /** Hold/release the parent's background poll while the "stopped" note is up. */
+  onHold: (active: boolean) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [runs, setRuns] = useState<FormRunRecord[] | null>(null);
@@ -47,33 +51,25 @@ export function ScheduleCard({
   const [stopping, setStopping] = useState(false);
   const [pausing, setPausing] = useState(false);
   const [confirmStop, setConfirmStop] = useState(false);
+  const [justStopped, setJustStopped] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holding = useRef(false);
 
-  // Mode-aware verdict for the most recent run (green when the form is healthy
-  // for the selected mode — e.g. SAFE "filled, not submitted" is a success).
   const verdict = schedule.lastStatus
     ? runVerdict(schedule.lastReasonCode ?? '', schedule.lastFormFound ?? false, schedule.lastStatus)
     : null;
   const level: VerdictLevel | 'pending' = verdict ? verdict.level : 'pending';
   const style = LEVEL_STYLE[level];
 
-  // Recent-history trend (oldest → newest): % healthy + a status sparkline.
   const recentRuns = (runs ?? []).slice(0, 12).reverse();
-  const levels = recentRuns.map(
-    (r) => runVerdict(r.reasonCode, r.fingerprint.formFound, r.status).level,
-  );
-  const passPct = levels.length
-    ? Math.round((levels.filter((l) => l === 'healthy').length / levels.length) * 100)
-    : null;
-  const trendTones: TrendTone[] = levels.map((l) =>
-    l === 'healthy' ? 'emerald' : l === 'failing' ? 'red' : 'amber',
-  );
+  const levels = recentRuns.map((r) => runVerdict(r.reasonCode, r.fingerprint.formFound, r.status).level);
+  const passPct = levels.length ? Math.round((levels.filter((l) => l === 'healthy').length / levels.length) * 100) : null;
+  const trendTones: TrendTone[] = levels.map((l) => (l === 'healthy' ? 'emerald' : l === 'failing' ? 'red' : 'amber'));
 
   async function loadRuns() {
     setLoadingRuns(true);
     try {
-      const res = await fetch(`/api/form-watch/results?id=${encodeURIComponent(schedule.id)}`, {
-        cache: 'no-store', // never serve a stale (empty) first response from cache
-      }).then((r) => r.json());
+      const res = await fetch(`/api/form-watch/results?id=${encodeURIComponent(schedule.id)}`, { cache: 'no-store' }).then((r) => r.json());
       setRuns(Array.isArray(res?.runs) ? res.runs : []);
     } catch {
       setRuns([]);
@@ -81,31 +77,37 @@ export function ScheduleCard({
       setLoadingRuns(false);
     }
   }
-
   function toggleExpand() {
     const next = !expanded;
     setExpanded(next);
-    // Always refetch when opening. Fetching only when `runs === null` meant an
-    // empty first fetch (the baseline run hadn't finished yet) stuck as
-    // "No runs yet" until `lastRunAt` changed — a whole day on a daily schedule.
     if (next) void loadRuns();
   }
-
-  // Re-fetch the run history whenever a new run completes (lastRunAt changes)
-  // while the panel is open.
-  // Load history on mount + when a new run lands, so the trend shows collapsed.
   useEffect(() => {
     void loadRuns();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedule.lastRunAt]);
 
+  // Release the poll hold if this card unmounts while its note is still up.
+  useEffect(() => () => { if (holding.current) onHold(false); if (timer.current) clearTimeout(timer.current); }, [onHold]);
+
+  function finish() {
+    if (timer.current) clearTimeout(timer.current);
+    if (holding.current) { holding.current = false; onHold(false); }
+    onDone();
+  }
+
   async function doStop() {
     setStopping(true);
     try {
-      await onStop(schedule.id);
+      await onStop(schedule.id); // API only — no reload yet
     } finally {
       setStopping(false);
     }
+    setConfirmStop(false);
+    holding.current = true;
+    onHold(true); // freeze the poll so the note stays put
+    setJustStopped(true);
+    timer.current = setTimeout(finish, 7000);
   }
 
   async function handlePause() {
@@ -117,50 +119,40 @@ export function ScheduleCard({
     }
   }
 
+  // ── In-place "stopped" confirmation — appears exactly where this card was ──
+  if (justStopped) {
+    return <KeptNotice title="Stopped — its last results are kept in Projects" subtitle={schedule.url} onDismiss={finish} />;
+  }
+
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60">
+    <div className={cx('rounded-xl border bg-panel/60', schedule.paused ? 'border-dashed border-line-strong' : 'border-line')}>
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
-              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${style.text}`}>
-                <span className={`w-2 h-2 rounded-full ${style.dot}`} />
+            <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className={cx('inline-flex items-center gap-1.5 text-xs font-semibold', style.text)}>
+                <span className={cx('h-2 w-2 rounded-full', style.dot)} />
                 {style.label}
               </span>
-              {verdict && <span className="text-[11px] text-slate-400">· {verdict.label}</span>}
+              {verdict && <span className="text-[11px] text-ink-muted">· {verdict.label}</span>}
               {schedule.paused && (
-                <span className="text-[11px] font-medium text-slate-400 bg-slate-800 rounded px-1.5 py-0.5">
-                  Paused
-                </span>
+                <span className="rounded bg-panel-raised px-1.5 py-0.5 text-[11px] font-medium text-ink-muted ring-1 ring-line-strong">Paused</span>
               )}
             </div>
-            <a
-              href={schedule.url}
-              target="_blank"
-              rel="noreferrer"
-              className="block text-sm font-medium text-slate-200 hover:text-indigo-300 truncate"
-              title={schedule.url}
-            >
+            <a href={schedule.url} target="_blank" rel="noreferrer" className="block truncate text-sm font-medium text-ink hover:text-accent-soft" title={schedule.url}>
               {schedule.url}
             </a>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500">
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-ink-faint">
               <span>{intervalLabel(schedule.intervalMs)}</span>
-              <span className="uppercase tracking-wide rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400">
-                {schedule.mode}
-              </span>
+              <span className="rounded bg-panel-raised px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-ink-muted">{schedule.mode}</span>
               {schedule.landingPage && (
-                <span
-                  className="uppercase tracking-wide rounded bg-indigo-500/15 ring-1 ring-indigo-500/30 px-1.5 py-0.5 text-[10px] text-indigo-300"
-                  title="Landing-page mode: tested on this exact URL, no contact-page discovery"
-                >
-                  Landing
-                </span>
+                <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-accent-soft ring-1 ring-accent/30" title="Landing-page mode: tested on this exact URL">Landing</span>
               )}
               <span>last run {relativeTime(schedule.lastRunAt)}</span>
               <span>next {relativeTime(schedule.nextRunAt)}</span>
               {passPct != null && (
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="text-slate-400">{passPct}% healthy</span>
+                  <span className="text-ink-muted">{passPct}% healthy</span>
                   <TrendBar tones={trendTones} title={`last ${trendTones.length} runs`} />
                 </span>
               )}
@@ -172,7 +164,7 @@ export function ScheduleCard({
               type="button"
               onClick={handlePause}
               disabled={pausing}
-              className="rounded-md border border-slate-700 hover:bg-slate-800 disabled:opacity-40 px-2.5 py-1.5 text-xs font-medium text-slate-300"
+              className="rounded-md border border-line-strong px-2.5 py-1.5 text-xs font-medium text-ink-secondary transition-colors hover:bg-panel hover:text-ink disabled:opacity-40"
             >
               {pausing ? '…' : schedule.paused ? 'Resume' : 'Pause'}
             </button>
@@ -180,37 +172,34 @@ export function ScheduleCard({
               type="button"
               onClick={() => setConfirmStop(true)}
               disabled={stopping}
-              title="Stops watching this URL and clears its run history. Its result stays in Projects. Use Pause to keep it."
-              className="rounded-md border border-red-900/60 text-red-300 hover:bg-red-950/40 disabled:opacity-40 px-2.5 py-1.5 text-xs font-medium"
+              title="Stops watching this URL and clears its run history here. Its result stays in Projects. Use Pause to keep it."
+              className="rounded-md border border-danger/40 px-2.5 py-1.5 text-xs font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-40"
             >
               {stopping ? 'Stopping…' : 'Stop'}
             </button>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={toggleExpand}
-          className="mt-3 text-xs font-medium text-slate-400 hover:text-slate-200"
-        >
+        {schedule.paused && (
+          <p className="mt-2.5 rounded-md border border-line bg-panel-raised px-3 py-2 text-[11px] text-ink-muted">
+            Paused — not running right now. Its last results stay in Projects; hit <strong className="text-ink-secondary">Resume</strong> to start again.
+          </p>
+        )}
+
+        <button type="button" onClick={toggleExpand} className="mt-3 text-xs font-medium text-ink-muted transition-colors hover:text-ink">
           {expanded ? '▾ Hide run history' : '▸ View run history'}
         </button>
       </div>
 
       {expanded && (
-        <div className="border-t border-slate-800 p-4 space-y-3">
+        <div className="space-y-3 border-t border-line p-4">
           {loadingRuns && (
-            <div className="space-y-2">
-              <div className="fp-skeleton h-12 rounded-lg" />
-              <div className="fp-skeleton h-12 rounded-lg" />
-            </div>
+            <div className="space-y-2"><div className="fp-skeleton h-12 rounded-lg" /><div className="fp-skeleton h-12 rounded-lg" /></div>
           )}
           {!loadingRuns && runs && runs.length === 0 && (
-            <p className="text-xs text-slate-500">No runs yet — they appear here after the first check.</p>
+            <p className="text-xs text-ink-faint">No runs yet — they appear here after the first check.</p>
           )}
-          {!loadingRuns &&
-            runs &&
-            runs.map((run, i) => <RunRow key={`${run.ranAt}-${i}`} run={run} />)}
+          {!loadingRuns && runs && runs.map((run, i) => <RunRow key={`${run.ranAt}-${i}`} run={run} />)}
         </div>
       )}
 
@@ -221,11 +210,8 @@ export function ScheduleCard({
         confirmLabel="Stop scheduler"
         message={
           <>
-            Stops watching{' '}
-            <span className="font-mono break-all text-slate-300">{schedule.url}</span> and clears its
-            run history here.{' '}
-            <strong className="text-slate-300">Its result stays in Projects</strong> — only deleting
-            the project removes it. Want to keep it? Use{' '}
+            Stops watching <span className="break-all font-mono text-slate-300">{schedule.url}</span> and clears its run history here.{' '}
+            <strong className="text-slate-300">Its result stays in Projects</strong> — only deleting the project removes it. Want to keep it? Use{' '}
             <strong className="text-slate-300">Pause</strong>.
           </>
         }
@@ -240,54 +226,36 @@ function RunRow({ run }: { run: FormRunRecord }) {
   const v = runVerdict(run.reasonCode, run.fingerprint.formFound, run.status);
   const s = LEVEL_STYLE[v.level];
   return (
-    <div className="rounded-lg bg-slate-950/40 border border-slate-800 p-3">
+    <div className="rounded-lg border border-line bg-ground/40 p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${s.text}`}>
-          <span className={`w-2 h-2 rounded-full ${s.dot}`} />
+        <span className={cx('inline-flex items-center gap-1.5 text-xs font-medium', s.text)}>
+          <span className={cx('h-2 w-2 rounded-full', s.dot)} />
           {s.label}
-          <span className="text-slate-400 font-normal">· {v.label}</span>
+          <span className="font-normal text-ink-muted">· {v.label}</span>
         </span>
-        <span className="text-[11px] text-slate-500">{new Date(run.ranAt).toLocaleString()}</span>
+        <span className="text-[11px] text-ink-faint">{new Date(run.ranAt).toLocaleString()}</span>
       </div>
-      <div className="mt-1 text-[11px] text-slate-500">
+      <div className="mt-1 text-[11px] text-ink-faint">
         {run.mode ? `${run.mode} · ` : ''}submission: {run.submissionResult} · {Math.round(run.durationMs / 1000)}s
         {run.fingerprint.captchaDetected ? ' · CAPTCHA present' : ''}
-        <span className="text-slate-600"> · {run.reasonCode}</span>
+        <span className="text-ink-faint"> · {run.reasonCode}</span>
       </div>
-
-      {/* Form details — surfaced so the form info is visible on the page */}
       {run.fingerprint.formFound && (
-        <div className="mt-1 text-[11px] text-slate-400">
+        <div className="mt-1 text-[11px] text-ink-muted">
           Form detected
-          {run.fingerprint.formConfidence > 0 &&
-            ` · ${Math.round(run.fingerprint.formConfidence * 100)}% confidence`}
+          {run.fingerprint.formConfidence > 0 && ` · ${Math.round(run.fingerprint.formConfidence * 100)}% confidence`}
           {run.fingerprint.formMethod && ` · ${run.fingerprint.formMethod.toUpperCase()}`}
-          {run.fingerprint.formId && (
-            <>
-              {' '}· id{' '}
-              <code className="rounded bg-slate-800/60 px-1 text-slate-300">
-                {run.fingerprint.formId}
-              </code>
-            </>
-          )}
+          {run.fingerprint.formId && (<> · id <code className="rounded bg-panel-raised px-1 text-ink-secondary">{run.fingerprint.formId}</code></>)}
         </div>
       )}
-
-      {/* Detailed run notes (form found, fields filled, suggestions, etc.) */}
       {run.notes.length > 0 && (
         <ul className="mt-1.5 space-y-1">
           {run.notes.map((n, i) => (
-            <li key={i} className="flex gap-1.5 text-[11px] text-slate-500">
-              <span className="shrink-0 text-slate-600">•</span>
-              <span>{n}</span>
-            </li>
+            <li key={i} className="flex gap-1.5 text-[11px] text-ink-faint"><span className="shrink-0 text-ink-faint">•</span><span>{n}</span></li>
           ))}
         </ul>
       )}
-
-      {run.errors.length > 0 && (
-        <p className="mt-1.5 text-[11px] text-red-300/80">{run.errors.slice(0, 2).join('; ')}</p>
-      )}
+      {run.errors.length > 0 && <p className="mt-1.5 text-[11px] text-danger/80">{run.errors.slice(0, 2).join('; ')}</p>}
     </div>
   );
 }

@@ -67,69 +67,71 @@ export function AddToProjectModal({ url, onClose }: { url: string; onClose: () =
   if (phase === 'checking') return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onMouseDown={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onMouseDown={onClose}>
       <div
-        className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
+        className="fp-menu-in w-full max-w-[540px] overflow-hidden rounded-2xl border border-line-strong bg-gradient-to-b from-panel-raised to-panel shadow-2xl shadow-black/60"
         onMouseDown={(e) => e.stopPropagation()}
+        style={{ transformOrigin: 'center' }}
       >
-        <h3 className="text-sm font-semibold text-slate-100">Add this URL to a project?</h3>
-        <p className="mt-1 text-xs text-slate-400">
-          <span className="font-mono text-slate-300 break-all">{url}</span>
-        </p>
+        {/* Header */}
+        <div className="flex items-start gap-3 px-5 pb-4 pt-5">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent-soft ring-1 ring-accent/25">
+            <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5" aria-hidden>
+              <path d="M3 5.5A1.5 1.5 0 014.5 4h3.3a1.5 1.5 0 011.06.44l1 1H15.5A1.5 1.5 0 0117 6.94V9h-1.5a3.5 3.5 0 100 7H4.5A1.5 1.5 0 013 14.5v-9z" />
+              <path d="M15.5 10.5a.9.9 0 01.9.9v1.7h1.7a.9.9 0 010 1.8h-1.7v1.7a.9.9 0 01-1.8 0v-1.7h-1.7a.9.9 0 010-1.8h1.7v-1.7a.9.9 0 01.9-.9z" />
+            </svg>
+          </span>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[15px] font-bold text-ink">Add this URL to a project?</h3>
+            <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+              Group it under a client to track its health over time, open its dashboard, share a status page, and get Slack alerts.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="-mr-1 shrink-0 rounded-lg p-1 text-ink-faint transition-colors hover:bg-panel hover:text-ink">
+            <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>
+          </button>
+        </div>
 
-        {/* Option 1 — add to a project */}
-        <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-          Add to a client
-        </p>
-        <p className="mt-0.5 text-[11px] text-slate-500">
-          Group it under a client — it shows in Projects with its health, dashboard, shareable status
-          page, and alerts.
-        </p>
-        <div className="mt-2 rounded-lg border border-slate-800 bg-slate-950/40 p-1.5">
+        {/* Target URL */}
+        <div className="mx-5 flex items-center gap-2.5 rounded-lg border border-line bg-ground px-3 py-2.5">
+          <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0 text-ink-faint" aria-hidden><path d="M10 2a8 8 0 100 16 8 8 0 000-16zM3.5 10a6.5 6.5 0 0112.06-3.4l-1.7 1.02a1 1 0 00-.46.7l-.28 1.68-1.5.6a1 1 0 00-.62.93v1.02l-1.3.86a1 1 0 00-.44.83v1.6A6.5 6.5 0 013.5 10z" /></svg>
+          <span className="truncate font-mono text-xs text-ink-secondary" title={url}>{url}</span>
+        </div>
+
+        {/* Add to a client */}
+        <p className="px-5 pb-2 pt-4 text-[10.5px] font-semibold uppercase tracking-wider text-ink-faint">Add to a client</p>
+        <div className="px-4">
           <ProjectChooser url={url} onAssigned={onClose} />
         </div>
 
-        {/* Options 2 & 3 — not now / never. Styled as clearly-clickable cards. */}
-        <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-          Or, not now
-        </p>
-        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="group flex flex-col rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2.5 text-left ring-1 ring-inset ring-white/5 transition hover:border-indigo-500/60 hover:bg-slate-800 active:scale-[0.99]"
-          >
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-100">
-              <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 text-slate-400 group-hover:text-indigo-400">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v4a1 1 0 00.293.707l2.5 2.5a1 1 0 001.414-1.414L11 9.586V7z" clipRule="evenodd" />
-              </svg>
-              Decide later
-            </span>
-            <span className="mt-1 block text-[11px] leading-snug text-slate-400">
-              Keeps it in Projects → <strong className="text-slate-300">Unassigned</strong>. Assign or
-              dismiss it anytime.
-            </span>
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void dismiss()}
-            className="group flex flex-col rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2.5 text-left ring-1 ring-inset ring-white/5 transition hover:border-red-500/60 hover:bg-red-500/10 active:scale-[0.99] disabled:opacity-40"
-          >
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-100">
-              <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 text-slate-400 group-hover:text-red-400">
-                <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
-              </svg>
-              Don&apos;t track this URL
-            </span>
-            <span className="mt-1 block text-[11px] leading-snug text-slate-400">
-              Hides it from Projects and <strong className="text-slate-300">stops asking</strong>. Existing
-              results stay saved; testing it again brings it back.
-            </span>
-          </button>
+        {/* Or, not now */}
+        <div className="mt-4 border-t border-line px-5 py-4">
+          <p className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-ink-faint">Or, not now</p>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+            <div className="flex flex-col gap-1.5">
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-accent/15 px-3 py-2.5 text-xs font-semibold text-accent-soft ring-1 ring-inset ring-accent/25 transition hover:bg-accent/25"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v4a1 1 0 00.29.71l2.5 2.5a1 1 0 001.42-1.42L11 9.59V7z" clipRule="evenodd" /></svg>
+                Decide later
+              </button>
+              <p className="text-[11px] leading-snug text-ink-faint">Keeps it in <strong className="text-ink-secondary">Unassigned</strong> — assign or dismiss it anytime.</p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void dismiss()}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-danger/15 px-3 py-2.5 text-xs font-semibold text-danger ring-1 ring-inset ring-danger/25 transition hover:bg-danger/25 disabled:opacity-40"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden><path fillRule="evenodd" d="M13.48 14.89A6 6 0 015.1 6.52l8.38 8.37zm1.41-1.41L6.52 5.1a6 6 0 018.37 8.37zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" /></svg>
+                Don&apos;t track this URL
+              </button>
+              <p className="text-[11px] leading-snug text-ink-faint">Hides it and <strong className="text-ink-secondary">stops asking</strong>. Existing results stay saved.</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
