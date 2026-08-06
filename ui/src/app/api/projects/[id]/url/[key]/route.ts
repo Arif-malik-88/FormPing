@@ -5,7 +5,8 @@ import { loadChangeEvents, removeChangeEvents } from '@/lib/changeEventStore';
 import { siteKey, stopWatch } from '@/lib/watchRegistry';
 import { getUrlShareToken, removeUrlShareByKey } from '@/lib/projects/urlShareStore';
 import { decodeUrlKey } from '@/lib/projects/urlKeyRoute';
-import { requireRole } from '@/lib/auth/authorize';
+import { requireRole, currentUser } from '@/lib/auth/authorize';
+import { getUserName } from '@/lib/auth/userStore';
 import { findScheduleByUrl as findFormByUrl, removeSchedule as removeFormSchedule } from '@/lib/formWatch/scheduleStore';
 import { findScheduleByUrl as findSiteByUrl, removeSchedule as removeSiteSchedule } from '@/lib/siteWatch/scheduleStore';
 import { removeRun } from '@/lib/onDemandRunStore';
@@ -22,6 +23,13 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const DAY = 86_400_000;
+
+/** The acting user's display name (falls back to email) for attribution (FR-30). */
+async function actorName(request: NextRequest): Promise<string | null> {
+  const actor = await currentUser(request).catch(() => null);
+  if (!actor) return null;
+  return (await getUserName(actor.email).catch(() => null)) ?? actor.email;
+}
 
 /**
  * GET /api/projects/[id]/url/[key] — the internal, auth-gated status snapshot for
@@ -124,7 +132,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     await projectStore.remove(params.id);
     projectDeleted = true;
   } else {
-    await projectStore.update(params.id, { urls: remaining });
+    await projectStore.update(params.id, { urls: remaining }, await actorName(request));
   }
 
   return NextResponse.json({ ok: true, hostPurged, projectDeleted });

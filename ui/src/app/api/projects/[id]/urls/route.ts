@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { projectStore, urlKey } from '@/lib/projects/projectStore';
 import { removeDismissed } from '@/lib/projects/dismissedStore';
-import { requireRole } from '@/lib/auth/authorize';
+import { requireRole, currentUser } from '@/lib/auth/authorize';
+import { getUserName } from '@/lib/auth/userStore';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+/** The acting user's display name (falls back to email) for attribution (FR-30). */
+async function actorName(request: NextRequest): Promise<string | null> {
+  const actor = await currentUser(request).catch(() => null);
+  if (!actor) return null;
+  return (await getUserName(actor.email).catch(() => null)) ?? actor.email;
+}
 
 /**
  * POST /api/projects/[id]/urls — append a single URL to a project.
@@ -41,7 +49,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const exists = project.urls.some((u) => urlKey(u) === urlKey(url));
   const updated = exists
     ? project
-    : await projectStore.update(params.id, { urls: [...project.urls, url] });
+    : await projectStore.update(params.id, { urls: [...project.urls, url] }, await actorName(request));
 
   // Adding a URL to a project is the opposite of "don't track" — so clear any
   // lingering dismissal for it. Without this a URL could be both in a project
