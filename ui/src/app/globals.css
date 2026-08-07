@@ -172,12 +172,25 @@ body {
   animation: fp-shimmer 1.4s ease-in-out infinite;
 }
 
+/* Content-Changes empty-state scan line — sweeps down a page glyph, evoking
+   "watching this site for changes". */
+@keyframes fp-scan {
+  0% { transform: translateY(0); opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { transform: translateY(30px); opacity: 0; }
+}
+.fp-scan { animation: fp-scan 2.6s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
   .fp-rise,
   .fp-subnav-in {
     animation: none;
   }
   .fp-skeleton::after {
+    animation: none;
+  }
+  .fp-scan {
     animation: none;
   }
 }
