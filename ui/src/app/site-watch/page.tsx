@@ -1,22 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { SiteCard } from '@/components/siteWatch/SiteCard';
-import { ProjectUrlPicker } from '@/components/projects/ProjectUrlPicker';
+import { SiteWatchCommandBar, type Unit } from '@/components/siteWatch/SiteWatchCommandBar';
 import { AddToProjectModal } from '@/components/projects/AddToProjectModal';
 import { ReadOnlyBanner } from '@/components/ReadOnlyBanner';
-import { Toaster } from '@/components/Toaster';
-import { showToast } from '@/lib/toast';
+import { PageHeader, Skeleton } from '@/components/ui';
 import type { SiteSchedule } from '@/lib/siteWatch/types';
 
-type Unit = 'min' | 'hour' | 'day';
 const UNIT_TO_MIN: Record<Unit, number> = { min: 1, hour: 60, day: 1440 };
-const INTERVAL_PRESETS: { label: string; amount: number; unit: Unit }[] = [
-  { label: 'Every 5 min', amount: 5, unit: 'min' },
-  { label: 'Every 15 min', amount: 15, unit: 'min' },
-  { label: 'Hourly', amount: 1, unit: 'hour' },
-  { label: 'Daily', amount: 1, unit: 'day' },
-];
 
 export default function SiteWatchPage() {
   const [schedules, setSchedules] = useState<SiteSchedule[]>([]);
@@ -27,10 +19,10 @@ export default function SiteWatchPage() {
   const [unit, setUnit] = useState<Unit>('min');
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /** True when the URL probed as down — show a warning + "Add anyway". */
   const [needsConfirm, setNeedsConfirm] = useState(false);
-  /** URL just added — drives the non-blocking "add to a project?" nudge. */
   const [justAdded, setJustAdded] = useState<string | null>(null);
+
+  const pollHold = useRef(0);
 
   const load = useCallback(async () => {
     try {
@@ -45,7 +37,7 @@ export default function SiteWatchPage() {
 
   useEffect(() => {
     void load();
-    const t = setInterval(() => void load(), 15000);
+    const t = setInterval(() => { if (pollHold.current === 0) void load(); }, 15000);
     return () => clearInterval(t);
   }, [load]);
 
@@ -53,18 +45,9 @@ export default function SiteWatchPage() {
     async (force: boolean) => {
       setError(null);
       let target = url.trim();
-      if (!target) {
-        setError('Enter a URL');
-        return;
-      }
+      if (!target) { setError('Enter a URL'); return; }
       if (!/^https?:\/\//i.test(target)) target = `https://${target}`;
-      try {
-        // eslint-disable-next-line no-new
-        new URL(target);
-      } catch {
-        setError('That doesn’t look like a valid URL');
-        return;
-      }
+      try { new URL(target); } catch { setError('That doesn’t look like a valid URL'); return; }
       setAdding(true);
       try {
         const intervalMinutes = Math.max(1, amount) * UNIT_TO_MIN[unit];
@@ -74,17 +57,12 @@ export default function SiteWatchPage() {
           body: JSON.stringify({ url: target, intervalMinutes, force }),
         });
         const data = await res.json().catch(() => ({}));
-        // Down/unreachable → warn + offer "Add anyway" instead of hard-failing.
         if (res.status === 422 && data?.needsConfirm) {
           setError(data.error || 'This URL appears to be down right now.');
           setNeedsConfirm(true);
           return;
         }
-        if (!res.ok) {
-          setError(data?.error || 'Could not add monitor');
-          setNeedsConfirm(false);
-          return;
-        }
+        if (!res.ok) { setError(data?.error || 'Could not add monitor'); setNeedsConfirm(false); return; }
         setUrl('');
         setNeedsConfirm(false);
         setJustAdded(target);
@@ -98,26 +76,14 @@ export default function SiteWatchPage() {
     [url, amount, unit, load],
   );
 
-  const handleAdd = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
-      void submit(false);
-    },
-    [submit],
-  );
-
-  const handleStop = useCallback(
-    async (id: string) => {
-      await fetch('/api/site-watch/stop', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      });
-      await load();
-      showToast('Monitor stopped — its last results stay in Projects.');
-    },
-    [load],
-  );
+  // API only — the card shows the in-place "stopped, kept in Projects" note.
+  const handleStop = useCallback(async (id: string) => {
+    await fetch('/api/site-watch/stop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+  }, []);
 
   const handleTogglePause = useCallback(
     async (id: string, paused: boolean) => {
@@ -131,191 +97,82 @@ export default function SiteWatchPage() {
     [load],
   );
 
+  const holdPoll = useCallback((active: boolean) => {
+    pollHold.current = Math.max(0, pollHold.current + (active ? 1 : -1));
+  }, []);
+
+  const setUrlClearErr = (v: string) => { setUrl(v); setNeedsConfirm(false); setError(null); };
+
   return (
-    <div className="min-h-screen bg-slate-950">
-      <main className="max-w-7xl mx-auto px-4 pb-16 pt-8">
-        <div className="mb-6">
-          <h2 className="text-xl font-bold text-slate-100">Uptime &amp; SSL</h2>
-          <p className="text-sm text-slate-400 mt-1">
-            Monitor site availability (uptime) and SSL-certificate expiry on a schedule. Get a Slack
-            alert when a site goes down or comes back, and a warning weeks before a cert expires.
-          </p>
+    <>
+      <main className="mx-auto max-w-5xl px-4 pb-16 pt-8">
+        <PageHeader
+          title="Uptime & SSL"
+          description="Monitor site availability and SSL / domain expiry on a schedule. Get a Slack alert when a site goes down or comes back, and a warning weeks before a certificate expires."
+        />
+        <div className="mt-5">
+          <ReadOnlyBanner />
         </div>
 
-        <ReadOnlyBanner />
+        <div className="mt-5">
+          <SiteWatchCommandBar
+            url={url}
+            onUrl={setUrlClearErr}
+            amount={amount}
+            onAmount={setAmount}
+            unit={unit}
+            onUnit={setUnit}
+            onSubmit={submit}
+            adding={adding}
+            error={error}
+            needsConfirm={needsConfirm}
+          />
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
-          {/* Left — add a monitor */}
-          <div className="lg:col-span-2 lg:sticky lg:top-20">
-            <form onSubmit={handleAdd} className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
-              <h3 className="text-sm font-semibold text-slate-200">Add a site to monitor</h3>
-
-              <div>
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider">
-                    Site URL
-                  </label>
-                  <ProjectUrlPicker
-                    align="right"
-                    onPick={(u) => {
-                      setUrl(u);
-                      setNeedsConfirm(false);
-                      setError(null);
-                    }}
-                  />
+        <div className="mt-6 space-y-3">
+          {loading && (
+            [0, 1].map((i) => (
+              <div key={i} className="rounded-xl border border-line bg-panel/60 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex-1 space-y-2"><Skeleton className="h-3.5 w-40" /><Skeleton className="h-2.5 w-56" /></div>
+                  <div className="flex gap-2"><Skeleton className="h-8 w-16 rounded-md" /><Skeleton className="h-8 w-16 rounded-md" /></div>
                 </div>
-                <input
-                  type="text"
-                  value={url}
-                  onChange={(e) => {
-                    setUrl(e.target.value);
-                    setNeedsConfirm(false);
-                    setError(null);
-                  }}
-                  placeholder="client-site.com"
-                  disabled={adding}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-40"
-                />
               </div>
+            ))
+          )}
 
-              <div>
-                <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-                  Check frequency
-                </label>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {INTERVAL_PRESETS.map((p) => (
-                    <button
-                      key={p.label}
-                      type="button"
-                      onClick={() => {
-                        setAmount(p.amount);
-                        setUnit(p.unit);
-                      }}
-                      className={`rounded-md px-2.5 py-1.5 text-xs font-medium ${
-                        amount === p.amount && unit === p.unit
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-                {/* Custom interval — any number + unit */}
-                <div className="flex items-center gap-2 text-xs text-slate-400">
-                  <span>Every</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={amount}
-                    onChange={(e) => setAmount(Math.max(1, Number(e.target.value) || 1))}
-                    disabled={adding}
-                    className="w-16 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-40"
-                  />
-                  <select
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value as Unit)}
-                    disabled={adding}
-                    className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-40"
-                  >
-                    <option value="min">minute(s)</option>
-                    <option value="hour">hour(s)</option>
-                    <option value="day">day(s)</option>
-                  </select>
-                </div>
-                <p className="mt-1 text-[11px] text-slate-600">Minimum 1 minute.</p>
-              </div>
+          {!loading && schedules.length > 0 && (
+            <div className="flex items-center gap-2.5 rounded-lg border border-ok/25 bg-ok/10 px-3.5 py-2.5">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ok opacity-60 motion-reduce:animate-none" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-ok" />
+              </span>
+              <span className="text-xs font-medium text-ok">Monitoring {schedules.length} site{schedules.length === 1 ? '' : 's'} automatically</span>
+            </div>
+          )}
 
-              {error && (
-                <div
-                  className={`rounded-lg border px-3 py-2 text-xs ${
-                    needsConfirm
-                      ? 'border-amber-800/60 bg-amber-950/30 text-amber-200'
-                      : 'border-red-900/60 bg-red-950/40 text-red-300'
-                  }`}
-                >
-                  {error}
-                  {needsConfirm && (
-                    <button
-                      type="button"
-                      onClick={() => void submit(true)}
-                      disabled={adding}
-                      className="mt-2 block w-full rounded-md bg-amber-600 hover:bg-amber-500 disabled:opacity-40 px-3 py-1.5 text-xs font-semibold text-white"
-                    >
-                      {adding ? 'Adding…' : 'Add anyway — monitor for recovery'}
-                    </button>
-                  )}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={adding || url.trim().length === 0}
-                className="w-full rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 px-4 py-2.5 text-sm font-semibold text-white"
-              >
-                {adding ? 'Adding…' : 'Add to Site Watch'}
-              </button>
-
-              <p className="text-[11px] text-slate-600">
-                Free — no browser, no proxy. Uptime is an HTTP check; SSL reads the certificate
-                expiry. Alerts fire only on change (down / recovered / cert expiring).
-              </p>
-            </form>
-
-          </div>
-
-          {/* Right — monitor list */}
-          <div className="lg:col-span-3 space-y-3">
-            <Toaster />
-            {loading && (
-              <div className="space-y-3">
-                {[0, 1].map((i) => (
-                  <div key={i} className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex-1 space-y-2"><div className="fp-skeleton h-3.5 w-40 rounded" /><div className="fp-skeleton h-2.5 w-56 rounded" /></div>
-                      <div className="flex gap-2"><div className="fp-skeleton h-8 w-16 rounded-md" /><div className="fp-skeleton h-8 w-16 rounded-md" /></div>
-                    </div>
-                    <div className="fp-skeleton mt-3 h-3 w-28 rounded" />
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {!loading && schedules.length > 0 && (
-              <div className="flex items-center gap-2.5 rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-3 py-2">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                </span>
-                <span className="text-xs font-medium text-emerald-300">
-                  Monitoring {schedules.length} site{schedules.length === 1 ? '' : 's'} automatically
+          {!loading && schedules.length === 0 && (
+            <div className="flex flex-col items-center rounded-xl border border-dashed border-line bg-panel/40 px-8 py-14 text-center">
+              <div className="relative mb-4 flex h-16 w-16 items-center justify-center">
+                <span className="absolute inline-flex h-11 w-11 animate-ping rounded-full bg-accent/15 [animation-duration:2.2s] motion-reduce:animate-none" aria-hidden />
+                <span className="absolute h-14 w-14 rounded-full border border-accent/15" aria-hidden />
+                <span className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-panel-raised text-accent-soft ring-1 ring-line-strong">
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5" aria-hidden><path d="M2.5 10a7.5 7.5 0 1115 0 7.5 7.5 0 01-15 0zm7.5-5a.75.75 0 01.75.75v4l2.6 1.55a.75.75 0 01-.77 1.3l-2.95-1.77A.75.75 0 019.25 10V5.75A.75.75 0 0110 5z" /></svg>
                 </span>
               </div>
-            )}
+              <p className="text-sm font-semibold text-ink">No sites are being monitored yet</p>
+              <p className="mt-1 text-xs text-ink-muted">Add a URL above to start watching uptime & SSL.</p>
+            </div>
+          )}
 
-            {!loading && schedules.length === 0 && (
-              <div className="rounded-xl border border-dashed border-slate-800 p-10 text-center">
-                <p className="text-sm text-slate-400">No sites are being monitored yet.</p>
-                <p className="text-xs text-slate-600 mt-1">Add a URL on the left to start.</p>
-              </div>
-            )}
-
-            {!loading &&
-              schedules.map((s) => (
-                <SiteCard
-                  key={s.id}
-                  schedule={s}
-                  onStop={handleStop}
-                  onTogglePause={handleTogglePause}
-                />
-              ))}
-          </div>
+          {!loading &&
+            schedules.map((s) => (
+              <SiteCard key={s.id} schedule={s} onStop={handleStop} onTogglePause={handleTogglePause} onDone={load} onHold={holdPoll} />
+            ))}
         </div>
       </main>
 
-      {justAdded && (
-        <AddToProjectModal url={justAdded} onClose={() => setJustAdded(null)} />
-      )}
-    </div>
+      {justAdded && <AddToProjectModal url={justAdded} onClose={() => setJustAdded(null)} />}
+    </>
   );
 }
