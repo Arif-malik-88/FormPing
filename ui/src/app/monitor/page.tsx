@@ -1,17 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { MonitorInputPanel } from '@/components/monitor/MonitorInputPanel';
-import { MonitorConfigPanel } from '@/components/monitor/MonitorConfigPanel';
+import { MonitorCommandBar } from '@/components/monitor/MonitorCommandBar';
 import { MonitorResultsPanel } from '@/components/monitor/MonitorResultsPanel';
 import { SnapshotsManager } from '@/components/monitor/SnapshotsManager';
 import { ProjectAssignQueue } from '@/components/projects/ProjectAssignQueue';
 import { ReadOnlyBanner } from '@/components/ReadOnlyBanner';
+import { PageHeader, KeptNotice } from '@/components/ui';
 import { Toaster } from '@/components/Toaster';
 import { checkUrl } from '@/lib/urlCheck';
 import * as monitorRun from '@/lib/monitorRun';
 import { markCleared, unmarkCleared, wasCleared } from '@/lib/clearedInput';
-import { showToast } from '@/lib/toast';
 import type { MonitorConfig, ChangeReport } from '@/types';
 
 const DEFAULT_CONFIG: MonitorConfig = {
@@ -50,6 +49,15 @@ export default function MonitorPage() {
   const [checking, setChecking] = useState(false);
   const [preflight, setPreflight] = useState<string | null>(null);
   const forceRef = useRef(false);
+
+  /** Inline "cleared" confirmation shown in the results area (not a floating toast). */
+  const [flash, setFlash] = useState<string | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showFlash = useCallback((msg: string) => {
+    setFlash(msg);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(null), 7000);
+  }, []);
 
   const watchActive = (running && config.monitorMode === 'watch') || watchDetached;
 
@@ -171,8 +179,8 @@ export default function MonitorPage() {
     monitorRun.clearView();
     markCleared('monitor'); // keep it empty until the user types again
     try { window.localStorage.removeItem(STORAGE_KEY_URL); } catch { /* ignore */ }
-    showToast('Cleared from view — change history is still tracked in Projects.');
-  }, []);
+    showFlash('Cleared from view — change history is still tracked in Projects.');
+  }, [showFlash]);
 
   const handleRun = useCallback(async () => {
     if (!url.trim() || running || checking) return;
@@ -203,60 +211,64 @@ export default function MonitorPage() {
   const handleStop = useCallback(() => monitorRun.stop(url, config), [url, config]);
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <main className="max-w-7xl mx-auto px-4 pb-16 pt-8">
-        <div className="mb-6">
-          <h2 className="text-xl font-bold text-slate-100">Content Changes</h2>
-          <p className="text-sm text-slate-400 mt-1">
-            Snapshot a site, compare it later, and see exactly what changed — content, SEO, forms, scripts, performance.
-          </p>
+    <>
+      <main className="mx-auto max-w-5xl px-4 pb-16 pt-8">
+        <PageHeader
+          title="Content Changes"
+          description="Snapshot a site, compare it later, and see exactly what changed — content, SEO, forms, scripts, performance."
+        />
+        <div className="mt-5">
+          <ReadOnlyBanner />
         </div>
 
-        <ReadOnlyBanner />
+        {/* Command bar */}
+        <div className="mt-5">
+          <MonitorCommandBar
+            url={url}
+            onUrl={(u) => {
+              setUrl(u);
+              if (u) unmarkCleared('monitor'); // user is filling it again
+              forceRef.current = false;
+              setPreflight(null);
+            }}
+            config={config}
+            onConfig={setConfig}
+            onRun={handleRun}
+            onStop={handleStop}
+            running={running}
+            watchActive={watchActive}
+            checking={checking}
+            preflight={preflight}
+          />
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
-          {/* Left — input + config */}
-          <div className="lg:col-span-2 space-y-4 lg:sticky lg:top-20">
-            <MonitorInputPanel
-              url={url}
-              onChange={(u) => {
-                setUrl(u);
-                if (u) unmarkCleared('monitor'); // user is filling it again
-                forceRef.current = false;
-                setPreflight(null);
-              }}
-              onRun={handleRun}
-              onStop={handleStop}
-              running={running}
-              watchActive={watchActive}
-            />
-            {(checking || preflight) && (
-              <div className={`rounded-lg border px-3 py-2 text-xs ${preflight ? 'border-amber-800/60 bg-amber-950/30 text-amber-200' : 'border-slate-700 bg-slate-900 text-slate-400'}`}>
-                {checking ? 'Checking URL…' : preflight}
-              </div>
-            )}
-            <SnapshotsManager url={url} disabled={running} refreshKey={refreshKey} onCleared={monitorRun.onSnapshotsCleared} />
-            <MonitorConfigPanel config={config} onChange={setConfig} disabled={running} />
-          </div>
+        {/* Baselines / snapshots */}
+        <div className="mt-5">
+          <SnapshotsManager url={url} disabled={running} refreshKey={refreshKey} onCleared={monitorRun.onSnapshotsCleared} />
+        </div>
 
-          {/* Right — results */}
-          <div className="lg:col-span-3">
-            <Toaster />
-            <MonitorResultsPanel
-              reports={reports}
-              snapshot={snapshot}
-              logs={logs}
-              running={running}
-              watchActive={watchActive}
-              onClear={handleClearView}
-            />
-          </div>
+        {/* Results — the full-width stage */}
+        <div className="mt-6">
+          <Toaster />
+          {flash && (
+            <div className="mb-3">
+              <KeptNotice title={flash} onDismiss={() => setFlash(null)} />
+            </div>
+          )}
+          <MonitorResultsPanel
+            reports={reports}
+            snapshot={snapshot}
+            logs={logs}
+            running={running}
+            watchActive={watchActive}
+            onClear={handleClearView}
+          />
         </div>
       </main>
 
       {pendingAssign.length > 0 && (
         <ProjectAssignQueue urls={pendingAssign} onDone={monitorRun.clearPendingAssign} />
       )}
-    </div>
+    </>
   );
 }
