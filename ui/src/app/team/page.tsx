@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ROLE_LABEL, type Role } from '@/lib/auth/roles';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { refreshMe } from '@/lib/auth/useMe';
 import { BugInbox } from '@/components/team/BugInbox';
+import { Button, ConfirmDialog, PageHeader, Tabs } from '@/components/ui';
 
 interface TeamUser {
   email: string;
@@ -18,9 +18,9 @@ interface Me {
 }
 
 const ROLE_HELP: Record<Role, string> = {
-  owner: 'Full control + manages admins and can transfer ownership.',
-  admin: 'Full app including deleting projects and managing members/viewers.',
-  member: 'Add URLs, run and edit monitors, view everything. No delete, no user management.',
+  owner: 'Full control, plus manages admins and can hand over ownership.',
+  admin: 'Full app, including deleting projects and managing members and viewers.',
+  member: 'Add URLs, run and edit monitors, view everything. No delete, no managing people.',
   viewer: 'Read-only.',
 };
 
@@ -145,9 +145,9 @@ export default function TeamPage() {
   if (state === 'forbidden') {
     return (
       <main className="mx-auto max-w-4xl px-4 py-20 text-center">
-        <h1 className="text-lg font-semibold text-slate-200">Admins only</h1>
-        <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
-          Team &amp; access management is available to admins and the owner. If you need a role
+        <h1 className="text-lg font-semibold text-ink">Admins only</h1>
+        <p className="mx-auto mt-2 max-w-md text-sm text-ink-muted">
+          Managing team &amp; access is available to admins and the owner. If you need a role
           change, ask an admin or the owner.
         </p>
       </main>
@@ -157,54 +157,49 @@ export default function TeamPage() {
   if (state === 'error') {
     return (
       <main className="mx-auto max-w-4xl px-4 py-20 text-center">
-        <h1 className="text-lg font-semibold text-slate-200">Couldn’t load the team</h1>
-        <button onClick={() => { setState('loading'); void load(); }} className="mt-3 rounded-lg border border-slate-700 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800">
+        <h1 className="text-lg font-semibold text-ink">Couldn’t load the team</h1>
+        <Button variant="secondary" size="sm" onClick={() => { setState('loading'); void load(); }} className="mt-3">
           Try again
-        </button>
+        </Button>
       </main>
     );
   }
 
   return (
     <main className="mx-auto max-w-4xl px-4 pb-20 pt-8">
-      <div className="border-b border-slate-800 pb-4">
-        <h1 className="text-xl font-bold tracking-tight text-slate-100">Team &amp; access</h1>
-        <div className="mt-4 inline-flex rounded-lg border border-slate-800 bg-slate-900/60 p-0.5">
-          <button
-            type="button"
-            onClick={() => setTab('members')}
-            className={`rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors ${tab === 'members' ? 'bg-slate-800 text-slate-100 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
-          >
-            Members &amp; roles
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('bugs')}
-            className={`rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors ${tab === 'bugs' ? 'bg-slate-800 text-slate-100 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
-          >
-            Bug reports
-          </button>
-        </div>
+      <PageHeader
+        title="Team & access"
+        description="Who can do what in FormPing, plus bug reports sent from the app."
+      />
+      <div className="mt-4 border-b border-line pb-4">
+        <Tabs
+          items={[
+            { value: 'members', label: 'Members & roles' },
+            { value: 'bugs', label: 'Bug reports' },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
       </div>
 
       {tab === 'members' && (
       <>
-      <p className="mt-4 text-sm text-slate-400">
-        Who can do what in FormPing. New sign-ins from an allowed domain start as{' '}
-        <strong className="text-slate-300">Member</strong>. Only the owner manages admins or
-        transfers ownership.
+      <p className="mt-4 text-sm text-ink-muted">
+        New sign-ins from an allowed domain start as{' '}
+        <strong className="text-ink-secondary">Member</strong>. Only the owner manages admins or
+        hands over ownership.
       </p>
 
       {error && (
-        <div className="mt-4 rounded-lg border border-rose-800/50 bg-rose-500/10 px-4 py-2.5 text-xs text-rose-300">
+        <div className="mt-4 rounded-lg border border-danger/40 bg-danger/10 px-4 py-2.5 text-xs text-danger">
           {error}
         </div>
       )}
 
-      <div className="mt-5 overflow-hidden rounded-xl border border-slate-800">
+      <div className="mt-5 overflow-hidden rounded-xl border border-line">
         <table className="w-full text-sm">
-          <thead className="bg-slate-900/60">
-            <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+          <thead className="bg-panel/60">
+            <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
               <th className="px-4 py-3">User</th>
               <th className="px-4 py-3">Role</th>
               <th className="px-4 py-3 text-right">Actions</th>
@@ -216,29 +211,29 @@ export default function TeamPage() {
               const editable = canEditRow(u);
               const busy = busyEmail === u.email;
               return (
-                <tr key={u.email} className="border-t border-slate-800/70">
+                <tr key={u.email} className="border-t border-line/70">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
                       {u.picture ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={u.picture} alt="" referrerPolicy="no-referrer" className="h-7 w-7 rounded-full object-cover" />
                       ) : (
-                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-semibold text-white">
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-b from-accent to-accent-strong text-[11px] font-semibold text-white">
                           {(u.name || u.email).charAt(0).toUpperCase()}
                         </span>
                       )}
                       <div className="min-w-0">
-                        <div className="truncate text-slate-200">
+                        <div className="truncate text-ink">
                           {u.name || u.email}
-                          {isSelf && <span className="ml-1.5 text-[11px] text-slate-500">(you)</span>}
+                          {isSelf && <span className="ml-1.5 text-[11px] text-ink-faint">(you)</span>}
                         </div>
-                        {u.name && <div className="truncate text-xs text-slate-500">{u.email}</div>}
+                        {u.name && <div className="truncate text-xs text-ink-faint">{u.email}</div>}
                       </div>
                     </div>
                   </td>
                   <td className="px-4 py-3">
                     {u.role === 'owner' ? (
-                      <span title={ROLE_HELP.owner} className="inline-flex items-center rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-300 ring-1 ring-amber-500/25">
+                      <span title={ROLE_HELP.owner} className="inline-flex items-center rounded-full bg-accent/15 px-2.5 py-1 text-xs font-semibold text-accent ring-1 ring-accent/25">
                         Owner
                       </span>
                     ) : editable ? (
@@ -247,14 +242,14 @@ export default function TeamPage() {
                         disabled={busy}
                         onChange={(e) => void changeRole(u, e.target.value as Role)}
                         title={ROLE_HELP[u.role]}
-                        className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+                        className="rounded-md border border-line-strong bg-ground px-2 py-1.5 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
                       >
                         {assignableRoles(u).map((r) => (
                           <option key={r} value={r}>{ROLE_LABEL[r]}</option>
                         ))}
                       </select>
                     ) : (
-                      <span title={ROLE_HELP[u.role]} className="text-xs font-medium text-slate-300">{ROLE_LABEL[u.role]}</span>
+                      <span title={ROLE_HELP[u.role]} className="text-xs font-medium text-ink-secondary">{ROLE_LABEL[u.role]}</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -264,7 +259,7 @@ export default function TeamPage() {
                           type="button"
                           onClick={() => setConfirmTransfer(u)}
                           disabled={busy}
-                          className="inline-flex items-center rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition-colors hover:border-amber-700/60 hover:text-amber-300 disabled:opacity-40"
+                          className="inline-flex items-center rounded-md border border-line-strong bg-panel px-2.5 py-1 text-[11px] font-semibold text-ink-secondary transition-colors hover:border-accent/60 hover:text-accent disabled:opacity-40"
                           title="Make this person the owner (you become an admin)"
                         >
                           Make owner
@@ -275,14 +270,14 @@ export default function TeamPage() {
                           type="button"
                           onClick={() => setConfirmRemove(u)}
                           disabled={busy}
-                          className="inline-flex items-center rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition-colors hover:border-rose-800/60 hover:text-rose-300 disabled:opacity-40"
+                          className="inline-flex items-center rounded-md border border-line-strong bg-panel px-2.5 py-1 text-[11px] font-semibold text-ink-secondary transition-colors hover:border-danger/60 hover:text-danger disabled:opacity-40"
                           title="Remove this user (they revert to Member on next sign-in)"
                         >
                           Remove
                         </button>
                       )}
                       {!editable && !(meOwner && !isSelf && u.role !== 'owner') && (
-                        <span className="text-[11px] text-slate-700">—</span>
+                        <span className="text-[11px] text-ink-faint">—</span>
                       )}
                     </div>
                   </td>
@@ -293,7 +288,7 @@ export default function TeamPage() {
         </table>
       </div>
 
-      <p className="mt-4 text-xs text-slate-600">
+      <p className="mt-4 text-xs text-ink-faint">
         Removing a user only clears their saved role — they can still sign in (as a Member) if their
         email domain is allowed. To block sign-in entirely, change the allowed domains.
       </p>
@@ -307,7 +302,7 @@ export default function TeamPage() {
         variant="danger"
         title={confirmRemove ? `Remove ${confirmRemove.name || confirmRemove.email}?` : ''}
         confirmLabel="Remove user"
-        message={<>Clears their saved role. They revert to <strong className="text-slate-300">Member</strong> if they sign in again (assuming their domain is allowed). No projects or data are affected.</>}
+        message={<>Clears their saved role. They revert to <strong className="text-ink-secondary">Member</strong> if they sign in again (assuming their domain is allowed). No projects or data are affected.</>}
         onConfirm={() => { if (confirmRemove) return doRemove(confirmRemove); }}
         onCancel={() => setConfirmRemove(null)}
       />
@@ -319,10 +314,10 @@ export default function TeamPage() {
         confirmLabel="Transfer ownership"
         message={
           <>
-            <strong className="text-slate-300">{confirmTransfer?.name || confirmTransfer?.email}</strong>{' '}
-            becomes the owner and <strong className="text-slate-300">you become an admin</strong>. This
-            changes only roles — it never touches projects or data. You can be made owner again by the
-            new owner. Continue?
+            <strong className="text-ink-secondary">{confirmTransfer?.name || confirmTransfer?.email}</strong>{' '}
+            becomes the owner and <strong className="text-ink-secondary">you become an admin</strong>. This
+            changes only roles — it never touches projects or data. The new owner can hand it back to
+            you. Continue?
           </>
         }
         onConfirm={() => { if (confirmTransfer) return doTransfer(confirmTransfer); }}

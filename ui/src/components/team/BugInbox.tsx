@@ -88,22 +88,22 @@ export function BugInbox() {
 
   return (
     <section className="mt-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
         <div>
-          <h2 className="text-lg font-bold tracking-tight text-slate-100">Bug reports</h2>
-          <p className="mt-1 text-sm text-slate-400">
-            Submitted from the footer’s <strong className="text-slate-300">Report a bug</strong> form.
-            {openCount > 0 ? <> <strong className="text-amber-300">{openCount} open</strong>.</> : ' All clear. 🎉'}
+          <h2 className="text-lg font-bold tracking-tight text-ink">Bug reports</h2>
+          <p className="mt-1 text-sm text-ink-muted">
+            Sent from the footer’s <strong className="text-ink-secondary">Report a bug</strong> form.
+            {openCount > 0 ? <> <strong className="text-warn">{openCount} open</strong>.</> : ' All clear. 🎉'}
           </p>
         </div>
-        <div className="inline-flex rounded-lg border border-slate-800 bg-slate-900/60 p-0.5">
+        <div className="inline-flex rounded-xl bg-panel/70 p-1 ring-1 ring-line">
           {(['all', 'open', 'resolved'] as Filter[]).map((f) => (
             <button
               key={f}
               type="button"
               onClick={() => setFilter(f)}
-              className={`rounded-md px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
-                filter === f ? 'bg-slate-800 text-slate-100' : 'text-slate-500 hover:text-slate-300'
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
+                filter === f ? 'bg-gradient-to-b from-accent to-accent-strong text-white shadow-sm shadow-accent-deep/40 ring-1 ring-accent-soft/20' : 'text-ink-muted hover:bg-panel hover:text-ink'
               }`}
             >
               {f}
@@ -116,12 +116,12 @@ export function BugInbox() {
         <div className="mt-4 space-y-2">{[0, 1].map((i) => <div key={i} className="fp-skeleton h-20 rounded-xl" />)}</div>
       )}
       {state === 'error' && (
-        <div className="mt-4 rounded-lg border border-rose-800/50 bg-rose-500/10 px-4 py-2.5 text-xs text-rose-300">
+        <div className="mt-4 rounded-lg border border-danger/40 bg-danger/10 px-4 py-2.5 text-xs text-danger">
           Couldn’t load bug reports. <button onClick={() => { setState('loading'); void load(); }} className="underline">Try again</button>
         </div>
       )}
       {state === 'ready' && shown.length === 0 && (
-        <p className="mt-6 rounded-xl border border-dashed border-slate-800 px-4 py-10 text-center text-sm text-slate-500">
+        <p className="mt-6 rounded-xl border border-dashed border-line px-4 py-10 text-center text-sm text-ink-muted">
           {filter === 'all' ? 'No bug reports yet.' : `No ${filter} reports.`}
         </p>
       )}
@@ -132,13 +132,13 @@ export function BugInbox() {
             const isBusy = busy === r.id;
             const resolved = r.status === 'resolved';
             return (
-              <div key={r.id} className={`rounded-xl border p-4 ${resolved ? 'border-slate-800 bg-slate-900/30' : 'border-slate-800 bg-slate-900/60'}`}>
+              <div key={r.id} className={`rounded-xl border border-line p-4 ${resolved ? 'bg-panel/30' : 'bg-panel/60'}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${
-                      resolved ? 'bg-emerald-500/12 text-emerald-300 ring-emerald-500/25' : 'bg-amber-500/12 text-amber-300 ring-amber-500/25'
+                      resolved ? 'bg-ok/12 text-ok ring-ok/25' : 'bg-warn/12 text-warn ring-warn/25'
                     }`}>
-                      <span className={`h-1.5 w-1.5 rounded-full ${resolved ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                      <span className={`h-1.5 w-1.5 rounded-full ${resolved ? 'bg-ok' : 'bg-warn'}`} />
                       {r.status}
                     </span>
                   </div>
@@ -147,7 +147,7 @@ export function BugInbox() {
                       type="button"
                       disabled={isBusy}
                       onClick={() => void setStatus(r, resolved ? 'open' : 'resolved')}
-                      className="rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100 disabled:opacity-40"
+                      className="rounded-md border border-line-strong bg-panel px-2.5 py-1 text-[11px] font-semibold text-ink-secondary transition-colors hover:border-ink-faint hover:text-ink disabled:opacity-40"
                     >
                       {isBusy ? '…' : resolved ? 'Reopen' : 'Mark resolved'}
                     </button>
@@ -156,22 +156,22 @@ export function BugInbox() {
                       disabled={isBusy}
                       onClick={() => setConfirmDelete(r)}
                       title="Delete this report"
-                      className="rounded-md border border-slate-700 bg-slate-900 p-1.5 text-slate-500 transition-colors hover:border-rose-800/60 hover:text-rose-300 disabled:opacity-40"
+                      className="rounded-md border border-line-strong bg-panel p-1.5 text-ink-faint transition-colors hover:border-danger/60 hover:text-danger disabled:opacity-40"
                     >
                       <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
                     </button>
                   </div>
                 </div>
 
-                <p className="mt-2.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-200">{r.message}</p>
+                <p className="mt-2.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-ink">{r.message}</p>
 
-                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                  <span className="text-slate-400">{r.name || 'Anonymous'}</span>
-                  {r.email && <span className="font-mono text-slate-500">{r.email}</span>}
-                  {r.page && <span>· on <span className="font-mono text-slate-400">{r.page}</span></span>}
+                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-faint">
+                  <span className="text-ink-muted">{r.name || 'Anonymous'}</span>
+                  {r.email && <span className="font-mono text-ink-faint">{r.email}</span>}
+                  {r.page && <span>· on <span className="font-mono text-ink-muted">{r.page}</span></span>}
                   <span>· {rel(r.createdAt)}</span>
                   {r.reporter && r.reporter !== r.email && <span>· signed in as <span className="font-mono">{r.reporter}</span></span>}
-                  {resolved && r.resolvedBy && <span className="text-emerald-300/80">· resolved by {r.resolvedBy}</span>}
+                  {resolved && r.resolvedBy && <span className="text-ok/80">· resolved by {r.resolvedBy}</span>}
                 </div>
               </div>
             );
