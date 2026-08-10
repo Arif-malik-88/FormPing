@@ -30,22 +30,22 @@ interface Props {
 
 const ACCENT: Record<Variant, { chip: string; icon: ReactNode; confirm: string }> = {
   danger: {
-    chip: 'bg-red-500/15 text-red-300 ring-red-500/30',
-    confirm: 'bg-red-600 hover:bg-red-500 text-white ring-red-400/30',
+    chip: 'bg-danger/15 text-danger ring-danger/30',
+    confirm: 'bg-danger/90 hover:bg-danger text-white ring-danger/40',
     icon: (
       <path d="M8.257 3.099c.765-1.36 2.72-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 10-2 0 1 1 0 002 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" />
     ),
   },
   info: {
-    chip: 'bg-indigo-500/15 text-indigo-300 ring-indigo-500/30',
-    confirm: 'bg-indigo-600 hover:bg-indigo-500 text-white ring-indigo-400/30',
+    chip: 'bg-accent/15 text-accent ring-accent/30',
+    confirm: 'bg-gradient-to-b from-accent to-accent-strong hover:brightness-110 text-white ring-accent-soft/20',
     icon: (
       <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2h1v3a1 1 0 002 0v-4a1 1 0 00-1-1H9z" />
     ),
   },
   edit: {
-    chip: 'bg-amber-500/15 text-amber-300 ring-amber-500/30',
-    confirm: 'bg-indigo-600 hover:bg-indigo-500 text-white ring-indigo-400/30',
+    chip: 'bg-warn/15 text-warn ring-warn/30',
+    confirm: 'bg-gradient-to-b from-accent to-accent-strong hover:brightness-110 text-white ring-accent-soft/20',
     icon: (
       <path d="M8.257 3.099c.765-1.36 2.72-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 10-2 0 1 1 0 002 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" />
     ),
@@ -98,7 +98,7 @@ export function ConfirmDialog({
       aria-modal="true"
     >
       <div
-        className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
+        className="w-full max-w-md rounded-xl border border-line-strong bg-panel p-5 shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-3">
@@ -110,8 +110,8 @@ export function ConfirmDialog({
             </svg>
           </span>
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-slate-100">{title}</h3>
-            <div className="mt-1 text-xs leading-relaxed text-slate-400">{message}</div>
+            <h3 className="text-sm font-semibold text-ink">{title}</h3>
+            <div className="mt-1 text-xs leading-relaxed text-ink-muted">{message}</div>
           </div>
         </div>
 
@@ -120,7 +120,7 @@ export function ConfirmDialog({
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="rounded-lg border border-slate-700 px-3.5 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-40"
+            className="rounded-lg border border-line-strong px-3.5 py-2 text-xs font-medium text-ink-secondary hover:bg-panel disabled:opacity-40"
           >
             {cancelLabel}
           </button>

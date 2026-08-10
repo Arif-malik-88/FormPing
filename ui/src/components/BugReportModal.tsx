@@ -72,27 +72,27 @@ export function BugReportModal({ open, onClose }: { open: boolean; onClose: () =
   }
 
   const input =
-    'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-40';
-  const label = 'mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500';
+    'w-full rounded-lg border border-line-strong bg-ground px-3 py-2 text-sm text-ink placeholder-ink-faint focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-40';
+  const label = 'mb-1 block text-xs font-medium uppercase tracking-wider text-ink-faint';
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onMouseDown={() => !busy && onClose()}>
-      <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md rounded-xl border border-line-strong bg-panel p-5 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
         {done ? (
           <div className="py-4 text-center">
-            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30">
+            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-ok/15 text-ok ring-1 ring-ok/30">
               <svg viewBox="0 0 20 20" fill="currentColor" className="h-6 w-6" aria-hidden><path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7 7a1 1 0 01-1.4 0l-3-3a1 1 0 111.4-1.4L9 11.58l6.3-6.3a1 1 0 011.4 0z" clipRule="evenodd" /></svg>
             </div>
-            <h3 className="text-sm font-semibold text-slate-100">Thanks — we got it</h3>
-            <p className="mt-1 text-xs text-slate-400">Your report was sent. We&apos;ll take a look.</p>
-            <button type="button" onClick={onClose} className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500">
+            <h3 className="text-sm font-semibold text-ink">Thanks — we got it</h3>
+            <p className="mt-1 text-xs text-ink-muted">Your report was sent. We&apos;ll take a look.</p>
+            <button type="button" onClick={onClose} className="mt-4 rounded-lg bg-gradient-to-b from-accent to-accent-strong px-4 py-2 text-xs font-semibold text-white ring-1 ring-accent-soft/20 hover:brightness-110">
               Close
             </button>
           </div>
         ) : (
           <form onSubmit={submit}>
-            <h3 className="text-sm font-semibold text-slate-100">Report a bug</h3>
-            <p className="mt-1 text-xs text-slate-400">Tell us what went wrong — it goes straight to the team.</p>
+            <h3 className="text-sm font-semibold text-ink">Report a bug</h3>
+            <p className="mt-1 text-xs text-ink-muted">Tell us what went wrong — it goes straight to the team.</p>
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
@@ -109,13 +109,13 @@ export function BugReportModal({ open, onClose }: { open: boolean; onClose: () =
               <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={4} placeholder="Describe the bug — what you did, what you expected, what happened." disabled={busy} className={input} autoFocus />
             </div>
 
-            {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+            {error && <p className="mt-2 text-xs text-danger">{error}</p>}
 
             <div className="mt-4 flex items-center justify-end gap-2">
-              <button type="button" onClick={onClose} disabled={busy} className="rounded-lg border border-slate-700 px-3.5 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-40">
+              <button type="button" onClick={onClose} disabled={busy} className="rounded-lg border border-line-strong px-3.5 py-2 text-xs font-medium text-ink-secondary hover:bg-panel disabled:opacity-40">
                 Cancel
               </button>
-              <button type="submit" disabled={busy || message.trim().length === 0} className="rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-40">
+              <button type="submit" disabled={busy || message.trim().length === 0} className="rounded-lg bg-gradient-to-b from-accent to-accent-strong px-3.5 py-2 text-xs font-semibold text-white ring-1 ring-accent-soft/20 hover:brightness-110 disabled:opacity-40">
                 {busy ? 'Sending…' : 'Send report'}
               </button>
             </div>
