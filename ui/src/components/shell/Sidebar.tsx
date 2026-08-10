@@ -52,6 +52,9 @@ const ICON = {
   bug: (
     <path d="M10 2.75a2.25 2.25 0 012.24 2.06 6.5 6.5 0 011.3.74l1.24-.72a.75.75 0 11.76 1.3l-1.1.63c.2.42.35.87.42 1.34H16a.75.75 0 010 1.5h-1.03a6.5 6.5 0 01-.42 2l1.1.64a.75.75 0 11-.76 1.3l-1.24-.72A5.5 5.5 0 0110.75 16.4V10a.75.75 0 00-1.5 0v6.4a5.5 5.5 0 01-2.9-1.98l-1.24.72a.75.75 0 11-.76-1.3l1.1-.64a6.5 6.5 0 01-.42-2H4a.75.75 0 010-1.5h1.02c.07-.47.22-.92.42-1.34l-1.1-.63a.75.75 0 11.76-1.3l1.24.72a6.5 6.5 0 011.3-.74A2.25 2.25 0 0110 2.75z" />
   ),
+  team: (
+    <path d="M10 9a3 3 0 100-6 3 3 0 000 6zM6 8a2 2 0 11-4 0 2 2 0 014 0zM1.49 15.326a.78.78 0 01-.358-.442 3 3 0 014.308-3.516 6.484 6.484 0 00-1.905 3.959c-.023.222-.014.442.025.654a4.97 4.97 0 01-2.07-.655zM16.44 15.98a4.97 4.97 0 002.07-.654.78.78 0 00.357-.442 3 3 0 00-4.308-3.517 6.484 6.484 0 011.907 3.96 2.32 2.32 0 01-.026.654zM18 8a2 2 0 11-4 0 2 2 0 014 0zM5.304 16.19a.844.844 0 01-.277-.71 5 5 0 019.947 0 .843.843 0 01-.277.71A6.975 6.975 0 0110 18a6.974 6.974 0 01-4.696-1.81z" />
+  ),
 };
 
 const NAV: NavGroup[] = [
@@ -171,7 +174,6 @@ function ProfileBlock({ collapsed }: { collapsed: boolean }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
-  const isAdmin = canRole(me.role, 'admin');
   const name = me.name || me.email || '';
 
   useEffect(() => {
@@ -218,12 +220,6 @@ function ProfileBlock({ collapsed }: { collapsed: boolean }) {
         collapsed ? 'bottom-1 left-full ml-2 w-52' : 'bottom-full left-3 right-3 mb-2',
       )}
     >
-      {isAdmin && (
-        <Link href="/team" onClick={() => setOpen(false)} role="menuitem" className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ink-secondary hover:bg-panel">
-          <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-ink-faint" aria-hidden><path d="M10 9a3 3 0 100-6 3 3 0 000 6zM6 8a2 2 0 11-4 0 2 2 0 014 0zM1.49 15.326a.78.78 0 01-.358-.442 3 3 0 014.308-3.516 6.484 6.484 0 00-1.905 3.959c-.023.222-.014.442.025.654a4.97 4.97 0 01-2.07-.655zM16.44 15.98a4.97 4.97 0 002.07-.654.78.78 0 00.357-.442 3 3 0 00-4.308-3.517 6.484 6.484 0 011.907 3.96 2.32 2.32 0 01-.026.654zM18 8a2 2 0 11-4 0 2 2 0 014 0zM5.304 16.19a.844.844 0 01-.277-.71 5 5 0 019.947 0 .843.843 0 01-.277.71A6.975 6.975 0 0110 18a6.974 6.974 0 01-4.696-1.81z" /></svg>
-          Team &amp; access
-        </Link>
-      )}
       <button type="button" onClick={logout} disabled={pending} role="menuitem" className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-ink-secondary hover:bg-panel disabled:opacity-40">
         <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-ink-faint" aria-hidden><path fillRule="evenodd" d="M3 4.25A2.25 2.25 0 015.25 2h5.5A2.25 2.25 0 0113 4.25v2a.75.75 0 01-1.5 0v-2a.75.75 0 00-.75-.75h-5.5a.75.75 0 00-.75.75v11.5c0 .414.336.75.75.75h5.5a.75.75 0 00.75-.75v-2a.75.75 0 011.5 0v2A2.25 2.25 0 0110.75 18h-5.5A2.25 2.25 0 013 15.75V4.25z" clipRule="evenodd" /><path fillRule="evenodd" d="M19 10a.75.75 0 00-.22-.53l-3.25-3.25a.75.75 0 00-1.06 1.06L16.94 9.5H9.75a.75.75 0 000 1.5h7.19l-2.47 2.47a.75.75 0 101.06 1.06l3.25-3.25c.141-.141.22-.331.22-.53z" clipRule="evenodd" /></svg>
         {pending ? 'Signing out…' : 'Sign out'}
@@ -333,6 +329,8 @@ export function Sidebar({
   onReportBug?: () => void;
 }) {
   const pathname = usePathname();
+  const me = useMe();
+  const isAdmin = canRole(me.role, 'admin');
 
   return (
     <aside className={cx('relative flex h-full w-full flex-col bg-rail', className)}>
@@ -402,9 +400,12 @@ export function Sidebar({
         )}
       </nav>
 
-      {/* Secondary — utilities (Docs, Report a bug). */}
+      {/* Secondary — utilities (Docs, Team & access [admin+], Report a bug). */}
       <div className={cx('space-y-1 border-t border-line py-2', collapsed ? 'px-2' : 'px-3')}>
         <UtilityItem icon={ICON.docs} label="Docs" href="/docs" active={pathname === '/docs'} collapsed={collapsed} onNavigate={onNavigate} />
+        {isAdmin && (
+          <UtilityItem icon={ICON.team} label="Team & access" href="/team" active={pathname === '/team'} collapsed={collapsed} onNavigate={onNavigate} />
+        )}
         <UtilityItem icon={ICON.bug} label="Report a bug" onClick={onReportBug} collapsed={collapsed} onNavigate={onNavigate} />
       </div>
 
