@@ -43,7 +43,7 @@ export default function UrlDashboardPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:py-10">
-      <Link href={`/projects/${id}`} className="text-xs text-slate-500 transition-colors hover:text-indigo-300">
+      <Link href={`/projects/${id}`} className="text-xs text-ink-muted transition-colors hover:text-ink">
         ← Back to {data?.name ?? 'project'}
       </Link>
 
@@ -57,21 +57,21 @@ export default function UrlDashboardPage() {
 
       {state === 'notfound' && (
         <div className="py-20 text-center">
-          <h1 className="text-lg font-semibold text-slate-200">Page not found</h1>
-          <p className="mt-2 text-sm text-slate-500">This URL may have been removed from the project.</p>
+          <h1 className="text-lg font-semibold text-ink">Page not found</h1>
+          <p className="mt-2 text-sm text-ink-muted">This URL may have been removed from the project.</p>
         </div>
       )}
 
       {state === 'ready' && data && (
         <div className="mt-4">
-          <p className="mb-4 break-all font-mono text-xs text-slate-500">{data.sharedUrl}</p>
+          <p className="mb-4 break-all font-mono text-xs text-ink-faint">{data.sharedUrl}</p>
 
           <StatusView data={data} window={win} onWindow={setWin} />
 
           {/* Share just this page with the client */}
           <section className="mt-8">
-            <h2 className="text-sm font-semibold text-slate-200">Share this page with the client</h2>
-            <p className="mb-2 mt-1 text-xs text-slate-500">
+            <h2 className="text-sm font-semibold text-ink">Share this page with the client</h2>
+            <p className="mb-2 mt-1 text-xs text-ink-muted">
               A live, client-safe status page for this one URL — no login needed.
             </p>
             {key && (
