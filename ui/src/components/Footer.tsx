@@ -21,13 +21,13 @@ export function Footer() {
   const isPublic = pathname === '/login' || pathname.startsWith('/status/');
 
   return (
-    <footer className="mt-8 border-t border-slate-800/80 bg-slate-950">
+    <footer className="mt-8 border-t border-line bg-ground">
       <div className="mx-auto flex max-w-7xl flex-col items-center gap-4 px-4 py-8 sm:flex-row sm:justify-between sm:gap-6">
         {/* Brand / identity */}
         <div className="text-center sm:text-left">
-          <p className="text-sm font-semibold text-slate-200">FormPing</p>
-          <p className="mt-1 text-xs text-slate-500">
-            Contact-form QA &amp; site monitoring — an <span className="text-slate-400">Apexure</span> internal tool.
+          <p className="text-sm font-semibold text-ink">FormPing</p>
+          <p className="mt-1 text-xs text-ink-faint">
+            Contact-form QA &amp; site monitoring — an <span className="text-ink-muted">Apexure</span> internal tool.
           </p>
         </div>
 
@@ -36,22 +36,22 @@ export function Footer() {
           <nav className="flex items-center gap-2 text-sm">
             <Link
               href="/docs"
-              className="rounded-lg px-3 py-1.5 font-medium text-slate-400 transition-colors hover:bg-slate-900 hover:text-slate-100"
+              className="rounded-lg px-3 py-1.5 font-medium text-ink-muted transition-colors hover:bg-panel hover:text-ink"
             >
               Docs
             </Link>
-            <span className="text-slate-700" aria-hidden>·</span>
+            <span className="text-line-strong" aria-hidden>·</span>
             <button
               type="button"
               onClick={() => setBugOpen(true)}
-              className="rounded-lg px-3 py-1.5 font-medium text-slate-400 transition-colors hover:bg-slate-900 hover:text-slate-100"
+              className="rounded-lg px-3 py-1.5 font-medium text-ink-muted transition-colors hover:bg-panel hover:text-ink"
             >
               Report a bug
             </button>
           </nav>
         )}
 
-        <p className="text-xs text-slate-600">&copy; 2026 Apexure. All rights reserved.</p>
+        <p className="text-xs text-ink-faint">&copy; 2026 Apexure. All rights reserved.</p>
       </div>
 
       {!isPublic && <BugReportModal open={bugOpen} onClose={() => setBugOpen(false)} />}

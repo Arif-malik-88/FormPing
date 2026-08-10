@@ -63,8 +63,8 @@ export function UrlShareControl({
 
   if (!token) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/50 px-4 py-3.5">
-        <p className="text-xs text-slate-500">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-panel/50 px-4 py-3.5">
+        <p className="text-xs text-ink-muted">
           No public link for this page yet{canManage ? ' — create one to share just this URL’s status.' : '.'}
         </p>
         {canManage && (
@@ -72,7 +72,7 @@ export function UrlShareControl({
             type="button"
             onClick={generate}
             disabled={busy}
-            className="shrink-0 rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-40"
+            className="shrink-0 rounded-lg bg-gradient-to-b from-accent to-accent-strong px-3.5 py-2 text-xs font-semibold text-white shadow-sm shadow-accent-deep/40 ring-1 ring-accent-soft/20 transition hover:brightness-110 disabled:opacity-40"
           >
             {busy ? 'Creating…' : 'Create link'}
           </button>
@@ -82,15 +82,15 @@ export function UrlShareControl({
   }
 
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+    <div className="rounded-lg border border-line bg-panel/50 p-4">
       <div className="mb-2.5 flex items-center justify-between gap-2">
-        <p className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-300">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Live · anyone with the link can view this page
+        <p className="inline-flex items-center gap-2 text-xs font-semibold text-ok">
+          <span className="h-1.5 w-1.5 rounded-full bg-ok" />Live · anyone with the link can view this page
         </p>
         {canManage && (
           <div className="flex items-center gap-3">
-            <button type="button" onClick={generate} disabled={busy} title="Generate a new link and invalidate the old one" className="text-[11px] text-slate-500 hover:text-slate-300 disabled:opacity-40">Regenerate</button>
-            <button type="button" onClick={() => setConfirmRevoke(true)} disabled={busy} className="text-[11px] text-slate-500 hover:text-rose-300 disabled:opacity-40">Turn off</button>
+            <button type="button" onClick={generate} disabled={busy} title="Generate a new link and invalidate the old one" className="text-[11px] text-ink-muted hover:text-ink disabled:opacity-40">Regenerate</button>
+            <button type="button" onClick={() => setConfirmRevoke(true)} disabled={busy} className="text-[11px] text-ink-muted hover:text-danger disabled:opacity-40">Turn off</button>
           </div>
         )}
       </div>
@@ -99,10 +99,10 @@ export function UrlShareControl({
           readOnly
           value={url}
           onFocus={(e) => e.currentTarget.select()}
-          className="min-w-0 flex-1 rounded-md border border-slate-800 bg-slate-950 px-2.5 py-1.5 font-mono text-[11px] text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="min-w-0 flex-1 rounded-md border border-line bg-ground px-2.5 py-1.5 font-mono text-[11px] text-ink-secondary focus:outline-none focus:ring-1 focus:ring-accent"
         />
-        <a href={url} target="_blank" rel="noreferrer" className="shrink-0 rounded-md border border-slate-700 px-2.5 py-1.5 text-[11px] font-medium text-slate-300 hover:bg-slate-800">Open</a>
-        <button type="button" onClick={copy} className="shrink-0 rounded-md bg-slate-700 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-slate-600">{copied ? 'Copied ✓' : 'Copy'}</button>
+        <a href={url} target="_blank" rel="noreferrer" className="shrink-0 rounded-md border border-line-strong bg-panel px-2.5 py-1.5 text-[11px] font-medium text-ink-secondary hover:text-ink">Open</a>
+        <button type="button" onClick={copy} className="shrink-0 rounded-md bg-gradient-to-b from-accent to-accent-strong px-2.5 py-1.5 text-[11px] font-semibold text-white ring-1 ring-accent-soft/20 transition hover:brightness-110">{copied ? 'Copied ✓' : 'Copy'}</button>
       </div>
 
       <ConfirmDialog
@@ -112,7 +112,7 @@ export function UrlShareControl({
         confirmLabel="Turn off"
         message={
           <>
-            The shared link stops working <strong className="text-slate-300">immediately</strong> — the
+            The shared link stops working <strong className="text-ink-secondary">immediately</strong> — the
             client will see a not-found page. Your monitoring is unaffected, and you can create a new
             link anytime.
           </>

@@ -39,7 +39,7 @@ export default function InternalStatusPage() {
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-8 sm:py-10">
-      <Link href={`/projects/${id}`} className="text-xs text-slate-500 hover:text-indigo-300 transition-colors">
+      <Link href={`/projects/${id}`} className="text-xs text-ink-muted hover:text-ink transition-colors">
         ← Back to {data?.name ?? 'project'}
       </Link>
       <div className="mt-4">
@@ -53,8 +53,8 @@ export default function InternalStatusPage() {
         )}
         {state === 'notfound' && (
           <div className="text-center py-20">
-            <h1 className="text-lg font-semibold text-slate-200">Project not found</h1>
-            <p className="text-sm text-slate-500 mt-2">It may have been deleted.</p>
+            <h1 className="text-lg font-semibold text-ink">Project not found</h1>
+            <p className="text-sm text-ink-muted mt-2">It may have been deleted.</p>
           </div>
         )}
         {state === 'ready' && data && (

@@ -59,7 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           extensions (Grammarly, LastPass, Dark Reader, etc.) that inject
           attributes/divs into the DOM before React hydrates. Doesn't hide
           real bugs in the React tree itself. */}
-      <body className="antialiased min-h-screen bg-slate-950" suppressHydrationWarning>
+      <body className="antialiased min-h-screen bg-ground" suppressHydrationWarning>
         <AppShell>{children}</AppShell>
       </body>
     </html>
