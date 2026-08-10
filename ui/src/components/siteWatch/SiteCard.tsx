@@ -184,8 +184,8 @@ export function SiteCard({
         confirmLabel="Stop monitor"
         message={
           <>
-            Stops watching <span className="break-all font-mono text-slate-300">{schedule.url}</span> and clears its check history here.{' '}
-            <strong className="text-slate-300">Its result stays in Projects</strong> — only deleting the project removes it. Want to keep it? Use <strong className="text-slate-300">Pause</strong>.
+            Stops watching <span className="break-all font-mono text-ink-secondary">{schedule.url}</span> and clears its check history here.{' '}
+            <strong className="text-ink-secondary">Its result stays in Projects</strong> — only deleting the project removes it. Want to keep it? Use <strong className="text-ink-secondary">Pause</strong>.
           </>
         }
         onConfirm={doStop}
