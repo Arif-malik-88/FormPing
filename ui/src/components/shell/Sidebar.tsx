@@ -49,6 +49,9 @@ const ICON = {
   docs: (
     <path d="M2.5 5A1.5 1.5 0 014 3.5c1.66 0 3.16.5 4.25 1.32V16c-1.09-.82-2.59-1.32-4.25-1.32A1.5 1.5 0 012.5 13.2V5zm15 0a1.5 1.5 0 00-1.5-1.5c-1.66 0-3.16.5-4.25 1.32V16c1.09-.82 2.59-1.32 4.25-1.32a1.5 1.5 0 001.5-1.48V5z" />
   ),
+  whatsNew: (
+    <path d="M9 2.2l1.5 3.9a1 1 0 00.6.6L15 8.2l-3.9 1.5a1 1 0 00-.6.6L9 14.2l-1.5-3.9a1 1 0 00-.6-.6L3 8.2l3.9-1.5a1 1 0 00.6-.6L9 2.2zM15.5 12l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7.7-1.9z" />
+  ),
   bug: (
     <path d="M10 2.75a2.25 2.25 0 012.24 2.06 6.5 6.5 0 011.3.74l1.24-.72a.75.75 0 11.76 1.3l-1.1.63c.2.42.35.87.42 1.34H16a.75.75 0 010 1.5h-1.03a6.5 6.5 0 01-.42 2l1.1.64a.75.75 0 11-.76 1.3l-1.24-.72A5.5 5.5 0 0110.75 16.4V10a.75.75 0 00-1.5 0v6.4a5.5 5.5 0 01-2.9-1.98l-1.24.72a.75.75 0 11-.76-1.3l1.1-.64a6.5 6.5 0 01-.42-2H4a.75.75 0 010-1.5h1.02c.07-.47.22-.92.42-1.34l-1.1-.63a.75.75 0 11.76-1.3l1.24.72a6.5 6.5 0 011.3-.74A2.25 2.25 0 0110 2.75z" />
   ),
@@ -400,9 +403,10 @@ export function Sidebar({
         )}
       </nav>
 
-      {/* Secondary — utilities (Docs, Team & access [admin+], Report a bug). */}
+      {/* Secondary — utilities (Docs, What's new, Team & access [admin+], Report a bug). */}
       <div className={cx('space-y-1 border-t border-line py-2', collapsed ? 'px-2' : 'px-3')}>
         <UtilityItem icon={ICON.docs} label="Docs" href="/docs" active={pathname === '/docs'} collapsed={collapsed} onNavigate={onNavigate} />
+        <UtilityItem icon={ICON.whatsNew} label="What's new" href="/whats-new" active={pathname === '/whats-new'} collapsed={collapsed} onNavigate={onNavigate} />
         {isAdmin && (
           <UtilityItem icon={ICON.team} label="Team & access" href="/team" active={pathname === '/team'} collapsed={collapsed} onNavigate={onNavigate} />
         )}
