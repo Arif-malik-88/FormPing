@@ -73,6 +73,13 @@ export interface StatusSite {
   ssl: { valid: boolean; daysRemaining: number | null } | null;
   /** Contact-form health: true = working, false = attention, null = not monitored. */
   formWorking: boolean | null;
+  /** Internal-only: this site is tracked for content changes (labels the card when
+   *  there's no uptime/form signal). Set only on the auth-gated team view. */
+  changeTracked?: boolean;
+  /** Internal-only: the uptime/SSL shown is the LAST result of a stopped monitor,
+   *  not a live check — the card labels it "monitor stopped". Never set on the
+   *  public page (a client never sees stale data presented as live). */
+  stale?: boolean;
   /** Internal-only technical detail (present only on the auth-gated team view). */
   tech?: SiteTech;
 }

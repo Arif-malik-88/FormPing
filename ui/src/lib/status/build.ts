@@ -108,13 +108,48 @@ function series(daily: SiteDaily[], windowDays: number | null): { uptime: Uptime
  */
 const NOT_LOCATABLE = new Set(['CONTACT_PAGE_NOT_FOUND', 'CONTACT_PAGE_AMBIGUOUS']);
 
+/** Does this URL have uptime/SSL data to show — an active OR stopped Site Watch
+ *  (a stopped monitor keeps its last result until the project is deleted)? */
+function hasUptimeData(h: UrlHealth): boolean {
+  return h.site.monitored || h.site.stopped === true;
+}
+/** Does this URL have a contact-form result to show — a scheduled/stopped Form
+ *  Watch, or a manual Form Tester run? */
+function hasFormResult(h: UrlHealth): boolean {
+  return h.form.monitored || h.form.stopped === true || h.lastRun != null;
+}
+
+/**
+ * Contact-form working/attention/not-monitored, from whichever form signal exists:
+ * a scheduled/stopped Form Watch (its health level) or a manual Form Tester run
+ * (a point-in-time result). Client-safe: "couldn't locate a contact page" reads
+ * as not-a-result rather than a false "form is broken".
+ */
 function formWorking(h: UrlHealth, internal: boolean): boolean | null {
-  if (!h.form.monitored) return null;
-  if (h.form.level === 'healthy') return true;
-  // Client page: "couldn't find a contact page" is not a form failure.
-  if (!internal && h.form.reasonCode && NOT_LOCATABLE.has(h.form.reasonCode)) return null;
-  if (h.form.level === 'attention' || h.form.level === 'failing') return false;
+  if (h.form.monitored || h.form.stopped) {
+    if (h.form.level === 'healthy') return true;
+    if (!internal && h.form.reasonCode && NOT_LOCATABLE.has(h.form.reasonCode)) return null;
+    if (h.form.level === 'attention' || h.form.level === 'failing') return false;
+    return null;
+  }
+  if (h.lastRun) {
+    if (!internal && h.lastRun.reasonCode && NOT_LOCATABLE.has(h.lastRun.reasonCode)) return null;
+    if (h.lastRun.formFound) return true;
+    if (h.lastRun.finalStatus === 'fail') return false;
+    return null;
+  }
   return null;
+}
+
+/** Internal `tech.form` block from whichever form signal exists (monitor or manual run). */
+function formTech(h: UrlHealth): Pick<NonNullable<StatusSite['tech']>, 'form'> | Record<string, never> {
+  if (h.form.monitored || h.form.stopped) {
+    return { form: { mode: h.form.mode ?? null, level: h.form.level ?? null, label: h.form.label ?? null, lastRunAt: h.form.lastRunAt ?? null } };
+  }
+  if (h.lastRun) {
+    return { form: { mode: h.lastRun.mode ?? null, level: null, label: null, lastRunAt: h.lastRun.ranAt ?? null } };
+  }
+  return {};
 }
 
 function deriveOverall(sites: StatusSite[]): OverallStatus {
@@ -141,19 +176,34 @@ export async function buildClientStatus(
   const [health, siteSchedules] = await Promise.all([urlHealthFor(project.urls), listSiteSchedules()]);
   const scheduleByKey = new Map(siteSchedules.map((s) => [key(s.url), s]));
 
-  // One entry per URL we actively monitor (site OR form).
-  const monitored = health.filter((h) => h.site.monitored || h.form.monitored);
+  // Which URLs earn a status card. A card appears when we have something real to
+  // show: uptime/SSL data, or a contact-form result (a monitor OR a manual run).
+  // INTERNAL also cards a content-change-only URL. The PUBLIC client page is
+  // stricter — only client-safe, current signals: an ACTIVE uptime monitor or a
+  // form result. A stopped monitor's stale uptime is never shown to a client as
+  // if live, and content changes stay internal-only (they render in the timeline).
+  const included = health.filter((h) =>
+    internal
+      ? hasUptimeData(h) || hasFormResult(h) || h.change?.tracked === true
+      : h.site.monitored || hasFormResult(h),
+  );
 
   const sites: StatusSite[] = await Promise.all(
-    monitored.map(async (h) => {
-      const state: SiteUp = h.site.monitored ? (h.site.upState ?? 'unknown') : 'unknown';
+    included.map(async (h) => {
+      // Uptime/SSL come from the last known check. On the public page a stopped
+      // monitor is NOT presented as live, so only an active monitor shows uptime.
+      const showUptime = h.site.monitored || (internal && h.site.stopped === true);
+      // We're showing a stopped monitor's LAST result (internal only) — flag it
+      // so the card can say "monitor stopped" instead of implying a live check.
+      const uptimeStale = showUptime && !h.site.monitored;
+      const state: SiteUp = showUptime ? (h.site.upState ?? 'unknown') : 'unknown';
       const sched = h.site.monitored ? scheduleByKey.get(key(h.url)) : undefined;
-      const daily = h.site.monitored ? await loadDaily(h.url) : [];
+      const daily = showUptime ? await loadDaily(h.url) : [];
       const win = windowDailies(daily, windowDays);
       const { uptime: dailyUptime, response: responseTrend } = series(daily, windowDays);
 
       const ssl =
-        h.site.monitored && h.site.sslDaysRemaining != null
+        showUptime && h.site.sslDaysRemaining != null
           ? { valid: h.site.sslDaysRemaining > 0, daysRemaining: h.site.sslDaysRemaining }
           : null;
 
@@ -170,9 +220,13 @@ export async function buildClientStatus(
         incidents: incidentDays(win),
         ssl,
         formWorking: formWorking(h, internal),
+        ...(internal && h.change?.tracked === true ? { changeTracked: true } : {}),
+        ...(uptimeStale ? { stale: true } : {}),
       };
 
-      if (internal) {
+      // Technical block — only when there's uptime or a form result to detail
+      // (a content-change-only card is covered by the timeline, not tech).
+      if (internal && (showUptime || hasFormResult(h))) {
         site.tech = {
           url: h.url,
           statusCode: h.site.statusCode ?? null,
@@ -182,16 +236,7 @@ export async function buildClientStatus(
           avgResponseMs: avgResp(win),
           responseTrend,
           intervalMs: sched?.intervalMs ?? null,
-          ...(h.form.monitored
-            ? {
-                form: {
-                  mode: h.form.mode ?? null,
-                  level: h.form.level ?? null,
-                  label: h.form.label ?? null,
-                  lastRunAt: h.form.lastRunAt ?? null,
-                },
-              }
-            : {}),
+          ...formTech(h),
         };
       }
 

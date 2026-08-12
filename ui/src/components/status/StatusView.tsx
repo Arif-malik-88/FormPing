@@ -176,7 +176,14 @@ function SiteCard({ s, windowDays }: { s: StatusSite; windowDays: number | null 
           <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${s.state === 'up' ? 'bg-ok' : s.state === 'down' ? 'bg-danger' : 'bg-idle'}`} />
           <span className="truncate font-semibold text-ink">{s.host}</span>
         </div>
-        <StatePill state={s.state} />
+        <div className="flex shrink-0 items-center gap-2">
+          {s.stale && (
+            <span className="rounded-full bg-idle/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted ring-1 ring-white/10">
+              Monitor stopped
+            </span>
+          )}
+          <StatePill state={s.state} />
+        </div>
       </div>
 
       {uptimeMonitored ? (
@@ -217,7 +224,13 @@ function SiteCard({ s, windowDays }: { s: StatusSite; windowDays: number | null 
           )}
         </>
       ) : (
-        <p className="mb-4 text-sm text-ink-muted">Contact-form monitoring for this page.</p>
+        <p className="mb-4 text-sm text-ink-muted">
+          {s.formWorking != null
+            ? 'Contact-form monitoring for this page.'
+            : s.changeTracked
+              ? 'Content-change monitoring for this site.'
+              : 'Monitoring for this page.'}
+        </p>
       )}
 
       {(s.formWorking != null || ssl) && (
