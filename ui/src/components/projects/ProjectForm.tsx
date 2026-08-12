@@ -154,17 +154,17 @@ export function ProjectForm({
   }
 
   const input =
-    'w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-40';
-  const label = 'block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5';
+    'w-full bg-ground border border-line-strong rounded-lg px-3 py-2 text-sm text-ink placeholder-ink-faint focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-40';
+  const label = 'block text-xs font-medium text-ink-faint uppercase tracking-wider mb-1.5';
 
   return (
     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <div>
         <label className={label}>Client / project name</label>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Inc." disabled={saving} className={input} autoFocus />
-        <label className={`${label} mt-3`}>Notes <span className="normal-case text-slate-600">(optional)</span></label>
+        <label className={`${label} mt-3`}>Notes <span className="normal-case text-ink-faint">(optional)</span></label>
         <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything worth noting" disabled={saving} className={input} />
-        <label className={`${label} mt-3`}>Contact <span className="normal-case text-slate-600">(optional — email / Slack / name)</span></label>
+        <label className={`${label} mt-3`}>Contact <span className="normal-case text-ink-faint">(optional — email / Slack / name)</span></label>
         <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="who to notify — e.g. dev@client.com" disabled={saving} className={input} />
       </div>
       <div>
@@ -184,13 +184,13 @@ export function ProjectForm({
                     readOnly={locked}
                     aria-invalid={invalid}
                     title={locked ? 'Only an admin or owner can remove or change an existing URL' : undefined}
-                    className={`${input} font-mono ${invalid ? 'border-red-700 focus:ring-red-500' : ''}`}
+                    className={`${input} font-mono ${invalid ? 'border-danger focus:ring-danger' : ''}`}
                   />
                   {locked ? (
                     <span
                       title="Only an admin or owner can remove a URL"
                       aria-label="Locked — admins only"
-                      className="flex shrink-0 items-center rounded-lg border border-slate-700 px-2.5 py-2 text-slate-600"
+                      className="flex shrink-0 items-center rounded-lg border border-line-strong px-2.5 py-2 text-ink-faint"
                     >
                       <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
                         <path fillRule="evenodd" d="M10 1a3.5 3.5 0 00-3.5 3.5V7H6a2 2 0 00-2 2v6a2 2 0 002 2h8a2 2 0 002-2V9a2 2 0 00-2-2h-.5V4.5A3.5 3.5 0 0010 1zm2 6V4.5a2 2 0 10-4 0V7h4z" clipRule="evenodd" />
@@ -203,7 +203,7 @@ export function ProjectForm({
                       disabled={saving}
                       title="Remove this URL"
                       aria-label="Remove this URL"
-                      className="shrink-0 rounded-lg border border-slate-700 px-2.5 py-2 text-slate-500 hover:border-red-800/60 hover:text-red-300 disabled:opacity-40"
+                      className="shrink-0 rounded-lg border border-line-strong px-2.5 py-2 text-ink-faint hover:border-danger/60 hover:text-danger disabled:opacity-40"
                     >
                       <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
                         <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
@@ -212,7 +212,7 @@ export function ProjectForm({
                   )}
                 </div>
                 {invalid && (
-                  <p className="mt-1 text-[11px] text-red-400">Not a valid URL — use https://domain.com</p>
+                  <p className="mt-1 text-[11px] text-danger">Not a valid URL — use https://domain.com</p>
                 )}
               </div>
             );
@@ -222,23 +222,23 @@ export function ProjectForm({
           type="button"
           onClick={addRow}
           disabled={saving}
-          className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-indigo-300 hover:text-indigo-200 disabled:opacity-40"
+          className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-accent hover:text-accent-soft disabled:opacity-40"
         >
           <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden><path d="M10 5a.75.75 0 01.75.75v3.5h3.5a.75.75 0 010 1.5h-3.5v3.5a.75.75 0 01-1.5 0v-3.5h-3.5a.75.75 0 010-1.5h3.5v-3.5A.75.75 0 0110 5z" /></svg>
           Add URL
         </button>
-        <p className="mt-2 text-[11px] text-slate-600">
+        <p className="mt-2 text-[11px] text-ink-faint">
           One field per page or site for this client (homepage, contact page, landing pages…).
           {filledUrls.length > 0 ? ` ${filledUrls.length} URL${filledUrls.length === 1 ? '' : 's'}.` : ''}
         </p>
         {lockRemovals && (
-          <p className="mt-1 text-[11px] text-amber-300/70">
+          <p className="mt-1 text-[11px] text-warn/70">
             You can add URLs; removing an existing URL is restricted to admins &amp; owners.
           </p>
         )}
       </div>
       {error && (
-        <div className="rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300 sm:col-span-2">
+        <div className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger sm:col-span-2">
           {error}
         </div>
       )}
@@ -246,14 +246,14 @@ export function ProjectForm({
         <button
           type="submit"
           disabled={saving || checking || name.trim().length === 0}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-40"
+          className="rounded-lg bg-gradient-to-b from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-white ring-1 ring-accent-soft/20 hover:brightness-110 disabled:opacity-40"
         >
           {checking ? 'Checking…' : saving ? 'Saving…' : editing ? 'Save changes' : 'Add project'}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800"
+          className="rounded-lg border border-line-strong px-4 py-2 text-sm font-medium text-ink-secondary hover:bg-panel"
         >
           Cancel
         </button>
@@ -274,8 +274,8 @@ export function ProjectForm({
                 <ul className="mt-1.5 space-y-1">
                   {warning.dups.map((d) => (
                     <li key={d.url} className="text-[11px]">
-                      <span className="break-all font-mono text-amber-200/80">{d.url}</span>
-                      <span className="text-slate-400"> — in <strong className="text-slate-300">{d.projects.map((p) => p.name).join(', ')}</strong></span>
+                      <span className="break-all font-mono text-warn/80">{d.url}</span>
+                      <span className="text-ink-muted"> — in <strong className="text-ink-secondary">{d.projects.map((p) => p.name).join(', ')}</strong></span>
                     </li>
                   ))}
                 </ul>
@@ -286,7 +286,7 @@ export function ProjectForm({
                 <p className={warning.dups.length > 0 ? 'mt-3' : ''}>Couldn&apos;t reach (may be down or blocking us):</p>
                 <ul className="mt-1.5 space-y-1">
                   {warning.unreachable.map((u) => (
-                    <li key={u} className="break-all font-mono text-[11px] text-amber-200/80">{u}</li>
+                    <li key={u} className="break-all font-mono text-[11px] text-warn/80">{u}</li>
                   ))}
                 </ul>
               </>
@@ -311,26 +311,26 @@ export function ProjectForm({
         confirmLabel="Save changes"
         message={
           <>
-            <p>These leave <strong className="text-slate-300">{name.trim()}</strong>:</p>
+            <p>These leave <strong className="text-ink-secondary">{name.trim()}</strong>:</p>
             <ul className="mt-1.5 space-y-0.5">
               {removedUrls.map((u) => (
-                <li key={u} className="break-all font-mono text-[11px] text-amber-200/80">{u}</li>
+                <li key={u} className="break-all font-mono text-[11px] text-warn/80">{u}</li>
               ))}
             </ul>
             <p className="mt-2">Nothing is deleted. What happens to each depends on whether it has activity:</p>
-            <ul className="mt-1.5 list-disc space-y-1 pl-5 text-slate-400">
+            <ul className="mt-1.5 list-disc space-y-1 pl-5 text-ink-muted">
               <li>
-                <strong className="text-slate-300">Tested or monitored</strong> → keeps all its data and its monitors
-                keep running; it moves to <strong className="text-emerald-300">Unassigned</strong> (on the Projects
+                <strong className="text-ink-secondary">Tested or monitored</strong> → keeps all its data and its monitors
+                keep running; it moves to <strong className="text-ok">Unassigned</strong> (on the Projects
                 page) to reassign or dismiss.
               </li>
               <li>
-                <strong className="text-slate-300">No activity yet</strong> → simply drops off — there&apos;s nothing to
+                <strong className="text-ink-secondary">No activity yet</strong> → simply drops off — there&apos;s nothing to
                 keep, so it won&apos;t appear in Unassigned.
               </li>
             </ul>
             {filledUrls.length === 0 && (
-              <p className="mt-2 rounded-md border border-amber-800/50 bg-amber-500/10 px-3 py-2 text-amber-200">
+              <p className="mt-2 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-warn">
                 This removes <strong>every URL</strong> — the now-empty project will be deleted (its
                 URLs still keep their data).
               </p>

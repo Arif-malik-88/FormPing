@@ -36,7 +36,7 @@ export function DismissUrlButton({ url, onDone }: { url: string; onDone: () => v
       onClick={() => void dismiss()}
       disabled={busy}
       title="Hide this URL from Projects. It's not deleted — any monitor keeps running (manage it in its Forms/Site tab), and re-testing brings it back."
-      className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800/50 px-2 py-1 text-[11px] font-medium text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors disabled:opacity-40"
+      className="inline-flex items-center gap-1 rounded-md border border-line-strong bg-ground/50 px-2 py-1 text-[11px] font-medium text-ink-muted hover:text-ink hover:border-ink-faint transition-colors disabled:opacity-40"
     >
       {busy ? 'Dismissing…' : 'Dismiss'}
     </button>

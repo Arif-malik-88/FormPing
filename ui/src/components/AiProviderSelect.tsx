@@ -102,10 +102,10 @@ export function AiProviderSelect({ label, hint, value, onChange, disabled }: Pro
 
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+      <label className="block text-xs font-medium text-ink-faint uppercase tracking-wider mb-1.5">
         {label}
       </label>
-      {hint && <p className="text-xs text-slate-500 mb-1.5 -mt-1">{hint}</p>}
+      {hint && <p className="text-xs text-ink-faint mb-1.5 -mt-1">{hint}</p>}
 
       <div className="relative">
         <button
@@ -113,21 +113,21 @@ export function AiProviderSelect({ label, hint, value, onChange, disabled }: Pro
           type="button"
           onClick={() => !disabled && setOpen((v) => !v)}
           disabled={disabled}
-          className={`w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between gap-2 hover:border-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed ${
-            value === 'off' ? 'text-slate-400' : 'text-slate-100'
+          className={`w-full bg-ground border border-line-strong rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between gap-2 hover:border-ink-faint focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-40 disabled:cursor-not-allowed ${
+            value === 'off' ? 'text-ink-muted' : 'text-ink'
           }`}
         >
           <span className="truncate flex items-center gap-2">
             {value !== 'off' && (
               <span
-                className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0"
+                className="inline-flex h-1.5 w-1.5 rounded-full bg-ok shrink-0"
                 aria-hidden
               />
             )}
             {loading ? 'Loading…' : triggerLabel}
           </span>
           <svg
-            className={`w-4 h-4 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`}
+            className={`w-4 h-4 text-ink-faint transition-transform ${open ? 'rotate-180' : ''}`}
             fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -156,7 +156,7 @@ export function AiProviderSelect({ label, hint, value, onChange, disabled }: Pro
               zIndex: 70,
               maxHeight: 360,
             }}
-            className="rounded-lg border border-slate-700 bg-slate-900 shadow-2xl shadow-black/50 overflow-hidden flex flex-col"
+            className="rounded-lg border border-line-strong bg-panel-raised shadow-2xl shadow-black/50 overflow-hidden flex flex-col"
           >
             <ul className="overflow-y-auto py-1">
               {/* Off */}
@@ -187,7 +187,7 @@ export function AiProviderSelect({ label, hint, value, onChange, disabled }: Pro
                 }}
               />
 
-              <li className="my-1 mx-2 border-t border-slate-800" aria-hidden />
+              <li className="my-1 mx-2 border-t border-line" aria-hidden />
 
               {/* Each provider */}
               {data.providers.map((p) => (
@@ -245,24 +245,24 @@ function Option({
           disabled
             ? 'opacity-50 cursor-not-allowed'
             : selected
-              ? 'bg-indigo-600/10 text-indigo-200 hover:bg-indigo-600/20'
-              : 'text-slate-200 hover:bg-slate-800'
+              ? 'bg-accent/10 text-accent-soft hover:bg-accent/20'
+              : 'text-ink hover:bg-panel'
         }`}
       >
         <span className="mt-0.5 shrink-0">
           {selected ? (
-            <span className="inline-block w-3.5 h-3.5 rounded-full bg-indigo-500 ring-2 ring-indigo-500/30" />
+            <span className="inline-block w-3.5 h-3.5 rounded-full bg-accent ring-2 ring-accent/30" />
           ) : disabled ? (
-            <span className="inline-block w-3.5 h-3.5 rounded-full border border-slate-700" />
+            <span className="inline-block w-3.5 h-3.5 rounded-full border border-line-strong" />
           ) : (
-            <span className="inline-block w-3.5 h-3.5 rounded-full border border-slate-600" />
+            <span className="inline-block w-3.5 h-3.5 rounded-full border border-line-strong" />
           )}
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium truncate">{label}</p>
-          {hint && <p className="text-xs text-slate-500 mt-0.5 truncate">{hint}</p>}
+          {hint && <p className="text-xs text-ink-faint mt-0.5 truncate">{hint}</p>}
           {setupHint && (
-            <p className="text-xs text-slate-600 mt-1 font-mono break-words">{setupHint}</p>
+            <p className="text-xs text-ink-faint mt-1 font-mono break-words">{setupHint}</p>
           )}
         </div>
       </button>

@@ -8,10 +8,10 @@
 export type TrendTone = 'emerald' | 'amber' | 'red' | 'slate';
 
 const BAR: Record<TrendTone, string> = {
-  emerald: 'bg-emerald-400/80',
-  amber: 'bg-amber-400/80',
-  red: 'bg-red-400/80',
-  slate: 'bg-slate-600',
+  emerald: 'bg-ok/80',
+  amber: 'bg-warn/80',
+  red: 'bg-danger/80',
+  slate: 'bg-idle/70',
 };
 
 export function TrendBar({ tones, title }: { tones: TrendTone[]; title?: string }) {

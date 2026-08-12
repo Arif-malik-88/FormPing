@@ -25,7 +25,7 @@ export function AssignToProject({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1 rounded-md border border-indigo-700/60 bg-indigo-600/10 px-2 py-1 text-[11px] font-medium text-indigo-300 hover:bg-indigo-600/20 transition-colors"
+        className="inline-flex items-center gap-1 rounded-md border border-accent/50 bg-accent/10 px-2 py-1 text-[11px] font-medium text-accent-soft hover:bg-accent/20 transition-colors"
       >
         {label}
         <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
@@ -43,13 +43,13 @@ export function AssignToProject({
           onMouseDown={() => setOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
+            className="w-full max-w-md rounded-xl border border-line-strong bg-panel p-5 shadow-2xl"
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <h3 className="text-sm font-semibold text-slate-100">Assign to a project</h3>
-            <p className="mt-1 font-mono text-xs text-slate-300 break-all">{url}</p>
+            <h3 className="text-sm font-semibold text-ink">Assign to a project</h3>
+            <p className="mt-1 font-mono text-xs text-ink-secondary break-all">{url}</p>
 
-            <div className="mt-3 rounded-lg border border-slate-800 bg-slate-950/40 p-1.5">
+            <div className="mt-3 rounded-lg border border-line bg-ground/40 p-1.5">
               <ProjectChooser
                 url={url}
                 onAssigned={() => {
@@ -59,11 +59,11 @@ export function AssignToProject({
               />
             </div>
 
-            <div className="mt-3 flex justify-end border-t border-slate-800 pt-3">
+            <div className="mt-3 flex justify-end border-t border-line pt-3">
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="text-xs text-slate-400 hover:text-slate-200"
+                className="text-xs text-ink-muted hover:text-ink"
               >
                 Cancel
               </button>
