@@ -1,560 +1,270 @@
+<div align="center">
+
 # FormPing
 
-A QA automation tool that finds, fills, and verifies contact forms on websites you own or are authorized to test — and now monitors websites for meaningful changes over time.
+### Contact-form QA & website monitoring — in one place
+
+Find, fill and verify contact forms on sites you own or are authorized to test, and keep watch on uptime, SSL, and meaningful content changes over time. Group everything by client, and share a clean, live status page with them.
+
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js%2014-000000?style=flat&logo=nextdotjs&logoColor=white)
+![React](https://img.shields.io/badge/React%2018-20232A?style=flat&logo=react&logoColor=61DAFB)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-06B6D4?style=flat&logo=tailwindcss&logoColor=white)
+![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
+
+</div>
 
 ---
 
-## What it does
+## Contents
 
-The web UI is organized around **Projects** (a client + their URLs), plus two tool areas — **Forms** and **Site** — and Docs:
-
-| Area | What it is |
-|------|-------|
-| **Projects** | Group a client's URLs into a project; see their form, uptime & SSL health in one place (a thin overlay over the monitors). URLs you've tested or monitored but not grouped appear in an **Unassigned** bucket to **assign** or **dismiss**. |
-| **Status page** | Per-client health page built from the same data. **Internal** ops view (`/projects/<id>/status`, auth-gated, with technical detail) + an opt-in **public** shareable link (`/status/<token>`, no login, client-safe only). Uptime history, 24h/7d/30d, response-time trend, SSL & form status. |
-| **Per-URL dashboard** | Each URL row in a project has a **Dashboard** link → an internal single-URL view (`/projects/<id>/url/<key>`) with its own **client share link** (`/status/u/<token>`, client-safe, one URL only). Per-URL tokens generate/revoke independently and are auto-revoked when the URL leaves the project (or the project is deleted). |
-| **Contact Forms** | *Form Tester* (on-demand — results persist across tabs/refresh, with a **Clear** button) · *Form Scheduler* (recurring form tests + Slack alerts) |
-| **Site Health** | *Uptime & SSL* (availability + cert-expiry monitoring + Slack) · *Content Changes* (content / SEO / form / script changes over time) |
-
-### Form testing (original)
-
-1. Accepts one URL or a batch file of URLs
-2. Discovers the contact page using deterministic heuristics (path matching + anchor text scoring)
-3. Verifies the top candidates by loading them with Playwright and scoring the page content
-4. Detects the main contact form on that page using heuristic scoring (field types, submit button text)
-5. Fills the form with configurable test data
-6. Optionally submits it and observes for a thank-you redirect or inline success message
-7. Returns a structured JSON result for each site
-
-**Landing-page mode** (`--landing-page`, or the "Landing page" toggle in the UI): skips steps 2–3
-and runs form detection **directly on the given URL** — for standalone landing pages that have an
-inline form and no separate `/contact` page (which would otherwise fail `CONTACT_PAGE_NOT_FOUND`).
-Off by default. Available on both the Form Tester and Form Watch (remembered per scheduled monitor).
-In landing-page mode detection is also **lenient**: because you asserted the form is on this page,
-the best-scoring form is accepted even if it doesn't clear the classic contact-form threshold (a
-quiz, assessment, or booking form is still a real form).
-
-**When a contact form isn't submitted, the result says *why*** (three-way outcome, not a blunt
-"not found"):
-
-- **`FORM_NOT_FOUND`** — genuinely nothing: no native `<form>` and no known embed on the page.
-- **`NON_CONTACT_FORM_FOUND`** — a form exists but didn't score as a contact form (e.g. search /
-  newsletter / quiz). The notes carry its score and which contact fields are missing.
-- **`THIRD_PARTY_EMBED_FORM`** — a hosted embed (Typeform, HubSpot, Calendly, Jotform, Tally,
-  GoHighLevel/LeadConnector, …) is present. The form exists but is a cross-origin embed FormPing
-  can't auto-fill — it's detected and named so you can verify it manually. Unknown builders are still
-  caught by a generic `/form|survey|quiz|booking/` iframe-path heuristic and reported by host.
-
-Detection also does **not** exclude forms on `opacity:0` ancestors — opacity-based scroll-reveal
-animations (`.reveal` / AOS / framer-motion) often stay transparent in headless automation, and an
-`opacity:0` form is still fillable, so excluding it produced false "no form found" misses.
-
-### Website Change Monitor (new)
-
-1. Crawls a small set of important pages (homepage, about, pricing, services, contact, thank-you)
-2. Saves a snapshot of each page (title, meta, H1, form fields, buttons, scripts, text-hash, optional screenshot)
-3. Re-checks later, compares old vs new, and reports meaningful changes
-4. Detects content, SEO, form, and technical changes
-5. Optional AI summary turns the diff into a human-readable paragraph
-
-### Landing page & access (FR-29)
-
-A public **`/welcome`** landing page sits in front of the login wall. The auth
-middleware sends an **unauthenticated visitor at the root `/` → `/welcome`**
-(deep links still go to `/login?redirect=…` so users bounce back to where they
-were headed), and **logged-in users skip `/welcome` → the app**. The page shows
-what FormPing does plus a few **real, animated volume metrics** from the public
-`GET /api/stats` (row counts only — forms tested, uptime/SSL checks, alerts
-delivered; no client, URL, or result data, and no client/site counts). `Sign in`
-→ Google auth → the tool.
-
-The **`/docs`** knowledge center is also **public** (allow-listed in middleware,
-FR-33): a grouped, scroll-spy documentation site covering what FormPing is, why
-to use it, and how to use every feature. It is **product documentation only** —
-deliberately carries no infrastructure, storage, env, account, or ops detail, so
-it's safe to read without login. It renders its own header/footer (the app chrome
-is suppressed on `/docs`), and everything else stays behind the login gate.
-
-**Bug reports (FR-31).** Anyone signed in can file a bug via **Report a bug** in the
-footer (stored durably + pinged to Slack). Admins triage them in an inbox on the
-**Team** page — mark **resolved** / **reopen** (stamped with who + when) or **delete**
-(hard delete, confirmed). Admin+ gated, same as Team &amp; access.
-
-**Project attribution (FR-30).** Each project records **who created it** and **who
-last edited it** (display name, snapshot at the time of the action), surfaced as
-"Added by X · edited by Y · Nd ago" on the project card and detail. Additive —
-pre-existing projects read "Added · …" until next edited.
+- [What FormPing is](#what-formping-is)
+- [The web app](#the-web-app)
+- [How form testing works](#how-form-testing-works)
+- [Website change monitoring](#website-change-monitoring)
+- [Client status pages](#client-status-pages)
+- [Roles & access](#roles--access)
+- [Tech stack](#tech-stack)
+- [Project structure](#project-structure)
+- [Getting started](#getting-started)
+- [Command-line engine](#command-line-engine)
+- [Reference](#reference)
+- [Contributing](#contributing)
+- [Responsible use](#responsible-use)
 
 ---
 
-## Ethical usage — read this first
+## What FormPing is
 
-FormPing is for **authorized testing only**.
+FormPing is two things that share one engine:
 
-- Use it only on websites you own, operate, or have explicit written permission to test
-- Never use it against third-party sites without permission
-- Never use it to spam, flood, or abuse contact forms
-- Real submissions in live mode send real emails — use a test email address you control
+1. **A web app** — the day-to-day product. Organize clients and their URLs into **projects**, run and schedule contact-form tests, monitor uptime / SSL / content changes, and hand each client a live, non-technical **status page**.
+2. **A command-line engine** — the same detection and monitoring logic as a scriptable CLI, for one-off runs, batches, and CI.
 
----
-
-## Limitations
-
-- Cannot bypass CAPTCHA or anti-bot systems (by design)
-- JavaScript-heavy SPAs may need longer timeouts
-- Some forms use non-standard submit mechanisms that heuristics may miss
-- AI fallback is a stub — you must implement the LLM provider yourself
-- Does not handle file upload fields
+Everything the app shows is built on top of the engine, so a result means the same thing whether it came from a scheduled monitor or a terminal command.
 
 ---
 
-## Setup
+## The web app
 
-### Requirements
+The app is organized around **Projects** (a client and their URLs), with two tool areas — **Contact Forms** and **Site Health** — plus Team and Docs.
 
-- Node.js >= 18
-- npm >= 9
+| Area | What it does |
+|------|--------------|
+| **Projects** | Group a client's URLs into a project and see their form, uptime and SSL health at a glance. URLs you've tested or monitored but not grouped yet surface in an **Unassigned** bucket to assign or dismiss, so nothing is ever invisible. |
+| **Contact Forms** | **Form Tester** — run an on-demand test against a URL; results persist across refreshes. **Form Scheduler** — recurring form tests with alerts when a form changes or breaks. |
+| **Site Health** | **Uptime & SSL** — availability plus certificate and domain expiry monitoring. **Content Changes** — track content, SEO, form and script changes over time, with an optional AI summary of each diff. |
+| **Status pages** | A live, client-safe health page per client (and per single URL), shareable with no login. An internal, richer version is available to the team. |
+| **Team** | Manage who can do what (roles), and triage bug reports submitted from within the app. |
 
-### Install
-
-```bash
-cd formping
-npm install
-npx playwright install chromium
-```
-
----
-
-## Commands
-
-### Single URL (safe mode — fills form but does NOT submit)
-
-```bash
-npm run start -- --url https://example.com
-```
-
-### Single URL with live submission
-
-```bash
-npm run start -- --url https://example.com --mode live
-```
-
-### Detect only (find contact page and form, do nothing else)
-
-```bash
-npm run start -- --url https://example.com --mode detect-only
-```
-
-### Batch from file
-
-```bash
-npm run start -- --file sites.txt --output results.json
-```
-
-### Batch with pretty JSON and live mode
-
-```bash
-npm run start -- --file sites.csv --output results.json --json-pretty --mode live
-```
-
-### Run with visible browser
-
-```bash
-npm run start -- --url https://example.com --headed
-```
-
-### Full options
-
-```
---url <url>           Single URL to test
---file <path>         Path to .txt or .csv with one URL per line
---mode <mode>         live | safe | detect-only  (default: safe)
---headed              Show browser window
---output <path>       Write results to JSON file
---json-pretty         Pretty-print JSON output
---timeout <ms>        Per-action timeout (default: 15000)
---concurrency <n>     Batch concurrency (default: 2)
---ai                  Enable AI fallback (disabled by default)
---email <email>       Override test email address
-```
+Every action that changes or removes data is confirmed first, and the copy always makes clear what will happen — especially whether a form test will actually **submit**.
 
 ---
 
-## Modes
+## How form testing works
+
+Given a URL, the engine:
+
+1. Discovers the contact page using deterministic heuristics (path matching + anchor-text scoring).
+2. Verifies the top candidates by loading them and scoring the page content.
+3. Detects the main contact form (field types, submit-button text, layout signals).
+4. Fills it with configurable test data.
+5. Optionally submits and watches for a thank-you redirect or an inline success message.
+6. Returns a structured result explaining exactly what happened.
+
+**Three test modes** put safety first:
 
 | Mode | Behavior |
 |------|----------|
-| `safe` | Discover contact page, find form, fill fields — **do not submit** |
-| `live` | Full flow including form submission — use only on authorized sites |
-| `detect-only` | Find contact page and form, do not fill or submit |
+| `safe` *(default)* | Find the page and form, fill the fields — **never submit**. |
+| `detect-only` | Find the contact page and form; don't fill or submit. |
+| `live` | The full flow **including submission** — only on sites you're authorized to test. |
 
-Default is `safe`.
+**Landing-page mode** skips contact-page discovery and detects the form directly on the given URL — for standalone landing pages with an inline form and no separate `/contact` page. In this mode detection is also more lenient: since you've asserted the form is here, the best-scoring form is accepted even if it wouldn't clear the classic contact-form threshold (a quiz, assessment, or booking form is still a real form).
+
+**When a form isn't submitted, the result says _why_** rather than a blunt "not found":
+
+- **`FORM_NOT_FOUND`** — genuinely nothing: no native form and no known embed.
+- **`NON_CONTACT_FORM_FOUND`** — a form exists but scored as something else (search / newsletter / quiz); the notes carry its score and the missing contact fields.
+- **`THIRD_PARTY_EMBED_FORM`** — a hosted embed (Typeform, HubSpot, Calendly, Jotform, Tally, and similar) is present. It's detected and named so you can verify it by hand, even though it can't be auto-filled across origins.
+
+CAPTCHA and anti-bot systems are **never bypassed** — if one is detected, the run stops and says so.
 
 ---
 
-## Configuration
+## Website change monitoring
 
-Edit `src/config.ts` to customize:
+The monitor snapshots a small set of important pages (home, about, pricing, services, contact, thank-you) and compares them over time:
 
-- `testData` — names, email, phone, message used to fill forms
-- `thankYouUrlPatterns` — URL patterns that indicate successful submission
-- `inlineSuccessPatterns` — text patterns on-page that indicate success
-- `batchConcurrency` — number of parallel sites in batch mode
-- `headless` — show/hide browser
-- `timeout` / `navigationTimeout` — timeouts in ms
-- `saveScreenshotOnFailure` — capture screenshot on failure (wiring optional)
-- `saveHtmlSnapshotOnFailure` — save HTML snapshot on failure (wiring optional)
+- **Content** — H1 changes, major text deltas, CTA/button text.
+- **SEO** — title, meta description, canonical, robots.
+- **Forms** — a field added or removed, a field becoming required, a type change.
+- **Technical** — new or removed tracking scripts, load-time spikes.
+- **Site-level** — a page appears or disappears.
 
-### Storage backend — Supabase (Postgres)
+Each change is graded **low / medium / high** so you can tell a cosmetic tweak from a material one, and an optional AI summary turns the diff into a readable paragraph. It's cheap by default — plain HTML fetching is used for parsing, and a full browser only launches when screenshots are requested.
 
-FormPing persists all structured data to **Supabase (Postgres)**. It is
-**required** — there is no JSON fallback (the app expects the two env vars below
-to be set). Confirm the live backend and environment any time via
-**`GET /api/health`** → `{"storage":"supabase","schema":"public"|"dev","environment":"production"|"development"}`.
+---
 
-Set these **server-only** vars in `ui/.env.local` (local) and Railway's Variables
-(prod). Never commit them:
+## Client status pages
 
-```
-SUPABASE_URL=https://<your-ref>.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=<secret key>   # bypasses RLS — server-side only
-SUPABASE_SCHEMA=dev                      # LOCAL ONLY — see "Environments" below
-```
+One presentation powers both a public and an internal view, curated so nothing technical can reach a client:
 
-#### Environments — one project, two schemas
+- **Public status page** — client-safe only: overall status, uptime %, uptime history, SSL validity, and whether the contact form is working. No response times, reason codes, full URLs, or content-change detail.
+- **Internal dashboard** — the full picture for the team: response-time and uptime charts, HTTP status, check frequency, domain expiry, and the content-change timeline (each run expands to show what changed).
 
-Production and local development share **one** Supabase project, isolated by
-Postgres **schema**, so development (including destructive tests) can never touch
-production data:
+Content diffs are internal-only by design — "84 changes detected" would alarm a client about what is often their own team's intentional edits. Both views carry a **Today / 7 days / 30 days / All-time** filter.
 
-| Schema   | Environment              | `SUPABASE_SCHEMA`         |
-| -------- | ------------------------ | ------------------------- |
-| `public` | **production** (Railway) | unset (defaults to public)|
-| `dev`    | **local development**    | `dev` (in `.env.local`)   |
+---
 
-This is working-agreement **rule 6, "Production data is sacred."** DB scripts
-under `ui/scripts/db/` enforce it: `guard.mjs` refuses to run a mutation unless
-`SUPABASE_SCHEMA=dev`, so a smoke test can never hit `public`. Run
-`node ui/scripts/db/smoke.mjs` (CRUD round-trip on `dev`) or
-`node ui/scripts/db/compare-schemas.mjs` (read-only row counts, both schemas).
+## Roles & access
 
-The schema lives in `supabase/migrations/` — see that folder's `README.md` for
-the dual-apply process (each migration is schema-agnostic and runs against BOTH
-`public` and `dev`). Tables are named after the app's tools:
-
-- **Phase 1 (core)** — `projects`, `form_tester_runs` (Form Tester),
-  `form_watch_schedules` (Form Watch), `site_watch_schedules` (Site Watch),
-  `dismissed_urls` (Projects "Don't track").
-- **Phase 2 (history + reports)** — `form_watch_runs` (Form Watch run history),
-  `site_watch_runs` (Site Watch check history), `change_reports` (Change Monitor).
-  The two history tables cascade-delete with their parent schedule, so removing a
-  monitor also clears its run log (no orphan rows).
-- **Phase 3 (durable results)** — `form_watch_results`, `site_watch_results`: the
-  **last known result per URL**, written on every scheduled run. Keyed by URL (not
-  by monitor), so they survive stopping/deleting a monitor — see the lifecycle
-  rules below.
-- **FR-20 (daily rollup)** — `site_watch_daily`: one summarised row per URL per
-  UTC day (checks, up/down, response sum+count, SSL min), written by the Site
-  Watch ticker each check. Powers the dashboard's **7d / 30d / All-time** uptime
-  & response charts truthfully (raw history is capped at 200 rows).
-- **FR-22 (alerts)** — `alerts`: the alert **delivery log**. Plumbing, not a
-  feature — nothing in the UI reads it. It exists so the dispatcher can dedupe
-  across restarts (unique `dedupe_key`) and answer "why didn't I get an alert for
-  X?" (`delivery`). The alert's full detail is deliberately *not* copied here —
-  it already lives in `change_reports` / the run-history tables.
-- **FR-21 (change events)** — `change_events`: one **slim row per Change Monitor
-  run**, for all three modes (`snapshot` | `compare` | `watch`). Deliberately
-  separate from `change_reports`: events are small and kept long (they power the
-  Projects status line + the dashboard timeline), while the heavy `details`
-  payload in `change_reports` is pruned to the recent few. A `snapshot` writes an
-  event but no report — which is how a freshly-baselined URL now shows up in its
-  project instead of looking untracked.
-
-RLS is enabled on every table (the anon key can do nothing; the server's secret
-key bypasses it and has full access).
-
-### Client status page vs internal dashboard
-
-Two views share one `StatusView`, curated **server-side** so nothing technical
-can reach a client:
-
-- **Internal dashboard** (`/projects/[id]/status`, auth-gated) — full detail:
-  uptime + **response-time** charts, HTTP status, check frequency, domain expiry,
-  form verdict, and the **content-change timeline** (every Change Monitor run in
-  the window). Timeline rows that found changes **expand** to show that run's
-  page-by-page breakdown, fetched on demand from
-  `/api/projects/[id]/changes?site=&at=` (auth-gated). Built with
-  `buildClientStatus(project, { internal: true })`.
-- **Public status page** (`/status/[token]`) — client-safe only: overall status,
-  hostname, uptime %, uptime history, SSL validity, contact-form working/not.
-  **No** response times, latency, check frequency, reason codes, full URLs, or
-  content-change detail.
-
-Content changes are internal-only by design: a diff is a technical QA signal, and
-"84 changes detected" would alarm a client about what is often their own team's
-intentional edits. It is enforced by types — `changes` exists only on
-`InternalStatus`, and the public route returns `ClientStatus`, so it cannot leak.
-
-Similarly, when the crawler simply **can't locate a contact page** to test
-(`CONTACT_PAGE_NOT_FOUND` / `CONTACT_PAGE_AMBIGUOUS`), the **client** page treats
-it as *not monitored* rather than "contact form needs attention" — telling a
-client their form is broken when we merely couldn't find a page to test is a
-false alarm. Internally it stays a real signal: the team still sees the reason on
-the dashboard, and it still counts toward the internal overall.
-
-Both carry a **Today / 7 days / 30 days / All-time** filter (`?window=`).
-
-### Access privileges — roles
-
-Signing in is gated to allow-listed Google domains (`ALLOWED_AUTH_DOMAINS`). On
-top of *who can get in*, each user has a **role** that controls *what they can
-do*, stored in the `app_users` table (keyed by their Google email):
+Signing in is limited to approved domains; on top of that, each person has a role that decides what they can do:
 
 | Role | Can |
-|---|---|
-| **Owner** (exactly one) | Everything, **+ manage admins + transfer ownership** |
-| **Admin** | Full app incl. **delete projects** + manage members/viewers |
-| **Member** (default) | Add URLs, create/run/edit monitors, rename/edit projects, view everything — **can't remove or delete URLs/projects, no user management** |
-| **Viewer** | Read-only |
+|------|-----|
+| **Owner** *(exactly one)* | Everything, plus manage admins and transfer ownership. |
+| **Admin** | Full app, including deleting projects and managing members and viewers. |
+| **Member** *(default)* | Add URLs, run and edit monitors, rename and edit projects, view everything. |
+| **Viewer** | Read-only. |
 
-Google proves *who you are* (the email); the role is FormPing's, assigned in the
-table. A new allow-listed login defaults to **Member**. Enforcement is
-**server-side** on **every mutating route** (`requireRole`): a Viewer is blocked
-from all writes (genuinely read-only), a Member can create/run/edit monitors and
-projects but **can't remove a URL, delete a project, or manage users** (Admin+), and only the
-Owner manages admins or transfers ownership. The role is read fresh from the DB
-per request, so a promotion/demotion takes effect immediately.
-
-The UI mirrors this — action buttons hide for roles that can't use them, viewers
-see a read-only banner, and any blocked action surfaces a clear message rather
-than failing silently. But the **server is the real gate**; the UI is only
-convenience.
-
-**Team management.** Admins and the Owner get a **Team** tab (`/team`) to list
-users, change roles (respecting the ownership rules), remove users, and — Owner
-only — **transfer ownership**. The rules live in one place (`userStore`), enforced
-by both the API and the DB single-owner index.
-
-**Env:**
-```
-OWNER_EMAIL=you@apexure.com          # break-glass owner (see below)
-ADMIN_EMAILS=manager@…,pm@…          # optional: start these as Admin on first login
-```
-
-**Lockout safety.** There is always exactly one Owner — the Owner can't be
-demoted, only **transferred** (an atomic action that swaps the successor to Owner
-and the old Owner to Admin). `OWNER_EMAIL` is *break-glass*: it re-seeds an Owner
-**only when the table has none**, so the app can never end up with no
-administrator, yet a real transfer still sticks. A database single-owner index
-backs the app-level checks.
-
-**Handoff (when the person who runs it leaves).** The in-app "Transfer ownership"
-changes only the role table — it never touches projects or data, so it can't lock
-the app or lose anything. But the app role is *not* the infrastructure: GitHub,
-Railway, and Supabase are owned at the account level (separately). A full handoff
-is: transfer the Owner role in-app → update `OWNER_EMAIL` in Railway → ensure the
-successor has GitHub/Railway/Supabase access. As long as those account owners
-persist, the app can't be stranded.
-
-### Slack notifications (optional, free)
-
-Set `SLACK_WEBHOOK_URL` to a [Slack Incoming Webhook](https://api.slack.com/messaging/webhooks)
-and FormPing posts to your channel when a monitor finds something worth knowing:
-
-- **Change Monitor** — changes detected (watch mode *and* one-off compare runs)
-- **Form Watch** — a scheduled form run changes or breaks
-- **Site Watch** — downtime, SSL/domain expiry thresholds
-
-One webhook serves all three. Set it in `ui/.env.local` locally, or the Railway
-service variables in production. Leave it unset to disable: runs still execute
-and are stored — the Slack send is just skipped. Notifications are best-effort,
-so a Slack outage or a bad webhook never breaks a monitor.
-
-**Alerts are INTERNAL-ONLY.** They carry full technical detail (reason codes,
-full URLs, what changed) and go to your team — never to a client. A client's view
-is the status page, which is curated separately.
-
-#### How alerting works
-
-Every alert — from all three tools — goes through **one dispatcher**
-(`ui/src/lib/alerts/`). Previously each tool POSTed to the webhook on its own,
-which meant no rate limiting, no dedupe and no retry; three tickers firing at
-once risked getting the webhook throttled or disabled. Now:
-
-- **Logged first.** Each alert is written to the `alerts` table before anything
-  is sent. That row is the record of *what was sent and how it went* — it exists
-  so a missing alert is diagnosable, not so you can browse it (there is no
-  inbox UI; the detail already lives in the dashboards).
-- **Deduped across restarts.** `dedupe_key` is unique per occurrence, so a retry
-  — or a watch that resumes after a redeploy — cannot ping you twice.
-- **Sent safely.** Sends are serialised and spaced ~1s apart per channel, honour
-  `429`/`Retry-After` with exponential backoff, and a circuit breaker rests a
-  channel after repeated failures.
-- **Slack stays small on purpose** — a headline, the URL, a few next steps, and
-  a **link to the full detail** in the app. The old behaviour trimmed a big
-  change report to a handful of lines and appended `+39 more`, silently dropping
-  the rest; now the message states the real total and links to the project
-  dashboard, whose change timeline expands to show every change.
-
-The Change Monitor's alert is raised by the UI (`watchSpawner`), not the CLI —
-the engine is a pure producer that detects changes and reports them.
-
-### Data lifecycle — what deleting actually deletes
-
-FormPing treats a **result as belonging to the URL**, not to the monitor that
-produced it. That gives three predictable rules, each surfaced to the user in a
-themed confirmation dialog before it happens:
-
-| Action | What happens |
-|---|---|
-| **Stop / delete a monitor** (Form Watch or Site Watch) | Future runs stop and the monitor + its run log are removed. **The last result stays** on the project's URL. Use **Pause** to keep the monitor and resume later. |
-| **Edit a project → remove a URL** | The URL leaves the project and drops to **Unassigned**. Its monitor **keeps running** and its results are **not** deleted — reassign or dismiss it there. |
-| **Delete a project** | A **complete** delete: its monitors, run history, durable per-URL results, last manual Form Tester run, and per-host change reports. Irreversible. |
-
-So only a **project delete** destroys results; everything else is recoverable or
-non-destructive.
-
-### The two remaining on-disk files (`FORMPING_DATA_DIR`)
-
-Structured data lives in Supabase (above). Only **two** things stay on disk,
-because neither belongs in a relational table:
-
-- **Change Monitor snapshots** — the raw HTML captured each check to diff against
-  next time (large blobs; a move to object storage is a planned future task).
-- **activeWatches** — the PIDs of running watch processes (machine-local runtime
-  state, meaningless in a shared DB).
-
-Both live under `data/snapshots/…`; by default `<repo>/data/snapshots` (on Railway
-the mounted persistent volume, so leave `FORMPING_DATA_DIR` unset in production).
-
-Set `FORMPING_DATA_DIR` (in `ui/.env.local`) to an **absolute** path to relocate
-them. This matters for **local dev when the repo lives inside a synced folder
-like OneDrive/Dropbox**, which re-syncs and reverts these frequently-written
-files (snapshots are rewritten on every check). Point it at a non-synced folder:
-
-```
-FORMPING_DATA_DIR="C:/Users/<you>/AppData/Local/FormPing/data"
-```
-
-The default (unset) behaviour is unchanged.
-
-## AI providers (optional)
-
-AI is **off by default**. To enable, create a `.env` file in `formping/` with one or more of these keys:
-
-```bash
-# Pick whichever provider you want — all four are optional
-ANTHROPIC_API_KEY=sk-ant-...     # Claude Haiku 4.5 — best quality, paid
-GEMINI_API_KEY=...                # Gemini 1.5 Flash — free tier, no card needed
-GROQ_API_KEY=gsk_...              # Llama 3.1 8B — free tier, very fast
-# Ollama needs no key — install from ollama.com and run `ollama pull llama3.1:8b`
-```
-
-Setup links:
-- Anthropic: https://console.anthropic.com/settings/keys (paid, ~$0.30–$2/mo for typical use)
-- Gemini: https://aistudio.google.com/app/apikey (free tier covers FormPing easily)
-- Groq: https://console.groq.com/keys (free tier)
-- Ollama: https://ollama.com (free, local-only — needs ~5GB disk)
-
-When enabled, the UI shows a dropdown to pick which provider to use, with "Auto" selecting the first available in the priority order: Anthropic → Gemini → Groq → Ollama. CLI users can pass `--ai-provider <id>` or `--ai-provider auto`.
+Enforcement is **server-side on every write** — the interface hides what a role can't do, but the server is the real gate. Roles are read fresh on each request, so a change takes effect immediately. There is always exactly one owner, and ownership is transferred (never left empty), so the app can't be locked out.
 
 ---
 
-## Public deployment via Cloudflare Quick Tunnel (free, $0/month)
+## Tech stack
 
-You can expose the local UI to the internet behind a password gate without buying a domain or server.
-
-### One-time setup
-
-1. **Add a basic-auth password** in `ui/.env.local` (this file is gitignored):
-   ```
-   BASIC_AUTH_USER=admin
-   BASIC_AUTH_PASSWORD=YourLongRandomPasswordHere
-   ```
-   Generate a strong password:
-   ```bash
-   node -e "console.log(require('crypto').randomBytes(18).toString('base64url'))"
-   ```
-
-2. **Install `cloudflared`**:
-   ```bash
-   brew install cloudflared
-   ```
-
-### Each time you want the tool live
-
-Open **two terminals**:
-
-```bash
-# Terminal 1 — start the UI (also starts the password gate)
-cd formping/ui
-npm run dev
-
-# Terminal 2 — start the tunnel and get a public URL
-cloudflared tunnel --url http://localhost:3000
-```
-
-The tunnel command prints something like:
-```
-| Your quick Tunnel has been created! Visit it at:    |
-| https://random-words-here.trycloudflare.com         |
-```
-
-Copy that URL. Anyone visiting it sees the basic-auth login. Only people with the password get through.
-
-### Notes
-
-- The `*.trycloudflare.com` URL **changes every time you restart `cloudflared`** — bookmark whichever is current. To get a stable URL, register a domain at Cloudflare Registrar (~$10/yr) and use a named tunnel instead.
-- When your Mac sleeps or the dev server stops, the public URL goes down. For 24/7 uptime, deploy to a small VPS (Hetzner CX22 €4/mo is the best value).
-- Watch out for **port collisions**: Next.js may pick port 3001 if 3000 is busy. Adjust the `cloudflared --url` accordingly.
+- **Web app** — Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS. A single design-token system drives the whole UI in one coherent dark theme.
+- **Engine** — TypeScript, [Playwright](https://playwright.dev) for real-browser form testing, and lightweight HTML parsing for fast change detection.
+- **Data** — PostgreSQL for structured data; captured page snapshots are kept on disk for diffing.
+- **Testing** — [Vitest](https://vitest.dev) for the engine's detection and analysis logic.
 
 ---
 
-## Output schema
+## Project structure
 
-```json
-{
-  "inputUrl": "https://example.com",
-  "normalizedUrl": "https://example.com",
-  "mode": "safe",
-  "resolvedContactPage": "https://example.com/contact",
-  "contactPageFound": true,
-  "contactPageConfidence": 0.91,
-  "formFound": true,
-  "formConfidence": 0.88,
-  "formIdentifier": {
-    "id": "contact-form",
-    "name": null,
-    "action": "/submit",
-    "method": "post"
-  },
-  "submissionAttempted": false,
-  "submissionResult": "not_attempted",
-  "redirectUrl": null,
-  "finalUrl": "https://example.com/contact",
-  "thankYouDetected": false,
-  "inlineSuccessDetected": false,
-  "captchaDetected": false,
-  "antiBotDetected": false,
-  "finalStatus": "warn",
-  "reasonCode": "SAFE_MODE_NO_SUBMIT",
-  "notes": [],
-  "durationMs": 3421
-}
+```
+formping/
+├── src/            # the CLI engine — form detection, testing, change monitoring
+├── tests/          # engine unit tests (Vitest)
+└── ui/             # the Next.js web app (App Router)
+    └── src/
+        ├── app/            # routes, pages, and API endpoints
+        ├── components/     # UI — a shared component kit + per-feature views
+        └── lib/            # app logic: projects, monitors, status, auth, design tokens
 ```
 
-### Reason codes
+The root package is the engine; `ui/` is the web app and has its own dependencies.
+
+---
+
+## Getting started
+
+**Prerequisites:** Node.js ≥ 18 and npm ≥ 9.
+
+**Engine (CLI):**
+
+```bash
+npm install
+npx playwright install chromium
+npm test          # run the engine test suite
+```
+
+**Web app:**
+
+```bash
+cd ui
+npm install
+npm run dev       # http://localhost:3000
+```
+
+Configuration (auth, database, and optional integrations) is supplied through environment variables — copy `.env.example` and fill in your own values.
+
+---
+
+## Command-line engine
+
+The same logic the app uses, as a script.
+
+<details>
+<summary><strong>Form testing</strong></summary>
+
+```bash
+# Single URL — safe mode (fills the form but does NOT submit)
+npm run start -- --url https://example.com
+
+# Detect only — find the contact page and form, do nothing else
+npm run start -- --url https://example.com --mode detect-only
+
+# Live submission — only on authorized sites
+npm run start -- --url https://example.com --mode live
+
+# Batch from a file, write results to JSON
+npm run start -- --file sites.txt --output results.json --json-pretty
+```
+
+**Options**
+
+```
+--url <url>          Single URL to test
+--file <path>        .txt or .csv with one URL per line
+--mode <mode>        live | safe | detect-only   (default: safe)
+--landing-page       Detect the form on the given URL (skip contact-page discovery)
+--headed             Show the browser window
+--output <path>      Write results to a JSON file
+--json-pretty        Pretty-print JSON
+--timeout <ms>       Per-action timeout (default: 15000)
+--concurrency <n>    Batch concurrency (default: 2)
+--email <email>      Override the test email address
+```
+
+</details>
+
+<details>
+<summary><strong>Change monitoring</strong></summary>
+
+```bash
+# Take a baseline snapshot
+npm run start -- --url https://yoursite.com --monitor snapshot
+
+# Later, compare current state against the most recent snapshot
+npm run start -- --url https://yoursite.com --monitor compare --json-pretty
+
+# Or run on a schedule until Ctrl+C
+npm run start -- --url https://yoursite.com --monitor watch --watch-interval 3600000
+```
+
+**Options**
+
+```
+--monitor <mode>       snapshot | compare | watch
+--pages <n>            max pages to crawl (default: 10)
+--screenshots          capture full-page screenshots
+--watch-interval <ms>  interval for watch mode (default: 3600000 = 1 hour)
+--output <file>        also write the JSON report to a file
+--json-pretty          pretty-print JSON
+```
+
+</details>
+
+---
+
+## Reference
+
+<details>
+<summary><strong>Form test result — reason codes</strong></summary>
 
 | Code | Meaning |
 |------|---------|
 | `CONTACT_PAGE_NOT_FOUND` | No contact page candidate found |
 | `CONTACT_PAGE_AMBIGUOUS` | Multiple candidates, low confidence |
-| `FORM_NOT_FOUND` | No form of any kind on the page (no native form, no known embed) |
-| `NON_CONTACT_FORM_FOUND` | A form exists but didn't score as a contact form (score + missing fields in notes) |
-| `THIRD_PARTY_EMBED_FORM` | A hosted embed (Typeform/HubSpot/Calendly/…) is present — exists, not auto-testable |
+| `FORM_NOT_FOUND` | No form of any kind on the page |
+| `NON_CONTACT_FORM_FOUND` | A form exists but didn't score as a contact form |
+| `THIRD_PARTY_EMBED_FORM` | A hosted embed is present — exists, not auto-testable |
 | `FORM_AMBIGUOUS` | Multiple forms, low confidence |
 | `CAPTCHA_DETECTED` | CAPTCHA widget found — aborted |
-| `ANTI_BOT_DETECTED` | Anti-bot/challenge page — aborted |
+| `ANTI_BOT_DETECTED` | Anti-bot challenge page — aborted |
 | `REQUIRED_FIELDS_UNSUPPORTED` | Could not fill required fields |
 | `SAFE_MODE_NO_SUBMIT` | Safe mode — filled but not submitted |
 | `DETECT_ONLY` | Detect-only mode — no interaction |
@@ -562,251 +272,43 @@ Copy that URL. Anyone visiting it sees the basic-auth login. Only people with th
 | `VALIDATION_ERROR` | Form showed validation errors |
 | `NO_REDIRECT_NO_SUCCESS` | Submitted but no success signal |
 | `INLINE_SUCCESS_ONLY` | Inline success message detected |
-| `THANK_YOU_REDIRECT` | Redirected to thank-you URL |
+| `THANK_YOU_REDIRECT` | Redirected to a thank-you URL |
 | `PASS` | Full success |
 | `ERROR` | Unhandled exception |
 
-### Final status values
+**Final status** rolls these up into `pass` · `warn` · `fail` · `error`.
 
-| Status | Meaning |
-|--------|---------|
-| `pass` | Form submitted and success confirmed |
-| `fail` | Something went wrong or blocked |
-| `warn` | Partial — safe/detect-only mode, or ambiguous |
-| `error` | Unhandled exception |
+</details>
 
----
-
-## Success detection rules
-
-### Thank-you URL detection
-
-URL is matched against patterns: `thank-you`, `thankyou`, `success`, `submitted`, `confirmation`, `sent`, `received`
-
-### Inline success detection
-
-Page text is matched against: "thank you", "thanks for contacting", "message sent", "form submitted", "we'll be in touch", "submission received", "get back to you"
-
----
-
-## CAPTCHA and anti-bot behavior
-
-FormPing **never attempts to bypass** CAPTCHA or anti-bot systems.
-
-- If a CAPTCHA widget is detected before form fill, it stops and returns `CAPTCHA_DETECTED`
-- If an anti-bot challenge page is detected when loading the contact page, it stops and returns `ANTI_BOT_DETECTED`
-- It does not retry through protected pages
-
----
-
-## AI fallback behavior
-
-AI is **disabled by default** and is an **optional stub**.
-
-When enabled (`--ai` flag or `aiEnabled: true` in config), it is only called in two cases:
-
-1. Multiple contact page candidates score similarly — AI picks one
-2. Multiple forms on the contact page score similarly — AI picks one
-
-The AI stub lives in `src/ai/aiClassifier.ts`. It returns `null` until you implement a provider. Prompts use only compact metadata (URLs, scores, field names) — never raw HTML.
-
-### Keeping AI disabled
-
-Do not pass `--ai`. The default config has `aiEnabled: false`. The stub contains clear TODO comments showing exactly where to wire in Claude or OpenAI.
-
----
-
-## Running tests
-
-```bash
-npm test
-```
-
-Tests cover:
-- Contact link scoring and exclusion logic
-- Success URL detection
-- Inline success text detection
-- Validation error detection
-- CAPTCHA detection
-- Anti-bot detection
-- Post-submit analysis composition
-
----
-
-## Future improvements
-
-### ✅ Recently shipped
-
-1. ~~Per-change location context in monitor diffs~~ — done. Each diff card now shows a breadcrumb like `🧭 main › About me › <p>`.
-2. ~~Wire AI toggles~~ — done, and made provider-agnostic. Supports Anthropic Claude Haiku, Google Gemini Flash, Groq Llama, and local Ollama. Pick one in the UI dropdown or set `AI_PROVIDER=auto` to use the first configured provider.
-
-### 🎯 Up next
-
-(Add new ideas here.)
-
-### Backlog
-
-- Screenshot capture on failure
-- HTML snapshot on failure
-- Retry logic for flaky navigations
-- Proxy/rotation support for large-scale authorized testing
-- Configurable per-site overrides (contact page URL, field mapping)
-- Output formats: CSV, JUnit XML for CI integration
-- Slack/webhook notifications for batch results
-- Visual diffs from monitor screenshots (pixel-by-pixel)
-- Accessibility / Lighthouse score tracking in monitor
-
----
-
-# Website Change Monitor
-
-A separate mode that snapshots your site over time and reports meaningful changes — content, SEO, forms, tracking scripts, performance.
-
-## Quick start
-
-```bash
-# 1. Take a baseline snapshot
-npm run start -- --url https://yoursite.com --monitor snapshot
-
-# 2. Later, compare current state vs the most recent snapshot
-npm run start -- --url https://yoursite.com --monitor compare --json-pretty
-
-# 3. Or run on a schedule until Ctrl+C
-npm run start -- --url https://yoursite.com --monitor watch --watch-interval 3600000
-```
-
-## Modes
-
-| Mode | What it does |
-|------|---------------|
-| `snapshot` | Crawls important pages, saves snapshot JSON, exits |
-| `compare`  | Takes a fresh snapshot, diffs it against the most recent stored snapshot, prints a change report, saves the new one |
-| `watch`    | Repeats `compare` on a fixed interval until SIGINT |
-
-## Monitor flags
-
-```
---monitor <mode>           snapshot | compare | watch
---pages <n>                max pages to crawl (default 10)
---screenshots              capture full-page screenshots (uses Playwright)
---ai-summary               use AI to summarize change reports (stub by default)
---watch-interval <ms>      cycle interval for watch mode (default 3600000 = 1 hour)
---output <file>            write JSON report to a file (in addition to stdout)
---json-pretty              pretty-print JSON
-```
-
-## What gets snapshotted
-
-For each page crawled:
-
-```json
-{
-  "url": "https://example.com/contact",
-  "title": "Contact Us",
-  "metaDescription": "Get in touch...",
-  "metaRobots": "index,follow",
-  "canonical": "https://example.com/contact",
-  "h1": "Talk to us",
-  "textContentHash": "9a3b2c1d4e5f6789",
-  "textContentLength": 4231,
-  "formFields": [
-    { "name": "email", "type": "email", "required": true, "label": "Email" },
-    { "name": "message", "type": "textarea", "required": true, "label": "Message" }
-  ],
-  "buttons": ["Send Message"],
-  "links": ["/about", "/pricing", "..."],
-  "scripts": ["https://www.googletagmanager.com/gtm.js?id=..."],
-  "loadTime": 842,
-  "screenshotPath": "data/snapshots/example.com/screenshots/2026-04-26T18-00-00-000Z/contact.png",
-  "timestamp": "2026-04-26T18:00:00.000Z",
-  "fetchedVia": "fetch"
-}
-```
-
-## Output report
-
-`compare` and `watch` produce a structured report:
-
-```json
-{
-  "site": "example.com",
-  "rootUrl": "https://example.com/",
-  "checkedAt": "2026-04-27T18:00:00.000Z",
-  "previousSnapshot": "data/snapshots/example.com/2026-04-26T18-00-00-000Z.json",
-  "pagesScanned": 5,
-  "pagesChanged": 2,
-  "changesFound": 3,
-  "summary": "3 changes across 2 pages. 1 high-severity. Most notable: /contact — New required tel field added: \"phone\".",
-  "details": [
-    {
-      "url": "https://example.com/",
-      "changes": [
-        "H1 changed: \"Welcome\" → \"Get Started Today\"",
-        "New button: \"Get Started\""
-      ],
-      "severity": "medium"
-    },
-    {
-      "url": "https://example.com/contact",
-      "changes": ["New required tel field added: \"phone\""],
-      "severity": "high"
-    }
-  ]
-}
-```
-
-## What kinds of change are detected
-
-| Category | Examples |
-|----------|----------|
-| **Content** | H1 changed, major text-content delta, button/CTA text changed |
-| **SEO** | Title, meta description, canonical, robots meta |
-| **Forms** | Field added/removed, field becomes required, type changed, button text changed |
-| **Technical** | New tracking scripts (GTM, GA, Meta Pixel), removed scripts, load-time spikes |
-| **Site-level** | New page appears, page disappears |
-
-## Severity tiers
+<details>
+<summary><strong>Change severity tiers</strong></summary>
 
 | Severity | Meaning |
 |----------|---------|
-| `low` | Cosmetic — meta description, minor text edits, script noise, load-time |
+| `low` | Cosmetic — meta description, minor text edits, script noise, load time |
 | `medium` | Likely intentional — title/H1 changed, CTA text changed, page added |
 | `high` | Material — form field added/removed, page disappeared, robots meta changed |
 
-## Storage
+</details>
 
-```
-formping/data/snapshots/example.com/
-  2026-04-26T18-00-00-000Z.json
-  2026-04-27T18-00-00-000Z.json
-  screenshots/
-    2026-04-26T18-00-00-000Z/
-      home.png
-      contact.png
-```
+---
 
-No database, no remote storage. Snapshots are plain JSON on disk so you can inspect, archive, or delete them with normal tooling.
+## Contributing
 
-## Cost
+1. Branch off `main`.
+2. Make your change; keep the engine and the web app type-clean (`npm run lint` in each) and green (`npm test` at the root).
+3. Open a pull request describing what changed and why.
 
-The monitor is built to be cheap by default:
+The codebase leans on a shared component kit and a single set of design tokens for the UI, and deterministic, well-tested heuristics in the engine — please match the surrounding style rather than introducing parallel patterns.
 
-- **Cheerio fetch** is used for HTML parsing — Playwright launches **only** when `--screenshots` is enabled
-- Page count is capped via `--pages` (default 10)
-- AI summarization is **opt-in only** (`--ai-summary`) and the implementation is a stub until you wire in a provider
-- No diffing libraries — the diff engine is pure TS, ~150 LOC
+---
 
-## AI summary
+## Responsible use
 
-`--ai-summary` enables a hook in [src/monitor/summarizeChanges.ts](src/monitor/summarizeChanges.ts) where you can wire in Claude or OpenAI. Until then it logs a warning and falls back to the deterministic summary. Prompts should pass diff metadata only (URLs, severities, change strings) — never raw page HTML.
+FormPing is for **authorized testing only**.
 
-## Watch mode
+- Use it only on sites you own, operate, or have written permission to test.
+- Never target third-party sites without permission, and never use it to spam or flood forms.
+- In live mode, submissions send **real** messages — use a test address you control.
 
-`watch` runs `compare` in a loop until SIGINT. The interval is set with `--watch-interval` (ms, default 1 hour). Each cycle:
-
-1. Snapshot current site
-2. Diff against previous snapshot
-3. Emit a JSON report to stdout
-4. Sleep until next cycle (interruptible by Ctrl+C)
-
-Pipe stdout to a log, a webhook handler, or your own alerting glue.
+It deliberately cannot bypass CAPTCHA or anti-bot protections, doesn't handle file-upload fields, and may miss forms that use unusual, non-standard submit mechanisms.
