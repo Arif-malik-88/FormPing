@@ -46,14 +46,14 @@ export function UnassignedRow({
   };
 
   return (
-    <section className="fp-rise mt-7 rounded-xl border border-dashed border-slate-700/70 bg-slate-900/25 p-4">
+    <section className="fp-rise mt-7 rounded-xl border border-dashed border-line-strong/70 bg-panel/25 p-4">
       <div className="mb-3.5 flex items-center gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-dashed border-slate-600 text-base text-slate-500">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-dashed border-line-strong text-base text-ink-faint">
           ⋯
         </span>
         <div>
-          <h2 className="text-sm font-semibold text-slate-200">Unassigned</h2>
-          <p className="mt-0.5 text-xs text-slate-500">
+          <h2 className="text-sm font-semibold text-ink">Unassigned</h2>
+          <p className="mt-0.5 text-xs text-ink-faint">
             {urls.length} monitored URL{urls.length === 1 ? '' : 's'} not tied to a client — assign so its alerts route correctly.
           </p>
         </div>
@@ -64,7 +64,7 @@ export function UnassignedRow({
       {!loading && health && health.length > 0 && (
         <div className="space-y-2.5">
           {health.map((h) => (
-            <div key={h.url} className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+            <div key={h.url} className="rounded-lg border border-line bg-ground/40 p-3">
               <UrlHealthDetail h={h} />
               <div className="mt-2.5 flex justify-end gap-2">
                 <DismissUrlButton url={h.url} onDone={handleChanged} />
@@ -76,7 +76,7 @@ export function UnassignedRow({
       )}
 
       {!loading && health && health.length === 0 && (
-        <p className="text-xs text-slate-500">Nothing unassigned — every monitored URL is in a client. 🎉</p>
+        <p className="text-xs text-ink-faint">Nothing unassigned — every monitored URL is in a client. 🎉</p>
       )}
     </section>
   );
