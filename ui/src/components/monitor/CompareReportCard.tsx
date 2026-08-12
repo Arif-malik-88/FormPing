@@ -30,15 +30,15 @@ export function CompareReportCard({ report }: { report: ChangeReport }) {
   return (
     <div className="space-y-4 animate-slide-in">
       {/* Summary card */}
-      <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+      <div className="rounded-xl border border-line-strong bg-panel p-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="text-sm font-bold text-slate-100">{report.site}</h3>
-            <p className="text-xs font-mono text-slate-500 truncate">{report.rootUrl}</p>
+            <h3 className="text-sm font-bold text-ink">{report.site}</h3>
+            <p className="text-xs font-mono text-ink-faint truncate">{report.rootUrl}</p>
           </div>
           <button
             onClick={downloadJson}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-slate-200 bg-slate-800 hover:bg-slate-700 transition-colors ring-1 ring-slate-700"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-ink-muted hover:text-ink bg-ground hover:bg-panel-raised transition-colors ring-1 ring-line-strong"
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -51,42 +51,42 @@ export function CompareReportCard({ report }: { report: ChangeReport }) {
           <StatPill
             count={report.pagesScanned}
             label={report.pagesScanned === 1 ? 'page scanned' : 'pages scanned'}
-            color="bg-slate-800 text-slate-200"
+            color="bg-ground text-ink-secondary"
           />
           {report.pagesChanged > 0 && (
             <StatPill
               count={report.pagesChanged}
               label={report.pagesChanged === 1 ? 'page changed' : 'pages changed'}
-              color="bg-indigo-500/10 text-indigo-300"
+              color="bg-accent/10 text-accent-soft"
             />
           )}
           {report.changesFound > 0 && (
             <StatPill
               count={report.changesFound}
               label={report.changesFound === 1 ? 'change' : 'changes'}
-              color="bg-slate-800 text-slate-200"
+              color="bg-ground text-ink-secondary"
             />
           )}
-          {high > 0 && <StatPill count={high} label="high" color="bg-red-500/10 text-red-400" />}
-          {medium > 0 && <StatPill count={medium} label="medium" color="bg-amber-500/10 text-amber-400" />}
-          {low > 0 && <StatPill count={low} label="low" color="bg-slate-500/10 text-slate-400" />}
+          {high > 0 && <StatPill count={high} label="high" color="bg-danger/10 text-danger" />}
+          {medium > 0 && <StatPill count={medium} label="medium" color="bg-warn/10 text-warn" />}
+          {low > 0 && <StatPill count={low} label="low" color="bg-idle/10 text-ink-muted" />}
         </div>
 
         {isInitial ? (
-          <div className="rounded-lg bg-indigo-500/10 border border-indigo-500/20 px-3 py-2.5">
-            <p className="text-sm text-indigo-300 font-semibold">📷 Initial baseline saved</p>
-            <p className="text-xs text-slate-400 mt-1">Run compare again later to see what changed.</p>
+          <div className="rounded-lg bg-accent/10 border border-accent/20 px-3 py-2.5">
+            <p className="text-sm text-accent-soft font-semibold">📷 Initial baseline saved</p>
+            <p className="text-xs text-ink-muted mt-1">Run compare again later to see what changed.</p>
           </div>
         ) : report.changesFound === 0 ? (
           (() => {
             const changedPages = report.hashStatus?.filter((h) => h.hashChanged) ?? [];
             if (changedPages.length === 0) {
               return (
-                <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2.5">
-                  <p className="text-sm text-emerald-300 font-semibold">
+                <div className="rounded-lg bg-ok/10 border border-ok/20 px-3 py-2.5">
+                  <p className="text-sm text-ok font-semibold">
                     ✓ No changes since last snapshot
                   </p>
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs text-ink-muted mt-1">
                     Site is byte-identical to the previous baseline (text-content hashes match).
                   </p>
                 </div>
@@ -94,29 +94,29 @@ export function CompareReportCard({ report }: { report: ChangeReport }) {
             }
             // Hash differs but our extractor didn't pinpoint specific changes
             return (
-              <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2.5">
-                <p className="text-sm text-amber-300 font-semibold">
+              <div className="rounded-lg bg-warn/10 border border-warn/20 px-3 py-2.5">
+                <p className="text-sm text-warn font-semibold">
                   ⚠ Page changed, but specific text could not be pinpointed
                 </p>
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                <p className="text-xs text-ink-muted mt-1 leading-relaxed">
                   The body text hash differs vs the previous snapshot on{' '}
-                  <strong className="text-slate-200">
+                  <strong className="text-ink">
                     {changedPages.length} page{changedPages.length !== 1 ? 's' : ''}
                   </strong>
                   , but the change is inside markup we don&apos;t extract semantically (deep
                   custom widgets, JS-rendered content, etc.). Try{' '}
-                  <strong className="text-slate-200">--screenshots</strong> mode for full
+                  <strong className="text-ink">--screenshots</strong> mode for full
                   JS-rendered comparison.
                 </p>
                 <ul className="mt-2 space-y-1">
                   {changedPages.slice(0, 5).map((h) => (
                     <li
                       key={h.url}
-                      className="text-xs font-mono text-amber-200/80 flex items-center gap-2"
+                      className="text-xs font-mono text-warn/80 flex items-center gap-2"
                     >
-                      <span className="text-amber-400/60">·</span>
+                      <span className="text-warn/60">·</span>
                       <span className="truncate">{new URL(h.url).pathname}</span>
-                      <span className="text-slate-500 text-[10px]">
+                      <span className="text-ink-faint text-[10px]">
                         {h.oldLength}b → {h.newLength}b
                       </span>
                     </li>
@@ -126,12 +126,12 @@ export function CompareReportCard({ report }: { report: ChangeReport }) {
             );
           })()
         ) : (
-          <div className="rounded-lg bg-slate-800/60 border border-slate-700 px-3 py-2.5">
+          <div className="rounded-lg bg-ground border border-line-strong px-3 py-2.5">
             <div className="flex items-center justify-between gap-2 mb-1">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Summary</p>
+              <p className="text-xs font-semibold text-ink-faint uppercase tracking-wider">Summary</p>
               {report.summaryProvider && (
                 <span
-                  className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 ring-1 ring-indigo-500/20"
+                  className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-accent/10 text-accent-soft ring-1 ring-accent/20"
                   title="This summary was written by the AI provider"
                 >
                   <span aria-hidden>✨</span>
@@ -139,11 +139,11 @@ export function CompareReportCard({ report }: { report: ChangeReport }) {
                 </span>
               )}
             </div>
-            <p className="text-sm text-slate-200 leading-relaxed">{report.summary}</p>
+            <p className="text-sm text-ink-secondary leading-relaxed">{report.summary}</p>
           </div>
         )}
 
-        <div className="text-xs text-slate-500 flex items-center gap-3 flex-wrap">
+        <div className="text-xs text-ink-faint flex items-center gap-3 flex-wrap">
           <span title={new Date(report.checkedAt).toISOString()}>
             Checked {formatRelativeTime(report.checkedAt)}
           </span>
