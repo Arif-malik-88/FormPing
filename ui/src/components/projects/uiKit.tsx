@@ -21,30 +21,30 @@ import { runVerdict } from '@/lib/formWatch/verdict';
 export type Tone = 'emerald' | 'amber' | 'red' | 'slate';
 
 export const TONE_DOT: Record<Tone, string> = {
-  emerald: 'bg-emerald-400',
-  amber: 'bg-amber-400',
-  red: 'bg-red-400',
-  slate: 'bg-slate-500',
+  emerald: 'bg-ok',
+  amber: 'bg-warn',
+  red: 'bg-danger',
+  slate: 'bg-idle',
 };
 export const TONE_TEXT: Record<Tone, string> = {
-  emerald: 'text-emerald-300',
-  amber: 'text-amber-300',
-  red: 'text-red-300',
-  slate: 'text-slate-400',
+  emerald: 'text-ok',
+  amber: 'text-warn',
+  red: 'text-danger',
+  slate: 'text-ink-muted',
 };
 /** Soft pill/badge fill + text for a tone. */
 export const TONE_SOFT: Record<Tone, string> = {
-  emerald: 'bg-emerald-500/12 text-emerald-300',
-  amber: 'bg-amber-500/12 text-amber-300',
-  red: 'bg-rose-500/12 text-rose-300',
-  slate: 'bg-slate-500/12 text-slate-300',
+  emerald: 'bg-ok/12 text-ok',
+  amber: 'bg-warn/12 text-warn',
+  red: 'bg-danger/12 text-danger',
+  slate: 'bg-idle/12 text-ink-secondary',
 };
 /** Left severity edge for cards. */
 export const TONE_EDGE: Record<Tone, string> = {
-  emerald: 'bg-emerald-400/80',
-  amber: 'bg-amber-400/80',
-  red: 'bg-rose-400/90',
-  slate: 'bg-slate-600',
+  emerald: 'bg-ok/80',
+  amber: 'bg-warn/80',
+  red: 'bg-danger/90',
+  slate: 'bg-idle/70',
 };
 
 export const FORM_TONE: Record<FormHealthLevel, Tone> = {
@@ -77,10 +77,10 @@ export function rel(iso: string | null | undefined): string {
 }
 export function sslText(days: number | null | undefined): { t: string; c: string } | null {
   if (days == null) return null;
-  if (days < 0) return { t: 'expired', c: 'text-rose-300 font-semibold' };
-  if (days <= 14) return { t: `${days}d left`, c: 'text-rose-300 font-semibold' };
-  if (days <= 30) return { t: `${days}d`, c: 'text-amber-300' };
-  return { t: `${days}d`, c: 'text-slate-300' };
+  if (days < 0) return { t: 'expired', c: 'text-danger font-semibold' };
+  if (days <= 14) return { t: `${days}d left`, c: 'text-danger font-semibold' };
+  if (days <= 30) return { t: `${days}d`, c: 'text-warn' };
+  return { t: `${days}d`, c: 'text-ink-secondary' };
 }
 export function formatInterval(ms?: number): string {
   if (!ms) return '';
@@ -183,10 +183,10 @@ export function Tile({
   tone?: Tone;
 }) {
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3.5">
-      <div className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">{k}</div>
-      <div className={`mt-1.5 text-lg font-bold tabular-nums ${tone ? TONE_TEXT[tone] : 'text-slate-100'}`}>{v}</div>
-      {s && <div className="mt-0.5 text-[11.5px] text-slate-500">{s}</div>}
+    <div className="rounded-lg border border-line bg-panel/60 p-3.5">
+      <div className="text-[10.5px] font-semibold uppercase tracking-wider text-ink-faint">{k}</div>
+      <div className={`mt-1.5 text-lg font-bold tabular-nums ${tone ? TONE_TEXT[tone] : 'text-ink'}`}>{v}</div>
+      {s && <div className="mt-0.5 text-[11.5px] text-ink-faint">{s}</div>}
     </div>
   );
 }
@@ -194,8 +194,8 @@ export function Tile({
 export function SectionHeader({ title, help }: { title: string; help?: string }) {
   return (
     <div className="mb-3">
-      <h2 className="text-sm font-semibold text-slate-100">{title}</h2>
-      {help && <p className="mt-1 max-w-[62ch] text-xs text-slate-500">{help}</p>}
+      <h2 className="text-sm font-semibold text-ink">{title}</h2>
+      {help && <p className="mt-1 max-w-[62ch] text-xs text-ink-faint">{help}</p>}
     </div>
   );
 }
@@ -205,7 +205,7 @@ function SourceTag({ label, dim = false }: { label: string; dim?: boolean }) {
   return (
     <span
       className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider ring-1 ${
-        dim ? 'bg-slate-900 text-slate-600 ring-slate-800' : 'bg-slate-800 text-slate-300 ring-slate-700'
+        dim ? 'bg-panel text-ink-faint ring-line' : 'bg-ground text-ink-secondary ring-line-strong'
       }`}
     >
       {label}
@@ -256,14 +256,14 @@ export function UrlHealthDetail({
   const runTone: Tone = runV ? FORM_TONE[runV.level] : 'slate';
 
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-3.5">
+    <div className="rounded-lg border border-line bg-panel/50 p-3.5">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1 space-y-2">
           <a
             href={h.url}
             target="_blank"
             rel="noreferrer"
-            className="block max-w-full truncate font-mono text-xs font-medium text-indigo-200 hover:text-indigo-300"
+            className="block max-w-full truncate font-mono text-xs font-medium text-accent-soft hover:text-accent"
             title={h.url}
           >
             {h.url}
@@ -275,19 +275,19 @@ export function UrlHealthDetail({
         {h.form.monitored ? (
           <>
             <StatusDot tone={formTone} pulse />
-            <span className="font-medium text-slate-300">Scheduled form test · {modeLabel(h.form.mode)}</span>
+            <span className="font-medium text-ink-secondary">Scheduled form test · {modeLabel(h.form.mode)}</span>
             <span className={TONE_TEXT[formTone]}>— {h.form.label}</span>
-            <span className="text-slate-600">· {formatInterval(h.form.intervalMs)} · {rel(h.form.lastRunAt)}</span>
+            <span className="text-ink-faint">· {formatInterval(h.form.intervalMs)} · {rel(h.form.lastRunAt)}</span>
           </>
         ) : h.form.stopped ? (
           <>
             <StatusDot tone={formTone} pulse={false} />
-            <span className="font-medium text-slate-400">Last form result</span>
+            <span className="font-medium text-ink-muted">Last form result</span>
             <span className={TONE_TEXT[formTone]}>— {h.form.label}</span>
-            <span className="text-slate-600">· monitor stopped · {rel(h.form.lastRunAt)}</span>
+            <span className="text-ink-faint">· monitor stopped · {rel(h.form.lastRunAt)}</span>
           </>
         ) : (
-          <span className="text-slate-600">Scheduled form test · not set up</span>
+          <span className="text-ink-faint">Scheduled form test · not set up</span>
         )}
       </div>
 
@@ -297,19 +297,19 @@ export function UrlHealthDetail({
         {h.site.monitored || h.site.stopped ? (
           <>
             <StatusDot tone={upTone} pulse={h.site.monitored} />
-            <span className="font-medium text-slate-300">{h.site.monitored ? 'Uptime & SSL' : 'Last uptime & SSL'}</span>
+            <span className="font-medium text-ink-secondary">{h.site.monitored ? 'Uptime & SSL' : 'Last uptime & SSL'}</span>
             <span className={TONE_TEXT[upTone]}>
               — {h.site.upState ? UP_LABEL[h.site.upState] : 'Unknown'}
               {h.site.statusCode ? ` · ${h.site.statusCode}` : ''}
             </span>
-            {ssl && <span className="text-slate-500">· SSL <span className={ssl.c}>{ssl.t}</span></span>}
-            {domain && <span className="text-slate-500">· Domain <span className={domain.c}>{domain.t}</span></span>}
-            <span className="text-slate-600">
+            {ssl && <span className="text-ink-faint">· SSL <span className={ssl.c}>{ssl.t}</span></span>}
+            {domain && <span className="text-ink-faint">· Domain <span className={domain.c}>{domain.t}</span></span>}
+            <span className="text-ink-faint">
               · {h.site.monitored ? `${formatInterval(h.site.intervalMs)} · ${rel(h.site.lastCheckedAt)}` : `monitor stopped · ${rel(h.site.lastCheckedAt)}`}
             </span>
           </>
         ) : (
-          <span className="text-slate-600">Uptime &amp; SSL · not set up</span>
+          <span className="text-ink-faint">Uptime &amp; SSL · not set up</span>
         )}
       </div>
 
@@ -319,25 +319,25 @@ export function UrlHealthDetail({
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
         <SourceTag label="Change Monitor" dim={!h.change?.tracked} />
         {!h.change?.tracked ? (
-          <span className="text-slate-600">Content changes · not set up</span>
+          <span className="text-ink-faint">Content changes · not set up</span>
         ) : h.change.mode === 'snapshot' ? (
           <>
             <StatusDot tone="slate" pulse={false} />
-            <span className="font-medium text-slate-300">Baseline captured</span>
-            <span className="text-slate-500">— awaiting first compare</span>
-            <span className="text-slate-600">· site-wide · {rel(h.change.lastCheckedAt)}</span>
+            <span className="font-medium text-ink-secondary">Baseline captured</span>
+            <span className="text-ink-faint">— awaiting first compare</span>
+            <span className="text-ink-faint">· site-wide · {rel(h.change.lastCheckedAt)}</span>
           </>
         ) : (
           <>
             <StatusDot tone={changeTone} pulse={h.change.mode === 'watch'} />
-            <span className="font-medium text-slate-300">Content changes</span>
+            <span className="font-medium text-ink-secondary">Content changes</span>
             <span className={TONE_TEXT[changeTone]}>
               —{' '}
               {changeCount
                 ? `${changeCount} change${changeCount === 1 ? '' : 's'} on ${h.change.pagesChanged} page${h.change.pagesChanged === 1 ? '' : 's'}`
                 : 'no changes last check'}
             </span>
-            <span className="text-slate-600">
+            <span className="text-ink-faint">
               · site-wide{h.change.mode === 'watch' ? ' · watching' : ''} · {rel(h.change.lastCheckedAt)}
             </span>
           </>
@@ -349,11 +349,11 @@ export function UrlHealthDetail({
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
           <SourceTag label="Form Tester" />
           <StatusDot tone={runTone} pulse={false} />
-          <span className="font-medium text-slate-300">
+          <span className="font-medium text-ink-secondary">
             Manual form test{h.lastRun.mode ? ` · ${modeLabel(h.lastRun.mode)}` : ''}
           </span>
           <span className={TONE_TEXT[runTone]}>— {runV?.label ?? h.lastRun.finalStatus}</span>
-          <span className="text-slate-600">· {rel(h.lastRun.ranAt)}</span>
+          <span className="text-ink-faint">· {rel(h.lastRun.ranAt)}</span>
         </div>
       )}
         </div>
@@ -365,7 +365,7 @@ export function UrlHealthDetail({
                   type="button"
                   onClick={onRemove}
                   title="Remove from project (keeps its data — moves to Unassigned)"
-                  className="inline-flex items-center rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] font-semibold text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200"
+                  className="inline-flex items-center rounded-md border border-line-strong bg-panel px-2 py-1 text-[11px] font-semibold text-ink-muted transition-colors hover:border-ink-faint hover:text-ink"
                 >
                   Remove
                 </button>
@@ -376,7 +376,7 @@ export function UrlHealthDetail({
                   onClick={onDelete}
                   title="Delete this URL and all its data (can't be undone)"
                   aria-label="Delete this URL and all its data"
-                  className="inline-flex items-center rounded-md border border-slate-700 bg-slate-900 p-1.5 text-slate-500 transition-colors hover:border-rose-800/60 hover:text-rose-300"
+                  className="inline-flex items-center rounded-md border border-line-strong bg-panel p-1.5 text-ink-faint transition-colors hover:border-danger/60 hover:text-danger"
                 >
                   <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
                 </button>
@@ -386,7 +386,7 @@ export function UrlHealthDetail({
           {dashboardHref && (
             <Link
               href={dashboardHref}
-              className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] font-semibold text-slate-300 transition-colors hover:border-indigo-600/60 hover:text-indigo-200"
+              className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-line-strong bg-panel px-2 py-1 text-[11px] font-semibold text-ink-secondary transition-colors hover:border-accent/60 hover:text-accent-soft"
               title="Open this URL's dashboard"
             >
               <svg viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3" aria-hidden><path d="M3 3a1 1 0 011 1v11h13a1 1 0 110 2H4a2 2 0 01-2-2V4a1 1 0 011-1z" /><path d="M7 11l3-3 2 1.5 3.5-4 1.5 1.2-4.4 5-2-1.5L8.4 12 7 11z" /></svg>
