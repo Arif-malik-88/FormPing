@@ -77,7 +77,7 @@ export default function ProjectDetailPage() {
     try {
       res = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
     } catch {
-      setDeleteError('Network error — could not reach the server. Please try again.');
+      setDeleteError('Couldn’t reach FormPing — check your connection and try again.');
       return;
     }
     if (!res.ok) {
