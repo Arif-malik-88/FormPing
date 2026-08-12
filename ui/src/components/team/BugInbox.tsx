@@ -184,7 +184,7 @@ export function BugInbox() {
         variant="danger"
         title="Delete this bug report?"
         confirmLabel="Delete report"
-        message={<>This permanently removes the report from the backend. It can’t be undone — but bug reports are disposable, so that’s fine once it’s handled.</>}
+        message={<>This permanently removes the report. It can’t be undone — but bug reports are disposable, so that’s fine once it’s handled.</>}
         onConfirm={() => { if (confirmDelete) return doDelete(confirmDelete); }}
         onCancel={() => setConfirmDelete(null)}
       />

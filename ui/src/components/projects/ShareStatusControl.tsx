@@ -89,7 +89,7 @@ export function ShareStatusControl({
         </p>
         {canManage && (
           <div className="flex items-center gap-3">
-            <button type="button" onClick={generate} disabled={busy} title="Generate a new link and invalidate the old one" className="text-[11px] text-ink-muted hover:text-ink disabled:opacity-40">Regenerate</button>
+            <button type="button" onClick={generate} disabled={busy} title="Generate a new link and replace the old one" className="text-[11px] text-ink-muted hover:text-ink disabled:opacity-40">Regenerate</button>
             <button type="button" onClick={() => setConfirmRevoke(true)} disabled={busy} className="text-[11px] text-ink-muted hover:text-danger disabled:opacity-40">Turn off</button>
           </div>
         )}
