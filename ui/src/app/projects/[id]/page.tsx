@@ -144,7 +144,7 @@ export default function ProjectDetailPage() {
     return (
       <main className="mx-auto max-w-5xl px-4 pb-20 pt-8">
         <div className="fp-skeleton mb-4 h-3 w-28 rounded" />
-        <div className="flex items-center gap-4 border-b border-slate-800 pb-6">
+        <div className="flex items-center gap-4 border-b border-line pb-6">
           <div className="fp-skeleton h-11 w-11 rounded-xl" />
           <div className="flex-1 space-y-2"><div className="fp-skeleton h-5 w-52 rounded" /><div className="fp-skeleton h-3 w-40 rounded" /></div>
           <div className="hidden gap-2 sm:flex"><div className="fp-skeleton h-9 w-32 rounded-lg" /><div className="fp-skeleton h-9 w-16 rounded-lg" /></div>
@@ -161,10 +161,10 @@ export default function ProjectDetailPage() {
   if (state === 'notfound' || !project) {
     return (
       <main className="mx-auto max-w-5xl px-4 py-10">
-        <Link href="/projects" className="text-xs font-medium text-slate-500 hover:text-indigo-300">← Back to Projects</Link>
+        <Link href="/projects" className="text-xs font-medium text-ink-muted hover:text-ink">← Back to Projects</Link>
         <div className="py-20 text-center">
-          <h1 className="text-lg font-semibold text-slate-200">Project not found</h1>
-          <p className="mt-2 text-sm text-slate-500">It may have been deleted.</p>
+          <h1 className="text-lg font-semibold text-ink">Project not found</h1>
+          <p className="mt-2 text-sm text-ink-muted">It may have been deleted.</p>
         </div>
       </main>
     );
@@ -247,8 +247,8 @@ export default function ProjectDetailPage() {
       <section className="mt-7">
         <SectionHeader title="URLs & monitors" help="Every page we watch for this client, and what each tool found." />
         {project.health.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-slate-800 px-4 py-8 text-center text-sm text-slate-500">
-            No URLs in this project yet — use <strong className="text-slate-300">Edit</strong> to add some.
+          <p className="rounded-lg border border-dashed border-line px-4 py-8 text-center text-sm text-ink-muted">
+            No URLs in this project yet — use <strong className="text-ink-secondary">Edit</strong> to add some.
           </p>
         ) : (
           <div className="space-y-2.5">
@@ -282,22 +282,22 @@ export default function ProjectDetailPage() {
         confirmLabel="Delete project"
         message={
           <>
-            Deletes <strong className="text-slate-300">{project.name}</strong> and everything for its {count} URL
+            Deletes <strong className="text-ink-secondary">{project.name}</strong> and everything for its {count} URL
             {count === 1 ? '' : 's'}:
-            <ul className="mt-2 space-y-1 list-disc pl-5 text-slate-400">
+            <ul className="mt-2 space-y-1 list-disc pl-5 text-ink-muted">
               <li>
-                <strong className="text-slate-300">Stops</strong> its Form Watch, Site Watch and any running change watch
+                <strong className="text-ink-secondary">Stops</strong> its Form Watch, Site Watch and any running change watch
               </li>
               <li>Deletes their run history, last results and uptime history</li>
               <li>Deletes change tracking — reports, timeline and saved snapshots</li>
             </ul>
             <span className="mt-2 block">
               Unlike stopping a single test, this{' '}
-              <strong className="text-slate-300">does remove the results from Projects</strong>.{' '}
-              <strong className="text-red-300">Can&apos;t be undone.</strong>
+              <strong className="text-ink-secondary">does remove the results from Projects</strong>.{' '}
+              <strong className="text-danger">Can&apos;t be undone.</strong>
             </span>
             {deleteError && (
-              <span className="mt-3 block rounded-md border border-rose-800/50 bg-rose-500/10 px-3 py-2 text-rose-300">
+              <span className="mt-3 block rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-danger">
                 {deleteError}
               </span>
             )}
@@ -314,27 +314,27 @@ export default function ProjectDetailPage() {
         confirmLabel="Delete URL"
         message={
           <>
-            <p className="break-all font-mono text-[11px] text-slate-300">{deleteUrl}</p>
+            <p className="break-all font-mono text-[11px] text-ink-secondary">{deleteUrl}</p>
             <p className="mt-2">Permanently deletes everything for this one URL:</p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-400">
-              <li><strong className="text-slate-300">Stops</strong> its Form Watch &amp; Site Watch and clears their history</li>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-ink-muted">
+              <li><strong className="text-ink-secondary">Stops</strong> its Form Watch &amp; Site Watch and clears their history</li>
               <li>Deletes its last results and uptime history</li>
               <li>Deletes its change tracking — reports, timeline and snapshots (unless another URL shares the same site)</li>
               <li>Turns off any client share link for this URL</li>
             </ul>
             {project && project.urls.length <= 1 && (
-              <span className="mt-2 block rounded-md border border-amber-800/50 bg-amber-500/10 px-3 py-2 text-amber-200">
+              <span className="mt-2 block rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-warn">
                 This is the <strong>only URL</strong> in this project — deleting it will remove the
                 whole project too.
               </span>
             )}
             <span className="mt-2 block">
-              This is <strong className="text-slate-300">not</strong> the same as removing it via Edit
+              This is <strong className="text-ink-secondary">not</strong> the same as removing it via Edit
               (which just moves it to Unassigned and keeps the data).{' '}
-              <strong className="text-red-300">Can&apos;t be undone.</strong>
+              <strong className="text-danger">Can&apos;t be undone.</strong>
             </span>
             {deleteUrlError && (
-              <span className="mt-3 block rounded-md border border-rose-800/50 bg-rose-500/10 px-3 py-2 text-rose-300">
+              <span className="mt-3 block rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-danger">
                 {deleteUrlError}
               </span>
             )}
@@ -351,30 +351,30 @@ export default function ProjectDetailPage() {
         confirmLabel="Remove URL"
         message={
           <>
-            <p className="break-all font-mono text-[11px] text-slate-300">{removeUrl}</p>
+            <p className="break-all font-mono text-[11px] text-ink-secondary">{removeUrl}</p>
             {removeHasActivity ? (
               <p className="mt-2">
                 This URL has test/monitor activity, so removing it{' '}
-                <strong className="text-slate-300">keeps all its data</strong> — its monitors keep running and it
-                moves to <strong className="text-emerald-300">Unassigned</strong> (on the Projects page), where you
+                <strong className="text-ink-secondary">keeps all its data</strong> — its monitors keep running and it
+                moves to <strong className="text-ok">Unassigned</strong> (on the Projects page), where you
                 can reassign it to another project later.
               </p>
             ) : (
               <p className="mt-2">
-                This URL has <strong className="text-slate-300">no test or monitor activity yet</strong>, so removing
+                This URL has <strong className="text-ink-secondary">no test or monitor activity yet</strong>, so removing
                 it simply takes it out of the project. There&apos;s nothing to keep, so it{' '}
-                <strong className="text-slate-300">won&apos;t appear in Unassigned</strong> — you&apos;d just add it
+                <strong className="text-ink-secondary">won&apos;t appear in Unassigned</strong> — you&apos;d just add it
                 again if you need it.
               </p>
             )}
             {project && project.urls.length <= 1 && (
-              <span className="mt-2 block rounded-md border border-amber-800/50 bg-amber-500/10 px-3 py-2 text-amber-200">
+              <span className="mt-2 block rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-warn">
                 This is the <strong>only URL</strong> — removing it will delete the (now-empty) project.
                 {removeHasActivity ? ' Its data is still kept.' : ''}
               </span>
             )}
             {removeUrlError && (
-              <span className="mt-3 block rounded-md border border-rose-800/50 bg-rose-500/10 px-3 py-2 text-rose-300">
+              <span className="mt-3 block rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-danger">
                 {removeUrlError}
               </span>
             )}
