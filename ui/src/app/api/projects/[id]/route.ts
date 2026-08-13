@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { projectStore, matchKey } from '@/lib/projects/projectStore';
 import { hostsUsedByOtherProjects } from '@/lib/projects/hostUsage';
+import { firstUrlOwnedElsewhere, firstDuplicatePage } from '@/lib/projects/urlOwnership';
 import { removeUrlShareByKey } from '@/lib/projects/urlShareStore';
 import { requireRole, currentUser } from '@/lib/auth/authorize';
 import { atLeast } from '@/lib/auth/roles';
@@ -85,14 +86,32 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         { status: 400 },
       );
     }
+    // The same page can't be listed twice in this project.
+    const dupe = firstDuplicatePage(urls);
+    if (dupe) {
+      return NextResponse.json(
+        { error: `“${dupe}” is already in this project — the same URL can’t be added twice.` },
+        { status: 409 },
+      );
+    }
+    // One page = one client: a URL that already lives in ANOTHER project can't be
+    // added here (exclude this project so its own existing URLs never clash).
+    const clash = await firstUrlOwnedElsewhere(urls, params.id);
+    if (clash) {
+      return NextResponse.json(
+        { error: `“${clash.url}” is already in the project “${clash.owner.name}”. A URL can only belong to one project.` },
+        { status: 409 },
+      );
+    }
     patch.urls = urls;
   }
   if (typeof body.notes === 'string') patch.notes = body.notes;
   if (typeof body.contact === 'string') patch.contact = body.contact;
 
-  // Capture the URLs BEFORE the update so we can tell which ones are being
-  // removed (to revoke their per-URL share links — FR-27).
-  const before = patch.urls !== undefined ? await projectStore.get(params.id) : null;
+  // Current project — needed to spot removed URLs (revoke their share links,
+  // FR-27) and to skip a no-op save (don't bump "updated" when nothing changed).
+  const before = await projectStore.get(params.id);
+  if (!before) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
 
   // Removing a URL from a project — including removing the last one, which deletes
   // the project — is Admin+ ONLY (FR-37). Members/viewers can rename, edit notes
@@ -123,6 +142,18 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     await projectStore.remove(params.id);
     return NextResponse.json({ projectDeleted: true });
   }
+
+  // No-op guard: if nothing actually changed, leave the project — and its
+  // "updated / edited by" stamp — exactly as it was. A save that changes nothing
+  // shouldn't look like an edit.
+  const norm = (s?: string) => (s ?? '').trim();
+  const changed =
+    (patch.name !== undefined && norm(patch.name) !== norm(before.name)) ||
+    (patch.notes !== undefined && norm(patch.notes) !== norm(before.notes)) ||
+    (patch.contact !== undefined && norm(patch.contact) !== norm(before.contact)) ||
+    (patch.urls !== undefined &&
+      (patch.urls.length !== before.urls.length || patch.urls.some((u, i) => u !== before.urls[i])));
+  if (!changed) return NextResponse.json({ project: before });
 
   const updated = await projectStore.update(params.id, patch, await actorName(request));
   if (!updated) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
