@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import type { Project } from '@/lib/projects/types';
-import { urlKey } from '@/lib/projects/projectStore';
+import { urlKey, matchKey } from '@/lib/projects/projectStore';
 import { checkUrl } from '@/lib/urlCheck';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
@@ -17,7 +17,7 @@ function isValidUrl(raw: string): boolean {
 }
 
 interface DupWarning {
-  dups: Array<{ url: string; projects: Array<{ id: string; name: string }> }>;
+  /** URLs that didn't respond — a soft "add anyway" (a live site can be briefly down). */
   unreachable: string[];
 }
 
@@ -120,14 +120,24 @@ export function ProjectForm({
       setError(`Fix the highlighted URL${invalidCount === 1 ? '' : 's'} first.`);
       return;
     }
+    // The same page can't be listed twice in one project.
+    const seenKeys = new Set<string>();
+    for (const u of filledUrls) {
+      const k = matchKey(u);
+      if (seenKeys.has(k)) {
+        setError(`“${u}” is already in this project — the same URL can’t be added twice.`);
+        return;
+      }
+      seenKeys.add(k);
+    }
     if (filledUrls.length === 0) {
       proceed();
       return;
     }
 
-    // Soft, fail-open checks: any URL already in ANOTHER project (matchKey-aware),
-    // and any that don't respond. Neither blocks — a URL can live in several
-    // projects and a live site can be briefly down.
+    // Two checks: a URL already in ANOTHER project (matchKey-aware) is a HARD
+    // block — one page belongs to one client. A URL that doesn't respond is a
+    // SOFT warning (a live site can be briefly down) — "add anyway".
     setChecking(true);
     try {
       const qs = new URLSearchParams();
@@ -141,8 +151,16 @@ export function ProjectForm({
       ]);
       const dups = Array.isArray(dupData?.duplicates) ? dupData.duplicates : [];
       const unreachable = checks.filter((c) => c.ok && !c.reachable).map((c) => c.input);
-      if (dups.length > 0 || unreachable.length > 0) {
-        setWarning({ dups, unreachable });
+      if (dups.length > 0) {
+        const d = dups[0];
+        const owner = d?.projects?.[0]?.name ?? 'another project';
+        setError(
+          `“${d.url}” is already in “${owner}”. A URL can only be in one project — remove it there first, or edit that project.`,
+        );
+        return;
+      }
+      if (unreachable.length > 0) {
+        setWarning({ unreachable });
         return;
       }
     } catch {
@@ -259,31 +277,19 @@ export function ProjectForm({
         </button>
       </div>
 
-      {/* Soft warning: duplicates and/or unreachable URLs — Okay / Add anyway. */}
+      {/* Soft warning: unreachable URLs — Okay / Add anyway. (Duplicates are a hard
+          block, handled inline above — a URL belongs to exactly one project.) */}
       <ConfirmDialog
         open={warning !== null}
         variant="edit"
-        title="Before you add these"
-        cancelLabel="Okay"
+        title="Some sites didn't respond"
+        cancelLabel="Go back"
         confirmLabel="Add anyway"
         message={
           <>
-            {warning && warning.dups.length > 0 && (
-              <>
-                <p>Already in another project:</p>
-                <ul className="mt-1.5 space-y-1">
-                  {warning.dups.map((d) => (
-                    <li key={d.url} className="text-[11px]">
-                      <span className="break-all font-mono text-warn/80">{d.url}</span>
-                      <span className="text-ink-muted"> — in <strong className="text-ink-secondary">{d.projects.map((p) => p.name).join(', ')}</strong></span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
             {warning && warning.unreachable.length > 0 && (
               <>
-                <p className={warning.dups.length > 0 ? 'mt-3' : ''}>Couldn&apos;t reach (may be down or blocking us):</p>
+                <p>Couldn&apos;t reach (may be down or blocking automated checks):</p>
                 <ul className="mt-1.5 space-y-1">
                   {warning.unreachable.map((u) => (
                     <li key={u} className="break-all font-mono text-[11px] text-warn/80">{u}</li>
@@ -291,10 +297,7 @@ export function ProjectForm({
                 </ul>
               </>
             )}
-            <p className="mt-2">
-              A URL can belong to more than one project, and a live site can be briefly down. Add
-              anyway, or go back and fix.
-            </p>
+            <p className="mt-2">A live site can be briefly down. Add anyway, or go back and check.</p>
           </>
         }
         onConfirm={() => {
