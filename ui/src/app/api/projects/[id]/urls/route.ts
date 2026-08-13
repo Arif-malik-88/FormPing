@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { projectStore, urlKey } from '@/lib/projects/projectStore';
+import { projectOwningUrl } from '@/lib/projects/urlOwnership';
 import { removeDismissed } from '@/lib/projects/dismissedStore';
 import { requireRole, currentUser } from '@/lib/auth/authorize';
 import { getUserName } from '@/lib/auth/userStore';
@@ -43,6 +44,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   const project = await projectStore.get(params.id);
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+
+  // One page = one client: refuse a URL that already lives in ANOTHER project.
+  const owner = await projectOwningUrl(url, params.id);
+  if (owner) {
+    return NextResponse.json(
+      { error: `This URL is already in the project “${owner.name}”. A URL can only belong to one project — remove it there first.` },
+      { status: 409 },
+    );
+  }
 
   // Dedup on the canonical key so re-adding the same URL in different casing is
   // still a no-op (a case-sensitive compare here silently created duplicates).

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { projectStore } from '@/lib/projects/projectStore';
+import { firstUrlOwnedElsewhere, firstDuplicatePage } from '@/lib/projects/urlOwnership';
 import { rollupsForUrlSets, listUnassignedUrls } from '@/lib/projects/health';
 import { removeDismissed } from '@/lib/projects/dismissedStore';
 import { requireRole, currentUser } from '@/lib/auth/authorize';
@@ -86,6 +87,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: `Invalid URL: "${bad}" — must start with http:// or https://` },
       { status: 400 },
+    );
+  }
+
+  // The same page can't be listed twice in a project.
+  const dupe = firstDuplicatePage(urls);
+  if (dupe) {
+    return NextResponse.json(
+      { error: `“${dupe}” is listed twice — the same URL can’t be added more than once.` },
+      { status: 409 },
+    );
+  }
+
+  // One page = one client: a URL already in another project can't start a new one.
+  const clash = await firstUrlOwnedElsewhere(urls);
+  if (clash) {
+    return NextResponse.json(
+      { error: `“${clash.url}” is already in the project “${clash.owner.name}”. A URL can only belong to one project.` },
+      { status: 409 },
     );
   }
 
