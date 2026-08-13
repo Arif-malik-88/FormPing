@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { projectStore, projectForUrlKey, matchKey } from '@/lib/projects/projectStore';
+import { hostUsedByOtherProject } from '@/lib/projects/hostUsage';
 import { buildClientStatus, parseWindow } from '@/lib/status/build';
 import { loadChangeEvents, removeChangeEvents } from '@/lib/changeEventStore';
 import { siteKey, stopWatch } from '@/lib/watchRegistry';
@@ -110,10 +111,12 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   await removeDaily(url);
   await removeUrlShareByKey(params.id, urlKey); // revoke its public link
 
-  // Host-level teardown ONLY if no sibling URL in this project uses the same host
-  // (change tracking is site-level — don't wipe another page's history).
+  // Host-level teardown ONLY if NOTHING still uses this host (change tracking is
+  // site-level — don't wipe another page's, or another project's, history). Check
+  // both this project's other URLs AND every other project.
   const remaining = project.urls.filter((u) => matchKey(u) !== urlKey);
-  const hostStillUsed = remaining.some((u) => siteKey(u) === host);
+  const hostStillUsed =
+    remaining.some((u) => siteKey(u) === host) || (await hostUsedByOtherProject(host, project.id));
   let hostPurged = false;
   if (host && host !== 'unknown' && !hostStillUsed) {
     stopWatch(host);

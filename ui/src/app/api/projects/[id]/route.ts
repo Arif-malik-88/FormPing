@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { projectStore, matchKey } from '@/lib/projects/projectStore';
+import { hostsUsedByOtherProjects } from '@/lib/projects/hostUsage';
 import { removeUrlShareByKey } from '@/lib/projects/urlShareStore';
 import { requireRole, currentUser } from '@/lib/auth/authorize';
 import { atLeast } from '@/lib/auth/roles';
@@ -210,8 +211,13 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
   // Per-host Change Monitor teardown. Order matters: STOP the watch first, so it
   // cannot write new events/reports in between and resurrect what we delete.
+  // Change tracking is host-level, so skip any host that ANOTHER project still
+  // tracks — deleting this project must not wipe a host's history out from under
+  // a sibling project that shares the same site.
+  const hostsUsedElsewhere = await hostsUsedByOtherProjects(params.id);
   let watchesStopped = 0;
   for (const host of hosts) {
+    if (host === 'unknown' || hostsUsedElsewhere.has(host)) continue; // another project keeps this host alive
     if (stopWatch(host)) watchesStopped++; // kill the running subprocess
     await removeActiveWatch(host); // and don't let it resume after a redeploy
     await removeReports(host);
