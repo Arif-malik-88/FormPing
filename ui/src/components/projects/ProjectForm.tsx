@@ -135,19 +135,29 @@ export function ProjectForm({
       return;
     }
 
-    // Two checks: a URL already in ANOTHER project (matchKey-aware) is a HARD
-    // block — one page belongs to one client. A URL that doesn't respond is a
-    // SOFT warning (a live site can be briefly down) — "add anyway".
+    // Only the NEW URLs need the network checks — the ones already in this project
+    // were validated when they were added, and (being in this project) can't clash
+    // with another one. Skipping the unchanged URLs makes saving an edit fast, and
+    // an edit that adds no URLs (renamed, edited notes, removed a URL) saves instantly.
+    const newUrls = filledUrls.filter((u) => !originalUrls.some((o) => matchKey(o) === matchKey(u)));
+    if (newUrls.length === 0) {
+      proceed();
+      return;
+    }
+
+    // Two checks on the new URLs: one already in ANOTHER project (matchKey-aware)
+    // is a HARD block — one page belongs to one client. One that doesn't respond
+    // is a SOFT warning (a live site can be briefly down) — "add anyway".
     setChecking(true);
     try {
       const qs = new URLSearchParams();
-      filledUrls.forEach((u) => qs.append('url', u));
+      newUrls.forEach((u) => qs.append('url', u));
       if (editing && project) qs.set('exclude', project.id);
       const [dupData, checks] = await Promise.all([
         fetch(`/api/projects/url-owners?${qs.toString()}`, { cache: 'no-store' })
           .then((r) => r.json())
           .catch(() => ({ duplicates: [] })),
-        Promise.all(filledUrls.map((u) => checkUrl(u))),
+        Promise.all(newUrls.map((u) => checkUrl(u))),
       ]);
       const dups = Array.isArray(dupData?.duplicates) ? dupData.duplicates : [];
       const unreachable = checks.filter((c) => c.ok && !c.reachable).map((c) => c.input);
