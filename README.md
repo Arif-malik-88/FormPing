@@ -111,7 +111,7 @@ Each change is graded **low / medium / high** so you can tell a cosmetic tweak f
 
 One presentation powers both a public and an internal view, curated so nothing technical can reach a client:
 
-- **Public status page** — client-safe only: overall status, uptime %, uptime history, SSL validity, and whether the contact form is working. No response times, reason codes, full URLs, or content-change detail.
+- **Public status page** — client-safe only: the page URL, overall status, uptime %, uptime history, SSL validity, and whether the contact form is working. No response times, reason codes, or content-change detail.
 - **Internal dashboard** — the full picture for the team: response-time and uptime charts, HTTP status, check frequency, domain expiry, and the content-change timeline (each run expands to show what changed).
 
 Content diffs are internal-only by design — "84 changes detected" would alarm a client about what is often their own team's intentional edits. Both views carry a **Today / 7 days / 30 days / All-time** filter.

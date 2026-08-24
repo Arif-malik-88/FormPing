@@ -250,10 +250,10 @@ export default function DocsContent() {
               <Section id="status-pages" title="Client status pages" eyebrow="Projects">
                 <P>Publish a <strong className="text-ink">clean, client-safe status page</strong> you can share with the client — a simple “is my site healthy?” view with none of the internal detail.</P>
                 <UL>
-                  <LI>It shows overall status, each site up/down, a 30-day uptime history, uptime % for 24h / 7d / 30d, a response-time trend, whether the contact form is working, and SSL validity. <strong className="text-ink">No reason codes, modes, notes, or full URLs</strong> ever appear.</LI>
+                  <LI>It shows the page URL, overall status, each site up/down, a 30-day uptime history, uptime % for 24h / 7d / 30d, whether the contact form is working, and SSL validity. <strong className="text-ink">No reason codes, modes, notes, response times, or content-change detail</strong> ever appear.</LI>
                   <LI>You get a <strong>private link</strong> that opens with <strong className="text-ink">no login</strong>. <strong>Regenerate</strong> it to replace the old one, or <strong>Turn off</strong> to disable it — a disabled link just shows a “not found” page.</LI>
                   <LI>Each URL can also have its <strong>own</strong> client share link (just that one page), generated and revoked independently.</LI>
-                  <LI>Only projects where you’ve explicitly created a link are ever public. Your team also gets an internal <strong>View status</strong> for any project without publishing anything.</LI>
+                  <LI>Only projects where you’ve explicitly created a link are ever public — nothing is published unless you create one.</LI>
                 </UL>
               </Section>
 
