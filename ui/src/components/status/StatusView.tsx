@@ -43,6 +43,42 @@ function windowLabel(d: number | null): string {
 function modeLabel(mode: string | null | undefined): string {
   return mode === 'live' ? 'Live' : mode === 'detect-only' ? 'Detect only' : mode === 'safe' ? 'Safe mode' : (mode ?? '—');
 }
+/** "24 Oct 2026" — the calendar date `days` from now (for SSL/domain expiry). */
+function fmtExpiry(days: number): string {
+  return new Date(Date.now() + days * 86_400_000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+/** Small trend chip vs the previous equal window. `higherIsBetter` flips the
+ *  colour (uptime↑ = good; response/incidents↑ = bad). Muted when unchanged. */
+function DeltaChip({ delta, higherIsBetter, fmt }: { delta: number; higherIsBetter: boolean; fmt: (n: number) => string }) {
+  if (delta === 0) return <span className="text-[10px] font-medium text-ink-faint">±0</span>;
+  const good = higherIsBetter ? delta > 0 : delta < 0;
+  return (
+    <span className={`text-[10px] font-semibold ${good ? 'text-ok' : 'text-warn'}`}>
+      {delta > 0 ? '↑' : '↓'}
+      {fmt(Math.abs(delta))}
+    </span>
+  );
+}
+
+/** SSL / domain expiry insight: real calendar date + days-left + urgency colour. */
+function ExpiryRow({ label, days, valid }: { label: string; days: number; valid: boolean }) {
+  const tone = !valid || days <= 14 ? 'text-danger' : days <= 30 ? 'text-warn' : 'text-ok';
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-ink-faint">{label}</span>
+      <span className="tabular-nums text-ink-secondary">
+        {valid ? (
+          <>
+            expires {fmtExpiry(days)} · <span className={`font-medium ${tone}`}>{days}d</span>
+          </>
+        ) : (
+          <span className="font-medium text-danger">expired</span>
+        )}
+      </span>
+    </div>
+  );
+}
 
 function Detail({ k, v }: { k: string; v: React.ReactNode }) {
   return (
@@ -76,11 +112,14 @@ function StatePill({ state }: { state: StatusSite['state'] }) {
   }[state];
   return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${map.c}`}>{map.t}</span>;
 }
-function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function StatTile({ label, value, sub, delta }: { label: string; value: string; sub?: string; delta?: React.ReactNode }) {
   return (
     <div className="rounded-xl bg-ground px-3 py-2.5 ring-1 ring-line">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">{label}</p>
-      <p className="mt-0.5 text-lg font-bold leading-tight tabular-nums text-ink">{value}</p>
+      <div className="mt-0.5 flex items-baseline gap-1.5">
+        <p className="text-lg font-bold leading-tight tabular-nums text-ink">{value}</p>
+        {delta}
+      </div>
       {sub && <p className="mt-0.5 text-[11px] text-ink-faint">{sub}</p>}
     </div>
   );
@@ -89,13 +128,14 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
 /** Window filter — Today / 7 days / 30 days / All time. */
 function WindowFilter({ value, onChange }: { value: WindowId; onChange: (w: WindowId) => void }) {
   return (
-    <div className="inline-flex rounded-xl bg-panel/70 p-1 ring-1 ring-line">
+    <div className="flex w-full rounded-xl bg-panel/70 p-1 ring-1 ring-line sm:inline-flex sm:w-auto">
       {WINDOWS.map((w) => (
         <button
           key={w.id}
           type="button"
+          aria-pressed={value === w.id}
           onClick={() => onChange(w.id)}
-          className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+          className={`flex-1 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors sm:flex-none sm:px-4 sm:py-2 sm:text-sm ${
             value === w.id ? 'bg-gradient-to-b from-accent to-accent-strong text-white shadow-sm shadow-accent-deep/40 ring-1 ring-accent-soft/20' : 'text-ink-muted hover:bg-panel hover:text-ink'
           }`}
         >
@@ -106,51 +146,157 @@ function WindowFilter({ value, onChange }: { value: WindowId; onChange: (w: Wind
   );
 }
 
-function UptimeBar({ days }: { days: UptimeDay[] }) {
-  const color = (p: number | null) => (p == null ? 'bg-line-strong' : p >= 99.9 ? 'bg-ok' : p >= 95 ? 'bg-warn' : 'bg-danger');
-  return (
-    <div className="flex h-9 items-end gap-[3px]">
-      {days.map((d) => (
-        <div key={d.date} className={`h-full flex-1 rounded-[2px] ${color(d.pct)} transition-colors`} title={`${d.date}: ${d.pct == null ? 'no data' : `${d.pct}% uptime`}`} />
-      ))}
-    </div>
-  );
+/** "24 Oct" from a YYYY-MM-DD day key. */
+function shortDate(iso: string): string {
+  return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 }
-function Legend() {
-  const items = [['bg-ok', 'Operational'], ['bg-warn', 'Partial'], ['bg-danger', 'Down'], ['bg-line-strong', 'No data']] as const;
+
+/**
+ * Uptime day-strip — one cell per day, coloured by that day's result, with a
+ * date axis, per-day hover tooltip, and a graceful note when history is sparse
+ * (so a fresh monitor reads as "filling in", not a broken wall of grey).
+ */
+function UptimeChart({ days }: { days: UptimeDay[] }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const color = (p: number | null) => (p == null ? 'bg-line-strong' : p >= 99.9 ? 'bg-ok' : p >= 95 ? 'bg-warn' : 'bg-danger');
+  const tracked = days.filter((d) => d.pct != null).length;
+  const hv = hover != null ? days[hover] : null;
+  const n = days.length;
+
+  // Empty window → say so plainly, so switching the range clearly does something
+  // even when there's no data (rather than an ambiguous grey grid).
+  if (tracked === 0) {
+    return (
+      <div className="flex h-28 flex-col items-center justify-center rounded-lg bg-ground text-center ring-1 ring-line">
+        <p className="text-[11px] text-ink-faint">No uptime checks in this window.</p>
+        <p className="mt-0.5 text-[10px] text-ink-faint/70">Try a longer range — history fills in as monitoring runs.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-      {items.map(([c, t]) => (
-        <span key={t} className="inline-flex items-center gap-1.5 text-[10px] text-ink-faint"><span className={`h-2.5 w-2.5 rounded-[2px] ${c}`} />{t}</span>
-      ))}
+    <div>
+      <div className="relative">
+        <div className="flex h-14 items-end gap-[2px]" onMouseLeave={() => setHover(null)}>
+          {days.map((d, i) => (
+            <div
+              key={d.date}
+              onMouseEnter={() => setHover(i)}
+              className={`h-full flex-1 rounded-[2px] ${color(d.pct)} ${hover === i ? 'ring-1 ring-white/50' : ''}`}
+            />
+          ))}
+        </div>
+        {hv && (
+          <div
+            className="pointer-events-none absolute bottom-full mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-panel-raised px-2 py-1 text-[10px] text-ink-secondary shadow-lg ring-1 ring-line-strong"
+            style={{ left: `${((hover! + 0.5) / n) * 100}%` }}
+          >
+            {shortDate(hv.date)} · <span className="font-medium text-ink">{hv.pct == null ? 'no data' : `${hv.pct}% uptime`}</span>
+          </div>
+        )}
+      </div>
+      <div className="mt-1 flex justify-between text-[10px] text-ink-faint">
+        <span>{n ? shortDate(days[0]!.date) : ''}</span>
+        <span>today</span>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {([['bg-ok', 'Operational'], ['bg-warn', 'Partial'], ['bg-danger', 'Down'], ['bg-line-strong', 'No data']] as const).map(([c, t]) => (
+            <span key={t} className="inline-flex items-center gap-1.5 text-[10px] text-ink-faint"><span className={`h-2.5 w-2.5 rounded-[2px] ${c}`} />{t}</span>
+          ))}
+        </div>
+        {tracked < n && <span className="text-[10px] text-ink-faint">{tracked} of {n} days tracked</span>}
+      </div>
     </div>
   );
 }
 
-/** Self-contained SVG response-time trend (internal only). */
-function TrendChart({ points }: { points: RespPoint[] }) {
-  const pts = points.map((p, i) => ({ i, ms: p.ms })).filter((p): p is { i: number; ms: number } => p.ms != null);
+/**
+ * Self-contained SVG response-time trend (internal only) — real y-axis (slowest
+ * top → fastest bottom) + gridlines, a date x-axis, and an interactive hover
+ * that reads out the day + ms at the cursor.
+ */
+function ResponseChart({ points }: { points: RespPoint[] }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const pts = points
+    .map((p, i) => ({ i, ms: p.ms, date: p.date }))
+    .filter((p): p is { i: number; ms: number; date: string } => p.ms != null);
   if (pts.length < 2) {
-    return <div className="flex h-14 items-center justify-center rounded-xl bg-ground ring-1 ring-line"><p className="text-[11px] text-ink-faint">Building trend — needs a bit more history.</p></div>;
+    return (
+      <div className="flex h-28 flex-col items-center justify-center rounded-lg bg-ground text-center ring-1 ring-line">
+        <p className="text-[11px] text-ink-faint">Not enough data in this window to chart a trend.</p>
+        <p className="mt-0.5 text-[10px] text-ink-faint/70">Try a longer range — the trend builds as monitoring runs.</p>
+      </div>
+    );
   }
   const xMax = points.length - 1;
   const values = pts.map((p) => p.ms);
   const min = Math.min(...values), max = Math.max(...values);
   const range = max - min || 1;
-  const W = 100, H = 32;
-  const coord = (p: { i: number; ms: number }): [number, number] => [(p.i / xMax) * W, H - ((p.ms - min) / range) * H];
-  const line = pts.map(coord).map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
-  const [fx] = coord(pts[0]!);
-  const [lx] = coord(pts[pts.length - 1]!);
-  const area = `M ${fx.toFixed(2)},${H} L ${line.replace(/ /g, ' L ')} L ${lx.toFixed(2)},${H} Z`;
+  const W = 100, H = 40;
+  const x = (i: number) => (i / xMax) * W;
+  const y = (ms: number) => H - ((ms - min) / range) * H;
+  const line = pts.map((p) => `${x(p.i).toFixed(2)},${y(p.ms).toFixed(2)}`).join(' ');
+  const area = `M ${x(pts[0]!.i).toFixed(2)},${H} L ${pts.map((p) => `${x(p.i).toFixed(2)},${y(p.ms).toFixed(2)}`).join(' L ')} L ${x(pts[pts.length - 1]!.i).toFixed(2)},${H} Z`;
+  const latest = pts[pts.length - 1]!;
+  const hv = hover != null ? pts.find((p) => p.i === hover) ?? null : null;
+  const gridStyle = { stroke: 'rgb(var(--fp-line-strong))', strokeWidth: 0.5 } as const;
+
+  function onMove(e: React.MouseEvent<HTMLDivElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const target = ratio * xMax;
+    const nearest = pts.reduce((a, b) => (Math.abs(b.i - target) < Math.abs(a.i - target) ? b : a));
+    setHover(nearest.i);
+  }
+
   return (
-    <div className="rounded-xl bg-ground px-3 pb-1 pt-2 ring-1 ring-line">
-      <div className="mb-1 flex items-center justify-between text-[10px] text-ink-faint"><span>slowest {max}ms</span><span>fastest {min}ms</span></div>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-12 w-full" aria-hidden>
-        <defs><linearGradient id="respFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style={{ stopColor: 'rgb(var(--fp-accent))', stopOpacity: 0.35 }} /><stop offset="1" style={{ stopColor: 'rgb(var(--fp-accent))', stopOpacity: 0 }} /></linearGradient></defs>
-        <path d={area} fill="url(#respFill)" />
-        <polyline points={line} fill="none" className="stroke-accent" strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-      </svg>
+    <div>
+      <div className="flex gap-2">
+        <div className="flex w-11 shrink-0 flex-col justify-between py-0.5 text-right text-[10px] tabular-nums text-ink-faint">
+          <span>{max}ms</span>
+          <span className="opacity-70">{Math.round((max + min) / 2)}ms</span>
+          <span>{min}ms</span>
+        </div>
+        <div className="relative flex-1" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+          <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-28 w-full" aria-hidden>
+            <defs>
+              <linearGradient id="respFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" style={{ stopColor: 'rgb(var(--fp-accent))', stopOpacity: 0.35 }} />
+                <stop offset="1" style={{ stopColor: 'rgb(var(--fp-accent))', stopOpacity: 0 }} />
+              </linearGradient>
+            </defs>
+            <line x1="0" y1="0" x2={W} y2="0" style={gridStyle} vectorEffect="non-scaling-stroke" />
+            <line x1="0" y1={H / 2} x2={W} y2={H / 2} style={gridStyle} strokeDasharray="2 2" vectorEffect="non-scaling-stroke" />
+            <line x1="0" y1={H} x2={W} y2={H} style={gridStyle} vectorEffect="non-scaling-stroke" />
+            <path d={area} fill="url(#respFill)" />
+            <polyline points={line} fill="none" className="stroke-accent" strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+            {/* Markers on each measured day — so sparse/clustered data reads as real points, not a broken line. */}
+            {pts.map((p) => (
+              <circle key={p.i} cx={x(p.i)} cy={y(p.ms)} r={1.5} style={{ fill: 'rgb(var(--fp-accent))' }} vectorEffect="non-scaling-stroke" />
+            ))}
+            {hv && (
+              <>
+                <line x1={x(hv.i)} y1="0" x2={x(hv.i)} y2={H} style={{ stroke: 'rgb(var(--fp-accent))', strokeWidth: 0.75, opacity: 0.5 }} vectorEffect="non-scaling-stroke" />
+                <circle cx={x(hv.i)} cy={y(hv.ms)} r={2.2} style={{ fill: 'rgb(var(--fp-accent))' }} vectorEffect="non-scaling-stroke" />
+              </>
+            )}
+          </svg>
+          {hv && (
+            <div
+              className="pointer-events-none absolute bottom-full mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-panel-raised px-2 py-1 text-[10px] text-ink-secondary shadow-lg ring-1 ring-line-strong"
+              style={{ left: `${(hv.i / xMax) * 100}%` }}
+            >
+              {shortDate(hv.date)} · <span className="font-medium text-ink">{hv.ms}ms</span>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="mt-1 flex justify-between pl-[3.25rem] text-[10px] text-ink-faint">
+        <span>{shortDate(pts[0]!.date)}</span>
+        <span>latest <span className="font-medium text-ink-secondary">{latest.ms}ms</span></span>
+        <span>today</span>
+      </div>
     </div>
   );
 }
@@ -162,107 +308,162 @@ function Badge({ ok, icon, children }: { ok: boolean; icon: string; children: Re
   );
 }
 
-function SiteCard({ s, windowDays }: { s: StatusSite; windowDays: number | null }) {
+/** A titled sub-panel — the unit of the panel-grid dashboard (separation of
+ *  concerns): each tool/metric gets its own bordered card with a clear heading. */
+function Panel({ title, children, wide }: { title: string; children: React.ReactNode; wide?: boolean }) {
+  return (
+    <div className={`rounded-xl bg-ground/40 p-4 ring-1 ring-line ${wide ? 'sm:col-span-2' : ''}`}>
+      <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">{title}</p>
+      {children}
+    </div>
+  );
+}
+
+function SiteCard({
+  s,
+  windowDays,
+  changes,
+  projectId,
+  internal = false,
+}: {
+  s: StatusSite;
+  windowDays: number | null;
+  /** This host's content-change runs, rendered in-card. Internal-only: the public
+   *  payload never carries `changes`, so this is always undefined there. */
+  changes?: ChangePoint[];
+  projectId?: string;
+  /** Team dashboards only. Turns on the per-tool section labels (Site Watch /
+   *  Contact form / Change Monitor) so the depth reads clearly by tool. Off on
+   *  the public client pages, which keep the plain, jargon-free layout. */
+  internal?: boolean;
+}) {
   const uptimeMonitored = s.state !== 'unknown';
   const hasUptimeData = s.dailyUptime.some((d) => d.pct != null);
   const tech = s.tech; // present only on the internal view
   const ssl = s.ssl;
-  const sslOk = ssl ? ssl.valid && (ssl.daysRemaining == null || ssl.daysRemaining > 14) : true;
+  // Full page URL (scheme stripped) so multiple URLs on one host are distinct.
+  const displayUrl = s.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+
+  // Trend deltas vs the previous equal window (hidden when no prior history).
+  const uptimeDelta =
+    s.uptimeWindowPct != null && s.uptimePrevPct != null
+      ? <DeltaChip delta={Math.round((s.uptimeWindowPct - s.uptimePrevPct) * 10) / 10} higherIsBetter fmt={(n) => `${n}pt`} />
+      : undefined;
+  const incidentsDelta =
+    s.incidentsPrev != null
+      ? <DeltaChip delta={s.incidents - s.incidentsPrev} higherIsBetter={false} fmt={(n) => `${n}`} />
+      : undefined;
+  const responseDelta =
+    tech?.avgResponseMs != null && tech.avgResponsePrevMs != null && tech.avgResponsePrevMs > 0
+      ? <DeltaChip delta={Math.round(((tech.avgResponseMs - tech.avgResponsePrevMs) / tech.avgResponsePrevMs) * 100)} higherIsBetter={false} fmt={(n) => `${n}%`} />
+      : undefined;
 
   return (
     <div className="rounded-2xl bg-panel/60 p-5 ring-1 ring-line">
-      <div className="mb-4 flex items-center justify-between gap-2">
+      <div className="mb-4 flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${s.state === 'up' ? 'bg-ok' : s.state === 'down' ? 'bg-danger' : 'bg-idle'}`} />
-          <span className="truncate font-semibold text-ink">{s.host}</span>
+          <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${s.state === 'up' ? 'bg-ok' : s.state === 'down' ? 'bg-danger' : 'bg-idle'}`} />
+          <span className="truncate font-semibold text-ink" title={s.url}>{displayUrl}</span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {s.stale && (
             <span className="rounded-full bg-idle/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted ring-1 ring-white/10">
-              Monitor stopped
+              Monitoring paused
             </span>
           )}
           <StatePill state={s.state} />
         </div>
       </div>
 
-      {uptimeMonitored ? (
-        <>
-          <div className={`mb-4 grid gap-2 ${tech ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
-            <StatTile label="Uptime" value={pct(s.uptimeWindowPct)} sub={windowLabel(windowDays)} />
-            <StatTile label="Incidents" value={String(s.incidents)} sub={windowLabel(windowDays)} />
-            {tech ? (
-              <>
-                <StatTile label="Response" value={tech.avgResponseMs != null ? `${tech.avgResponseMs}ms` : '—'} sub="avg" />
-                <StatTile label="Checked" value={cadence(tech.intervalMs)?.replace('every ', '') ?? '—'} sub="frequency" />
-              </>
-            ) : (
-              <StatTile label="SSL" value={ssl?.daysRemaining != null ? `${ssl.daysRemaining}d` : ssl?.valid ? 'valid' : '—'} sub={ssl ? 'until renewal' : 'not monitored'} />
-            )}
-          </div>
-
-          <div className="mb-4">
-            <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-xs font-semibold text-ink-muted">Uptime · {windowLabel(windowDays)}</span>
-              <div className="flex items-center gap-3 text-[11px] tabular-nums text-ink-faint">
-                <span>Today <span className="font-medium text-ink">{pct(s.uptime.d1)}</span></span>
-                <span>30d <span className="font-medium text-ink">{pct(s.uptime.d30)}</span></span>
-              </div>
-            </div>
-            {hasUptimeData ? (
-              <><UptimeBar days={s.dailyUptime} /><Legend /></>
-            ) : (
-              <div className="flex h-9 items-center rounded-xl bg-ground px-3 ring-1 ring-line"><p className="text-[11px] text-ink-faint">Monitoring history fills in over time.</p></div>
-            )}
-          </div>
-
-          {tech && (
-            <div>
-              <span className="text-xs font-semibold text-ink-muted">Response time · {windowLabel(windowDays)}</span>
-              <div className="mt-1.5"><TrendChart points={tech.responseTrend} /></div>
-            </div>
-          )}
-        </>
-      ) : (
-        <p className="mb-4 text-sm text-ink-muted">
-          {s.formWorking != null
-            ? 'Contact-form monitoring for this page.'
-            : s.changeTracked
-              ? 'Content-change monitoring for this site.'
-              : 'Monitoring for this page.'}
+      {s.stale && (
+        <p className="-mt-2 mb-4 text-[11px] text-ink-faint">
+          Showing the last known result{s.lastCheckedAt ? <> · checked {rel(s.lastCheckedAt)}</> : null}.
         </p>
       )}
 
-      {(s.formWorking != null || ssl) && (
-        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-4">
-          {s.formWorking != null && <Badge ok={s.formWorking} icon={s.formWorking ? P.check : P.alert}>{s.formWorking ? 'Contact form working' : 'Contact form needs attention'}</Badge>}
-          {ssl && <Badge ok={sslOk} icon={P.shield}>{!ssl.valid ? 'SSL expired' : ssl.daysRemaining != null && ssl.daysRemaining <= 30 ? `SSL renews in ${ssl.daysRemaining}d` : 'SSL valid'}</Badge>}
+      {/* KPI row — the scannable numbers (client-safe). */}
+      {uptimeMonitored && (
+        <div className={`mb-4 grid gap-2 ${tech ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
+          <StatTile label="Uptime" value={pct(s.uptimeWindowPct)} sub={windowLabel(windowDays)} delta={uptimeDelta} />
+          <StatTile label="Incidents" value={String(s.incidents)} sub={windowLabel(windowDays)} delta={incidentsDelta} />
+          {tech && <StatTile label="Response" value={tech.avgResponseMs != null ? `${tech.avgResponseMs}ms` : '—'} sub="avg" delta={responseDelta} />}
+          <StatTile label="SSL" value={ssl?.daysRemaining != null ? `${ssl.daysRemaining}d` : ssl?.valid ? 'valid' : '—'} sub={ssl ? 'until renewal' : 'not monitored'} />
         </div>
       )}
 
-      {tech && (
-        <div className="mt-4 border-t border-line pt-4">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">Technical details</p>
-          <div className="grid gap-x-6 gap-y-1.5 text-[11px] sm:grid-cols-2">
-            <Detail k="URL" v={<a href={tech.url} target="_blank" rel="noreferrer" className="truncate text-ink-secondary hover:text-accent" title={tech.url}>{tech.url.replace(/^https?:\/\//, '')}</a>} />
-            <Detail k="HTTP status" v={tech.statusCode ?? '—'} />
-            <Detail k="Last response" v={tech.lastResponseMs != null ? `${tech.lastResponseMs}ms` : '—'} />
-            <Detail k="Last checked" v={rel(tech.lastCheckedAt)} />
-            <Detail k="Domain expiry" v={tech.domainDaysRemaining != null ? `${tech.domainDaysRemaining}d` : '—'} />
-            {tech.form && <Detail k="Form test" v={`${modeLabel(tech.form.mode)}${tech.form.label ? ` · ${tech.form.label}` : ''}`} />}
-          </div>
-        </div>
+      {/* Panel grid — each concern in its own titled card (separation of concerns). */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {uptimeMonitored && (
+          <Panel title={`Uptime · ${windowLabel(windowDays)}`}>
+            {hasUptimeData ? (
+              <UptimeChart days={s.dailyUptime} />
+            ) : (
+              <div className="flex h-24 items-center justify-center rounded-lg bg-ground ring-1 ring-line"><p className="text-[11px] text-ink-faint">Monitoring history fills in over time.</p></div>
+            )}
+          </Panel>
+        )}
+
+        {tech && (
+          <Panel title={`Response time · ${windowLabel(windowDays)}`}>
+            <ResponseChart points={tech.responseTrend} />
+          </Panel>
+        )}
+
+        {(s.formWorking != null || internal) && (
+          <Panel title="Contact form">
+            {s.formWorking != null ? (
+              <div className="space-y-2">
+                <Badge ok={s.formWorking} icon={s.formWorking ? P.check : P.alert}>{s.formWorking ? 'Contact form working' : 'Contact form needs attention'}</Badge>
+                {internal && tech?.form && (
+                  <p className="text-[11px] text-ink-faint">
+                    {modeLabel(tech.form.mode)}{tech.form.label ? ` · ${tech.form.label}` : ''}{tech.form.lastRunAt ? ` · ${rel(tech.form.lastRunAt)}` : ''}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-[11px] text-ink-faint">Not monitored for this page.</p>
+            )}
+          </Panel>
+        )}
+
+        {(ssl || (internal && tech?.domainDaysRemaining != null)) && (
+          <Panel title="Certificates">
+            <div className="space-y-1.5 text-[11px]">
+              {ssl && ssl.daysRemaining != null ? (
+                <ExpiryRow label="SSL certificate" days={ssl.daysRemaining} valid={ssl.valid} />
+              ) : ssl ? (
+                <div className="flex items-baseline justify-between gap-3"><span className="text-ink-faint">SSL certificate</span><span className={`font-medium ${ssl.valid ? 'text-ok' : 'text-danger'}`}>{ssl.valid ? 'valid' : 'expired'}</span></div>
+              ) : null}
+              {internal && tech?.domainDaysRemaining != null && <ExpiryRow label="Domain registration" days={tech.domainDaysRemaining} valid={tech.domainDaysRemaining > 0} />}
+            </div>
+          </Panel>
+        )}
+
+        {internal && tech && (
+          <Panel title="Technical details" wide>
+            <div className="grid gap-x-6 gap-y-1.5 text-[11px] sm:grid-cols-2">
+              <Detail k="URL" v={<a href={tech.url} target="_blank" rel="noreferrer" className="truncate text-ink-secondary hover:text-accent" title={tech.url}>{tech.url.replace(/^https?:\/\//, '')}</a>} />
+              <Detail k="HTTP status" v={tech.statusCode ?? '—'} />
+              <Detail k="Last response" v={tech.lastResponseMs != null ? `${tech.lastResponseMs}ms` : '—'} />
+              <Detail k="Last checked" v={rel(tech.lastCheckedAt)} />
+              <Detail k="Checked every" v={cadence(tech.intervalMs) ?? '—'} />
+              {tech.form && <Detail k="Form test" v={`${modeLabel(tech.form.mode)}${tech.form.label ? ` · ${tech.form.label}` : ''}`} />}
+            </div>
+          </Panel>
+        )}
+
+        {changes && changes.length > 0 && (
+          <ChangeBlock changes={changes} windowDays={windowDays} projectId={projectId} />
+        )}
+      </div>
+
+      {!uptimeMonitored && s.formWorking == null && !(changes && changes.length > 0) && (
+        <p className="mt-1 text-sm text-ink-muted">Monitoring for this page.</p>
       )}
     </div>
   );
 }
 
-/**
- * Shared status presentation — used by BOTH the public page (/status/[token])
- * and the internal, auth-gated page (/projects/[id]/status). Response times +
- * latency + check frequency render ONLY when `tech` is present (internal), so
- * the public view never shows them.
- */
 /**
  * One run in the change timeline. Expands to show WHAT changed, fetched on
  * demand from the auth-gated drill-in endpoint so the heavy per-page detail is
@@ -379,14 +580,18 @@ function ChangeRow({ c, busiest, projectId }: { c: ChangePoint; busiest: number;
 }
 
 /**
- * Change-tracking timeline — INTERNAL ONLY.
+ * In-card content-change timeline — INTERNAL ONLY.
  *
- * Content diffs are a technical QA signal (and a client seeing "84 changes"
- * would be alarmed by what is often their own team's edits), so this is never
- * rendered on the public status page. Tracking is site-level: the crawler walks
- * a whole site from its homepage, so rows are per HOST, not per URL.
+ * Lives INSIDE a host's status card (FR-49) so every signal for that site —
+ * uptime, form, SSL, and content changes — reads in one place, rather than in a
+ * detached section. Content diffs are a technical QA signal (a client seeing "84
+ * changes" would be alarmed by what is often their own team's edits), so this
+ * only ever reaches the component through the internal payload: the public route
+ * omits `changes` entirely, the same trust model as `tech`. Tracking is
+ * site-level (the crawler walks a whole site from its homepage), so it attaches
+ * to the HOST's card, not any single URL path.
  */
-function ChangeTimeline({
+function ChangeBlock({
   changes,
   windowDays,
   projectId,
@@ -395,33 +600,79 @@ function ChangeTimeline({
   windowDays: number | null;
   projectId?: string;
 }) {
+  const [open, setOpen] = useState(false); // collapsed by default — the run list can be long
   const withChanges = changes.filter((c) => c.mode !== 'snapshot');
   const busiest = Math.max(1, ...withChanges.map((c) => c.changesFound));
   const totalChanges = withChanges.reduce((n, c) => n + c.changesFound, 0);
+  // Insight: most-recent real change + severity mix (changes are newest-first).
+  const lastChange = withChanges.find((c) => c.changesFound > 0);
+  const sev = { high: 0, medium: 0, low: 0 };
+  for (const c of withChanges) if (c.changesFound > 0 && c.severity) sev[c.severity] += 1;
+  const sevParts = [
+    sev.high ? `${sev.high} high` : null,
+    sev.medium ? `${sev.medium} medium` : null,
+    sev.low ? `${sev.low} low` : null,
+  ].filter(Boolean);
 
   return (
-    <section className="mt-5 rounded-2xl bg-panel/60 p-5 ring-1 ring-line">
-      <div className="flex flex-wrap items-end justify-between gap-2">
+    <div className="rounded-xl bg-ground/40 p-4 ring-1 ring-line sm:col-span-2">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        title={open ? 'Collapse' : 'Click to view all runs'}
+        className="group -m-2 flex w-full items-center justify-between gap-2 rounded-lg p-2 text-left transition-colors hover:bg-panel/50"
+      >
         <div>
-          <h2 className="text-sm font-semibold text-ink">Content changes</h2>
-          <p className="mt-0.5 text-xs text-ink-faint">
-            Tracked per site (whole-site crawl) · {windowLabel(windowDays)}
-          </p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">Content changes</p>
+          <p className="mt-0.5 text-[11px] text-ink-faint">Whole-site crawl · {windowLabel(windowDays)}</p>
         </div>
-        <p className="text-xs text-ink-faint">
-          <span className="font-semibold text-ink-secondary">{changes.length}</span> run
-          {changes.length === 1 ? '' : 's'} ·{' '}
-          <span className="font-semibold text-ink-secondary">{totalChanges}</span> change
-          {totalChanges === 1 ? '' : 's'}
-        </p>
-      </div>
+        <div className="flex shrink-0 items-center gap-3">
+          <p className="hidden text-[11px] text-ink-faint sm:block">
+            <span className="font-semibold text-ink-secondary">{changes.length}</span> run
+            {changes.length === 1 ? '' : 's'} ·{' '}
+            <span className="font-semibold text-ink-secondary">{totalChanges}</span> change
+            {totalChanges === 1 ? '' : 's'}
+          </p>
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-1 ring-line-strong transition-colors group-hover:bg-accent/10 group-hover:ring-accent/40">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" aria-hidden className={`h-4 w-4 text-ink-muted transition-transform duration-200 group-hover:text-accent ${open ? 'rotate-180' : ''}`}>
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </span>
+        </div>
+      </button>
 
-      <ol className="mt-4 space-y-1.5">
-        {changes.map((c, i) => (
-          <ChangeRow key={`${c.site}-${c.checkedAt}-${i}`} c={c} busiest={busiest} projectId={projectId} />
-        ))}
-      </ol>
-    </section>
+      {/* One-line insight — stays visible even when collapsed. */}
+      <p className="mt-2 text-[11px] text-ink-muted">
+        {totalChanges === 0 ? (
+          'Stable — no changes detected across the window.'
+        ) : (
+          <>
+            Last change {lastChange ? rel(lastChange.checkedAt) : '—'}
+            {sevParts.length ? <> · {sevParts.join(' · ')}</> : null}.
+          </>
+        )}
+      </p>
+
+      {open ? (
+        <ol className="mt-2.5 max-h-72 space-y-1.5 overflow-y-auto pr-1">
+          {changes.map((c, i) => (
+            <ChangeRow key={`${c.site}-${c.checkedAt}-${i}`} c={c} busiest={busiest} projectId={projectId} />
+          ))}
+        </ol>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="mt-2.5 inline-flex items-center gap-1.5 rounded-md border border-line-strong bg-panel px-2.5 py-1.5 text-[11px] font-semibold text-ink-secondary transition-colors hover:border-accent/50 hover:text-accent"
+        >
+          Click to view all {changes.length} run{changes.length === 1 ? '' : 's'}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden className="h-3.5 w-3.5">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -441,6 +692,19 @@ export function StatusView({
 }) {
   const o = OVERALL[data.overall];
   const monitors = data.sites.length;
+
+  // Group content-change runs by host so each site's runs render INSIDE that
+  // host's card (FR-49). Only the FIRST card for a host gets the block, so two
+  // URLs sharing a host (tracking is whole-site) don't render it twice. The
+  // public payload never carries `changes`, so `changesByHost` is empty there.
+  const changesByHost = new Map<string, ChangePoint[]>();
+  for (const c of data.changes ?? []) {
+    const arr = changesByHost.get(c.site);
+    if (arr) arr.push(c);
+    else changesByHost.set(c.site, [c]);
+  }
+  const hostShown = new Set<string>();
+
   return (
     <>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
@@ -472,14 +736,23 @@ export function StatusView({
         {data.sites.length === 0 ? (
           <div className="rounded-2xl bg-panel/60 p-8 text-center ring-1 ring-line"><p className="text-sm text-ink-muted">No monitored services yet.</p></div>
         ) : (
-          data.sites.map((s, i) => <SiteCard key={`${s.host}-${i}`} s={s} windowDays={data.windowDays} />)
+          data.sites.map((s, i) => {
+            // First card for this host carries its content-change block.
+            const hostChanges = hostShown.has(s.host) ? undefined : changesByHost.get(s.host);
+            if (hostChanges) hostShown.add(s.host);
+            return (
+              <SiteCard
+                key={`${s.host}-${i}`}
+                s={s}
+                windowDays={data.windowDays}
+                changes={hostChanges}
+                projectId={projectId}
+                internal={internal}
+              />
+            );
+          })
         )}
       </div>
-
-      {/* Internal-only: never rendered on the public client page. */}
-      {internal && data.changes && data.changes.length > 0 && (
-        <ChangeTimeline changes={data.changes} windowDays={data.windowDays} projectId={projectId} />
-      )}
 
       <p className="mt-6 text-center text-[11px] text-ink-faint">Uptime over {windowLabel(data.windowDays)} · updated {rel(data.generatedAt)} · refreshes automatically</p>
     </>

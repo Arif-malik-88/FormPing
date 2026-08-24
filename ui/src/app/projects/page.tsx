@@ -112,7 +112,7 @@ export default function ProjectsPage() {
 
       {/* Toolbar — saved views + search */}
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="-mx-1 overflow-x-auto px-1 pb-1">
+        <div className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,black,black_calc(100%_-_28px),transparent)] [-webkit-mask-image:linear-gradient(to_right,black,black_calc(100%_-_28px),transparent)] sm:[mask-image:none] sm:[-webkit-mask-image:none]">
           <Tabs items={tabItems} value={view} onChange={setView} />
         </div>
         {view !== 'unassigned' && (

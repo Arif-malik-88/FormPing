@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import type { ProjectWithHealth } from '@/lib/projects/types';
+import type { ProjectWithHealth, UrlHealth } from '@/lib/projects/types';
 import { rollupFromHealth } from '@/lib/projects/rollup';
 import { matchKey } from '@/lib/projects/projectStore';
 import { encodeUrlKey } from '@/lib/projects/urlKeyRoute';
@@ -32,6 +32,18 @@ function expiryTone(days: number | null): Tone | undefined {
   if (days <= 30) return 'amber';
   return 'emerald';
 }
+/** One-line "needs attention" reasons for a URL, from its derived health — the
+ *  at-a-glance triage that used to live on the (now-removed) global dashboard. */
+function urlAttention(h: UrlHealth): string[] {
+  const reasons: string[] = [];
+  if (h.site.upState === 'down') reasons.push('site is down');
+  if (h.form.level === 'attention' || h.form.level === 'failing') reasons.push('contact form needs attention');
+  else if (h.lastRun?.finalStatus === 'fail') reasons.push('form test failed');
+  if (h.site.sslDaysRemaining != null && h.site.sslDaysRemaining <= 14)
+    reasons.push(h.site.sslDaysRemaining <= 0 ? 'SSL expired' : `SSL renews in ${h.site.sslDaysRemaining}d`);
+  if (h.change?.severity === 'high' && (h.change.changesFound ?? 0) > 0) reasons.push('major content change');
+  return reasons;
+}
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
@@ -40,6 +52,7 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<ProjectWithHealth | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'notfound'>('loading');
   const [editing, setEditing] = useState(false);
+  const [filter, setFilter] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
@@ -174,6 +187,11 @@ export default function ProjectDetailPage() {
   const { level, label } = fromProjectRollup(rollup);
   const count = project.urls.length;
 
+  // At-a-glance triage + the searchable URL list.
+  const attention = project.health.map((h) => ({ url: h.url, reasons: urlAttention(h) })).filter((a) => a.reasons.length > 0);
+  const q = filter.trim().toLowerCase();
+  const shownHealth = q ? project.health.filter((h) => h.url.toLowerCase().includes(q)) : project.health;
+
   // Does the URL being removed have any data worth keeping? A removed URL only
   // lands in Unassigned if it has real activity (a monitor, a result, a manual
   // run, or change-tracking); with none, "remove" just drops it. We know this
@@ -198,11 +216,11 @@ export default function ProjectDetailPage() {
 
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-6">
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 items-start gap-4">
           <span className={cx('flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-sm font-bold ring-1 ring-inset ring-white/10', STATUS[level].soft)}>
             {monogram(project.name)}
           </span>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-xl font-bold tracking-tight text-ink">{project.name}</h1>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
               <StatusPill level={level}>{label}</StatusPill>
@@ -213,14 +231,6 @@ export default function ProjectDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link
-            href={`/projects/${project.id}/status`}
-            title="Live health across ALL of this client's URLs. Each URL also has its own dashboard on its row below."
-            className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-b from-accent to-accent-strong px-3.5 py-2 text-sm font-semibold text-white ring-1 ring-accent-soft/20 transition-colors hover:from-accent-strong hover:to-accent-strong"
-          >
-            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden><path d="M3 3a1 1 0 011 1v11h13a1 1 0 110 2H4a2 2 0 01-2-2V4a1 1 0 011-1z" /><path d="M7 11l3-3 2 1.5 3.5-4 1.5 1.2-4.4 5-2-1.5L8.4 12 7 11z" /></svg>
-            Global dashboard
-          </Link>
           {canEdit && <Button variant="secondary" onClick={() => setEditing(true)}>Edit</Button>}
           {canDelete && (
             <Button variant="secondary" onClick={() => setConfirmDelete(true)} className="hover:border-danger/60 hover:text-danger">Delete</Button>
@@ -241,6 +251,19 @@ export default function ProjectDetailPage() {
           <Tile k="Domain expiry" tone={expiryTone(rollup.domainSoonest)}
             v={rollup.domainSoonest != null ? `${rollup.domainSoonest}d` : '—'} />
         </div>
+
+        {attention.length > 0 && (
+          <div className="mt-3 rounded-xl bg-warn/10 p-3.5 ring-1 ring-warn/30">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-warn">Needs attention</p>
+            <ul className="mt-2 space-y-1">
+              {attention.map((a) => (
+                <li key={a.url} className="text-[13px] text-ink-secondary">
+                  <span className="font-medium text-ink">{a.url.replace(/^https?:\/\//, '').replace(/\/$/, '')}</span> — {a.reasons.join(' · ')}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
 
       {/* URLs & monitors */}
@@ -251,17 +274,35 @@ export default function ProjectDetailPage() {
             No URLs in this project yet — use <strong className="text-ink-secondary">Edit</strong> to add some.
           </p>
         ) : (
-          <div className="space-y-2.5">
-            {project.health.map((h) => (
-              <UrlHealthDetail
-                key={h.url}
-                h={h}
-                dashboardHref={`/projects/${project.id}/url/${encodeUrlKey(matchKey(h.url))}`}
-                onRemove={canDelete ? () => { setRemoveUrlError(null); setRemoveUrl(h.url); } : undefined}
-                onDelete={canDelete ? () => { setDeleteUrlError(null); setDeleteUrl(h.url); } : undefined}
+          <>
+            {project.health.length > 3 && (
+              <input
+                type="search"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder="Search URLs…"
+                aria-label="Search URLs"
+                className="mb-3 w-full rounded-lg border border-line bg-panel/50 px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-accent/60 focus:outline-none focus:ring-1 focus:ring-accent/30 sm:max-w-sm"
               />
-            ))}
-          </div>
+            )}
+            {shownHealth.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-sm text-ink-muted">
+                No URLs match “{filter.trim()}”.
+              </p>
+            ) : (
+              <div className="space-y-2.5">
+                {shownHealth.map((h) => (
+                  <UrlHealthDetail
+                    key={h.url}
+                    h={h}
+                    dashboardHref={`/projects/${project.id}/url/${encodeUrlKey(matchKey(h.url))}`}
+                    onRemove={canDelete ? () => { setRemoveUrlError(null); setRemoveUrl(h.url); } : undefined}
+                    onDelete={canDelete ? () => { setDeleteUrlError(null); setDeleteUrl(h.url); } : undefined}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </section>
 
