@@ -42,7 +42,7 @@ export default function UrlDashboardPage() {
   }, [load]);
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8 sm:py-10">
+    <main className="mx-auto max-w-5xl px-4 py-8 sm:py-10">
       <Link href={`/projects/${id}`} className="text-xs text-ink-muted transition-colors hover:text-ink">
         ← Back to {data?.name ?? 'project'}
       </Link>
@@ -66,7 +66,7 @@ export default function UrlDashboardPage() {
         <div className="mt-4">
           <p className="mb-4 break-all font-mono text-xs text-ink-faint">{data.sharedUrl}</p>
 
-          <StatusView data={data} window={win} onWindow={setWin} />
+          <StatusView data={data} internal window={win} onWindow={setWin} projectId={id} />
 
           {/* Share just this page with the client */}
           <section className="mt-8">
