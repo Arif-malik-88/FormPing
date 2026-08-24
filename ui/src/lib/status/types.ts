@@ -43,6 +43,9 @@ export interface SiteTech {
   domainDaysRemaining: number | null;
   /** Average response time (ms) over the selected window. */
   avgResponseMs: number | null;
+  /** Average response (ms) over the window immediately BEFORE the selected one —
+   *  for the trend delta. null when there's no prior history. */
+  avgResponsePrevMs?: number | null;
   /** Daily average response time over the selected window (internal trend). */
   responseTrend: RespPoint[];
   /** How often this site is checked, in ms. */
@@ -58,13 +61,22 @@ export interface SiteTech {
 
 /** One monitored site on the status page. */
 export interface StatusSite {
-  /** Hostname only (never the full internal URL). */
+  /** Hostname only — used to group content-change runs (tracking is site-level)
+   *  and as the card's stable key. */
   host: string;
+  /** Full monitored URL (host + path). Client-safe: it's the client's own page,
+   *  and it's what distinguishes multiple URLs that share a host on the cards. */
+  url: string;
   state: SiteUp;
   /** Uptime % over rolling windows (null when there's no history yet). */
   uptime: { d1: number | null; d7: number | null; d30: number | null };
   /** Uptime % over the SELECTED window (drives the headline). */
   uptimeWindowPct: number | null;
+  /** Uptime % over the window immediately BEFORE the selected one — for the
+   *  trend delta. null when there's no prior history (or all-time). Client-safe. */
+  uptimePrevPct?: number | null;
+  /** Incidents in that previous window — for the trend delta. Client-safe. */
+  incidentsPrev?: number;
   /** Daily uptime over the selected window (for the history chart). */
   dailyUptime: UptimeDay[];
   /** Incidents (days with any downtime) in the selected window. */
@@ -73,12 +85,16 @@ export interface StatusSite {
   ssl: { valid: boolean; daysRemaining: number | null } | null;
   /** Contact-form health: true = working, false = attention, null = not monitored. */
   formWorking: boolean | null;
+  /** When this site was last checked. Client-safe — used to caption a paused
+   *  monitor's last-known result ("checked X ago") so stale data reads honestly. */
+  lastCheckedAt?: string | null;
   /** Internal-only: this site is tracked for content changes (labels the card when
    *  there's no uptime/form signal). Set only on the auth-gated team view. */
   changeTracked?: boolean;
-  /** Internal-only: the uptime/SSL shown is the LAST result of a stopped monitor,
-   *  not a live check — the card labels it "monitor stopped". Never set on the
-   *  public page (a client never sees stale data presented as live). */
+  /** The uptime/SSL shown is the LAST result of a PAUSED (stopped) monitor, not a
+   *  live check — the card labels it "Monitoring paused". Shown on BOTH the team
+   *  view and the public client page, but always captioned with when it was
+   *  checked, so a client never reads stale data as live (FR-49 follow-up). */
   stale?: boolean;
   /** Internal-only technical detail (present only on the auth-gated team view). */
   tech?: SiteTech;

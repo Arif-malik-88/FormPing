@@ -55,6 +55,15 @@ function windowDailies(daily: SiteDaily[], windowDays: number | null): SiteDaily
   const cutoff = dayKey(Date.now() - (windowDays - 1) * DAY);
   return daily.filter((d) => d.day >= cutoff);
 }
+/** Daily rollups in the equal-length window immediately BEFORE the current one
+ *  (for trend deltas). null for all-time (no defined "previous"). Empty array
+ *  when there simply isn't prior history yet. */
+function prevWindowDailies(daily: SiteDaily[], windowDays: number | null): SiteDaily[] | null {
+  if (windowDays == null) return null;
+  const cutoff = dayKey(Date.now() - (windowDays - 1) * DAY);
+  const cutoffPrev = dayKey(Date.now() - (2 * windowDays - 1) * DAY);
+  return daily.filter((d) => d.day >= cutoffPrev && d.day < cutoff);
+}
 /** Uptime % across a set of daily rollups (blocked excluded), or null. */
 function uptimePct(rows: SiteDaily[]): number | null {
   let up = 0, down = 0;
@@ -153,11 +162,14 @@ function formTech(h: UrlHealth): Pick<NonNullable<StatusSite['tech']>, 'form'> |
 }
 
 function deriveOverall(sites: StatusSite[]): OverallStatus {
-  if (sites.some((s) => s.state === 'down')) return 'down';
+  // A PAUSED (stale) monitor's state is its last-known one, not current — so it
+  // must not push the banner to "Outage"/"degraded" on uptime state alone. SSL
+  // and form facts still count (SSL expiry is a fixed date; form is its own signal).
+  if (sites.some((s) => s.state === 'down' && !s.stale)) return 'down';
   const degraded = sites.some(
     (s) =>
       s.formWorking === false ||
-      s.state === 'blocked' ||
+      (s.state === 'blocked' && !s.stale) ||
       (s.ssl != null && (!s.ssl.valid || (s.ssl.daysRemaining != null && s.ssl.daysRemaining <= 14))),
   );
   return degraded ? 'degraded' : 'operational';
@@ -190,16 +202,23 @@ export async function buildClientStatus(
 
   const sites: StatusSite[] = await Promise.all(
     included.map(async (h) => {
-      // Uptime/SSL come from the last known check. On the public page a stopped
-      // monitor is NOT presented as live, so only an active monitor shows uptime.
-      const showUptime = h.site.monitored || (internal && h.site.stopped === true);
-      // We're showing a stopped monitor's LAST result (internal only) — flag it
-      // so the card can say "monitor stopped" instead of implying a live check.
+      // Uptime/SSL come from the last known check. A stopped monitor still shows
+      // its LAST result — on BOTH the team view and the public client page — so a
+      // client's status page is never blank; the `stale` flag captions it
+      // "Monitoring paused · checked X ago" so stale data is never read as live
+      // (FR-49 follow-up: the client-facing pages exist to inform clients, and a
+      // blank card informs no one).
+      const showUptime = h.site.monitored || h.site.stopped === true;
+      // Showing a stopped monitor's LAST result — flag it so the card says
+      // "Monitoring paused" instead of implying a live check.
       const uptimeStale = showUptime && !h.site.monitored;
       const state: SiteUp = showUptime ? (h.site.upState ?? 'unknown') : 'unknown';
       const sched = h.site.monitored ? scheduleByKey.get(key(h.url)) : undefined;
       const daily = showUptime ? await loadDaily(h.url) : [];
       const win = windowDailies(daily, windowDays);
+      // Previous equal-length window, for trend deltas (null = all-time / none).
+      const prev = showUptime ? prevWindowDailies(daily, windowDays) : null;
+      const hasPrev = prev != null && prev.length > 0;
       const { uptime: dailyUptime, response: responseTrend } = series(daily, windowDays);
 
       const ssl =
@@ -209,6 +228,7 @@ export async function buildClientStatus(
 
       const site: StatusSite = {
         host: hostOf(h.url),
+        url: h.url,
         state,
         uptime: {
           d1: uptimePct(windowDailies(daily, 1)),
@@ -220,6 +240,8 @@ export async function buildClientStatus(
         incidents: incidentDays(win),
         ssl,
         formWorking: formWorking(h, internal),
+        ...(hasPrev ? { uptimePrevPct: uptimePct(prev!), incidentsPrev: incidentDays(prev!) } : {}),
+        ...(showUptime ? { lastCheckedAt: h.site.lastCheckedAt ?? null } : {}),
         ...(internal && h.change?.tracked === true ? { changeTracked: true } : {}),
         ...(uptimeStale ? { stale: true } : {}),
       };
@@ -234,6 +256,7 @@ export async function buildClientStatus(
           lastCheckedAt: h.site.lastCheckedAt ?? null,
           domainDaysRemaining: h.site.domainDaysRemaining ?? null,
           avgResponseMs: avgResp(win),
+          avgResponsePrevMs: hasPrev ? avgResp(prev!) : null,
           responseTrend,
           intervalMs: sched?.intervalMs ?? null,
           ...formTech(h),
