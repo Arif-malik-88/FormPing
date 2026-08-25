@@ -18,8 +18,27 @@
 
 import type { SiteSchedule, SiteCheckRecord } from './types';
 import { dispatchAlert } from '@/lib/alerts/dispatch';
+import { lastAlertAt } from '@/lib/alerts/store';
 import { detailPathFor } from '@/lib/alerts/link';
 import type { AlertSeverity } from '@/lib/alerts/types';
+
+/** Events that count as "we already pinged about THIS ongoing outage", so a
+ *  reminder is spaced from whichever fired most recently (FR-53). */
+const DOWN_EVENTS = ['down', 'monitoring_started_down', 'down_reminder'];
+
+/** Re-notify spacing for an ongoing bad state (site down / cert or domain
+ *  expired). Configurable via ALERT_RENOTIFY_HOURS (default 6h). */
+function renotifyMs(): number {
+  const h = Number(process.env.ALERT_RENOTIFY_HOURS);
+  return (Number.isFinite(h) && h > 0 ? h : 6) * 3_600_000;
+}
+/** True once ALERT_RENOTIFY_HOURS has passed since the last alert for `events`
+ *  at `site` — i.e. it's time for another reminder. False when we've never
+ *  alerted (the state machine sends the first alert) or it's too soon. */
+async function dueForRenotify(site: string, events: string[]): Promise<boolean> {
+  const last = await lastAlertAt(site, events);
+  return last != null && Date.now() - new Date(last).getTime() >= renotifyMs();
+}
 
 export interface AlertStatePatch {
   consecutiveDown: number;
@@ -40,12 +59,38 @@ function expiryBucket(days: number): number | null {
   return null;
 }
 
-/** Human "Up (HTTP 200)" / "Down (error)" string for the details block. */
+/**
+ * Plain-language reason a site is down (FR-54: say exactly WHY, don't overclaim).
+ * Prefers the HTTP status when we got one; otherwise translates the raw network
+ * error captured in `checks.ts` into something actionable rather than a bare
+ * "Down (error)". Kept concise so it fits an alert title + Slack preview.
+ */
+function downReason(record: SiteCheckRecord): string {
+  const { statusCode, error } = record.uptime;
+  if (statusCode != null) {
+    if (statusCode >= 500) return `server error (HTTP ${statusCode})`;
+    if (statusCode === 404) return 'not found (HTTP 404)';
+    if (statusCode === 403) return 'forbidden (HTTP 403)';
+    if (statusCode === 401) return 'auth required (HTTP 401)';
+    if (statusCode >= 400) return `client error (HTTP ${statusCode})`;
+    return `HTTP ${statusCode}`;
+  }
+  const e = (error ?? '').toLowerCase();
+  if (/enotfound|eai_again|getaddrinfo/.test(e)) return 'DNS not resolving';
+  if (/econnrefused/.test(e)) return 'connection refused';
+  if (/econnreset/.test(e)) return 'connection reset';
+  if (/etimedout|timed\s?out|timeout|aborted|abort/.test(e)) return 'timed out';
+  if (/cert|tls|ssl|self[- ]signed|altname|unable to (verify|get)|handshake|eproto/.test(e)) return 'TLS/SSL error';
+  if (/ehostunreach|enetunreach/.test(e)) return 'host unreachable';
+  return 'no response';
+}
+
+/** Human "Up (HTTP 200)" / "Down — <reason>" string for the details block. */
 function statusText(record: SiteCheckRecord): string {
-  const { classification, statusCode, error } = record.uptime;
+  const { classification, statusCode } = record.uptime;
   if (classification === 'up') return `Up (HTTP ${statusCode})`;
   if (classification === 'blocked') return `Reachable but challenged (HTTP ${statusCode})`;
-  return statusCode ? `Down (HTTP ${statusCode})` : `Down (${error ?? 'no response'})`;
+  return `Down — ${downReason(record)}`;
 }
 
 /** SSL summary string for the details block. */
@@ -115,16 +160,29 @@ async function postAlert(opts: {
   );
 }
 
-/** Suggestions for an outage, tuned to the kind of failure. */
+/** Suggestions for an outage, tuned to the SPECIFIC cause so you go straight to
+ *  the fix (FR-54) — matches the reasons in `downReason`. */
 function downSuggestions(record: SiteCheckRecord): string[] {
-  const code = record.uptime.statusCode;
-  const out = ['Check the hosting/server and confirm the domain hasn’t lapsed.'];
-  if (code && code >= 500) {
-    out.push('A 5xx means the app responded but errored — check the server/app logs.');
-  } else if (code == null) {
-    out.push('No response at all — the server may be down, or DNS/the domain may have failed.');
-  }
-  return out;
+  const { statusCode, error } = record.uptime;
+  const e = (error ?? '').toLowerCase();
+  if (statusCode != null && statusCode >= 500)
+    return [
+      'The app responded but errored (5xx) — check the server/application logs for the failing request.',
+      'Confirm the process is healthy (not crashing on deploy or out of memory).',
+    ];
+  if (statusCode === 404)
+    return ['The URL returns 404 — the page or route may have moved; check the path and any recent deploy.'];
+  if (statusCode != null && statusCode >= 400)
+    return [`The URL returns ${statusCode} — check access rules and that the route still exists.`];
+  if (/enotfound|eai_again|getaddrinfo/.test(e))
+    return ['DNS isn’t resolving — the domain may have lapsed or its DNS records changed. Check the registrar and DNS settings.'];
+  if (/econnrefused/.test(e))
+    return ['Connection refused — the server isn’t accepting connections. Check the app/process is running and the port/firewall.'];
+  if (/etimedout|timed\s?out|timeout|aborted|abort/.test(e))
+    return ['The server didn’t respond in time — it may be overloaded or a firewall is dropping the request.'];
+  if (/cert|tls|ssl|self[- ]signed|altname|unable to (verify|get)|handshake|eproto/.test(e))
+    return ['The HTTPS/TLS connection failed — check the certificate (expired or mismatched) and the web-server’s TLS config.'];
+  return ['No response from the server — confirm hosting is up, the process is running, and the domain/DNS is valid.'];
 }
 
 function sslSuggestions(days: number, expiry: string): string[] {
@@ -191,7 +249,7 @@ export async function evaluateAndAlert(
       await postAlert({
         color: COLOR.red,
         headerEmoji: '🔴',
-        headerText: `Monitoring started — ${record.host} is DOWN`,
+        headerText: `Monitoring started — ${record.host} is DOWN · ${downReason(record)}`,
         event: 'monitoring_started_down',
         record,
         suggestions: downSuggestions(record),
@@ -236,12 +294,23 @@ export async function evaluateAndAlert(
       await postAlert({
         color: COLOR.red,
         headerEmoji: '🔴',
-        headerText: `Site DOWN — ${record.host}`,
+        headerText: `Site DOWN — ${record.host} · ${downReason(record)}`,
         event: 'down',
         record,
         suggestions: downSuggestions(record),
       });
       alertedDown = true;
+    } else if (alertedDown && (await dueForRenotify(record.host, DOWN_EVENTS))) {
+      // Still down after the initial alert — a spaced reminder so an ongoing
+      // outage doesn't go silent (FR-53). Recovery still fires exactly once.
+      await postAlert({
+        color: COLOR.red,
+        headerEmoji: '🔴',
+        headerText: `Still DOWN — ${record.host} · ${downReason(record)}`,
+        event: 'down_reminder',
+        record,
+        suggestions: downSuggestions(record),
+      });
     }
   } else {
     if (alertedDown) {
@@ -275,6 +344,16 @@ export async function evaluateAndAlert(
           suggestions: sslSuggestions(sslDays, sslExpiry),
         });
         lastSslThresholdAlerted = bucket;
+      } else if (sslDays <= 0 && (await dueForRenotify(record.host, ['ssl_expiring', 'ssl_expired_reminder']))) {
+        // Still expired — a spaced reminder until it's renewed (FR-53).
+        await postAlert({
+          color: COLOR.red,
+          headerEmoji: '🔴',
+          headerText: `SSL still EXPIRED — ${record.host}`,
+          event: 'ssl_expired_reminder',
+          record,
+          suggestions: sslSuggestions(sslDays, sslExpiry),
+        });
       }
     }
   }
@@ -296,6 +375,16 @@ export async function evaluateAndAlert(
           suggestions: domainSuggestions(domainDays, domainExpiry),
         });
         lastDomainThresholdAlerted = bucket;
+      } else if (domainDays <= 0 && (await dueForRenotify(record.host, ['domain_expiring', 'domain_expired_reminder']))) {
+        // Still expired — a spaced reminder until it's renewed (FR-53).
+        await postAlert({
+          color: COLOR.red,
+          headerEmoji: '🔴',
+          headerText: `Domain still EXPIRED — ${record.host}`,
+          event: 'domain_expired_reminder',
+          record,
+          suggestions: domainSuggestions(domainDays, domainExpiry),
+        });
       }
     }
   }

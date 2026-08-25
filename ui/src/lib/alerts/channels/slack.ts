@@ -82,7 +82,17 @@ function buildMessage(alert: AlertInput, detailUrl: string | null, moreNote: str
   footer.push(detailUrl ? `<${detailUrl}|See the full detail in FormPing>` : 'Full detail is in FormPing.');
   blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: truncate(footer.join(' · '), MAX_SECTION) }] });
 
-  return { attachments: [{ color: COLOR[sev] ?? COLOR.info, blocks }] };
+  // Top-level `text` is Slack's NOTIFICATION FALLBACK — the line shown in OS
+  // pushes and unopened previews. Without it, an attachments/blocks-only payload
+  // renders "[no preview available]" (FR-52). The rich `blocks` still drive the
+  // in-app card; this is just the readable one-liner for the preview, built from
+  // the same emoji + title as the header (with the site appended when it isn't
+  // already part of the title).
+  const previewParts = [`${EMOJI[sev] ?? 'ℹ️'} ${alert.title}`];
+  if (alert.site && !alert.title.includes(alert.site)) previewParts.push(alert.site);
+  const text = truncate(previewParts.join(' · '), 150);
+
+  return { text, attachments: [{ color: COLOR[sev] ?? COLOR.info, blocks }] };
 }
 
 /**

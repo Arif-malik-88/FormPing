@@ -109,6 +109,29 @@ export async function logAlert(input: AlertInput): Promise<{ inserted: boolean; 
   }
 }
 
+/**
+ * Most recent time we alerted for `site` with any of `events` — the "last
+ * notified at" used to SPACE periodic re-notifications for an ongoing bad state
+ * (FR-53: a site that stays down, or a cert/domain that stays expired, would
+ * otherwise go silent after the first alert). Returns null when none exists.
+ */
+export async function lastAlertAt(site: string, events: string[]): Promise<string | null> {
+  if (!site || events.length === 0) return null;
+  const { data, error } = await supabaseAdmin()
+    .from('alerts')
+    .select('created_at')
+    .eq('site', site)
+    .in('event', events)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.warn(`[alerts/store] lastAlertAt: ${error.message}`);
+    return null;
+  }
+  return (data as { created_at: string } | null)?.created_at ?? null;
+}
+
 /** Record how each channel fared. Best-effort. */
 export async function recordDelivery(id: string, delivery: AlertDelivery): Promise<void> {
   const { error } = await supabaseAdmin().from('alerts').update({ delivery }).eq('id', id);
