@@ -222,7 +222,7 @@ export default function DocsContent() {
                     [<b key="0">Domain</b>, 'Days until the domain registration expires.'],
                   ]}
                 />
-                <P>Alerts fire <strong className="text-ink">only on change</strong>, never every cycle: <strong>down</strong> after two checks in a row fail (so a brief blip doesn’t cry wolf) and again when it recovers; <strong>SSL</strong> and <strong>domain</strong> as each threshold is crossed (30 / 14 / 7 days, then expired), resetting on renewal. Each monitor shows an uptime % and a recent-checks sparkline, and can be paused/resumed.</P>
+                <P>Alerts are <strong className="text-ink">change-based</strong>, never a ping every cycle: <strong>down</strong> after two checks in a row fail (so a brief blip doesn’t cry wolf) and again when it recovers; <strong>SSL</strong> and <strong>domain</strong> as each threshold is crossed (30 / 14 / 7 days, then expired), resetting on renewal. While a site stays down — or a certificate/domain stays expired — a <strong>reminder repeats every few hours</strong> until it’s fixed, so an ongoing problem doesn’t go quiet. Each monitor shows an uptime % and a recent-checks sparkline, and can be paused/resumed.</P>
                 <Note>A few heavily-protected sites return a challenge page to automated checks — FormPing classifies that as <em>reachable (challenged)</em>, not <em>down</em>, so it never cries wolf.</Note>
               </Section>
 
@@ -275,7 +275,7 @@ export default function DocsContent() {
               <Section id="alerts" title="Alerts" eyebrow="Team">
                 <P>FormPing pings your team’s <strong className="text-ink">Slack channel</strong> when something needs attention — a scheduled form run, a site going down, or a certificate/domain nearing expiry. Each alert carries the URL, what happened, and a suggested next step, then links to the full detail in the app.</P>
                 <UL>
-                  <LI>You won’t be pinged twice for the same issue, and alerts are paced so they never flood your channel — even if a check retries or restarts.</LI>
+                  <LI>You won’t be spammed — a brief blip pings once, and while a problem stays unresolved (a site down, or an expired certificate/domain) you get a <strong className="text-ink">spaced reminder</strong> every few hours until it recovers. Everything is paced so it never floods your channel, even if a check retries or restarts.</LI>
                   <LI>Alerts are <strong className="text-ink">internal-only</strong> — they go to your team, never to a client.</LI>
                   <LI>Slack delivery is optional and set up by an admin; if it isn’t configured, checks still run and record normally — only the Slack ping is skipped.</LI>
                 </UL>
