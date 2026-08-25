@@ -18,8 +18,27 @@
 
 import type { SiteSchedule, SiteCheckRecord } from './types';
 import { dispatchAlert } from '@/lib/alerts/dispatch';
+import { lastAlertAt } from '@/lib/alerts/store';
 import { detailPathFor } from '@/lib/alerts/link';
 import type { AlertSeverity } from '@/lib/alerts/types';
+
+/** Events that count as "we already pinged about THIS ongoing outage", so a
+ *  reminder is spaced from whichever fired most recently (FR-53). */
+const DOWN_EVENTS = ['down', 'monitoring_started_down', 'down_reminder'];
+
+/** Re-notify spacing for an ongoing bad state (site down / cert or domain
+ *  expired). Configurable via ALERT_RENOTIFY_HOURS (default 6h). */
+function renotifyMs(): number {
+  const h = Number(process.env.ALERT_RENOTIFY_HOURS);
+  return (Number.isFinite(h) && h > 0 ? h : 6) * 3_600_000;
+}
+/** True once ALERT_RENOTIFY_HOURS has passed since the last alert for `events`
+ *  at `site` — i.e. it's time for another reminder. False when we've never
+ *  alerted (the state machine sends the first alert) or it's too soon. */
+async function dueForRenotify(site: string, events: string[]): Promise<boolean> {
+  const last = await lastAlertAt(site, events);
+  return last != null && Date.now() - new Date(last).getTime() >= renotifyMs();
+}
 
 export interface AlertStatePatch {
   consecutiveDown: number;
@@ -275,12 +294,23 @@ export async function evaluateAndAlert(
       await postAlert({
         color: COLOR.red,
         headerEmoji: '🔴',
-        headerText: `Site DOWN — ${record.host}`,
+        headerText: `Site DOWN — ${record.host} · ${downReason(record)}`,
         event: 'down',
         record,
         suggestions: downSuggestions(record),
       });
       alertedDown = true;
+    } else if (alertedDown && (await dueForRenotify(record.host, DOWN_EVENTS))) {
+      // Still down after the initial alert — a spaced reminder so an ongoing
+      // outage doesn't go silent (FR-53). Recovery still fires exactly once.
+      await postAlert({
+        color: COLOR.red,
+        headerEmoji: '🔴',
+        headerText: `Still DOWN — ${record.host} · ${downReason(record)}`,
+        event: 'down_reminder',
+        record,
+        suggestions: downSuggestions(record),
+      });
     }
   } else {
     if (alertedDown) {
@@ -314,6 +344,16 @@ export async function evaluateAndAlert(
           suggestions: sslSuggestions(sslDays, sslExpiry),
         });
         lastSslThresholdAlerted = bucket;
+      } else if (sslDays <= 0 && (await dueForRenotify(record.host, ['ssl_expiring', 'ssl_expired_reminder']))) {
+        // Still expired — a spaced reminder until it's renewed (FR-53).
+        await postAlert({
+          color: COLOR.red,
+          headerEmoji: '🔴',
+          headerText: `SSL still EXPIRED — ${record.host}`,
+          event: 'ssl_expired_reminder',
+          record,
+          suggestions: sslSuggestions(sslDays, sslExpiry),
+        });
       }
     }
   }
@@ -335,6 +375,16 @@ export async function evaluateAndAlert(
           suggestions: domainSuggestions(domainDays, domainExpiry),
         });
         lastDomainThresholdAlerted = bucket;
+      } else if (domainDays <= 0 && (await dueForRenotify(record.host, ['domain_expiring', 'domain_expired_reminder']))) {
+        // Still expired — a spaced reminder until it's renewed (FR-53).
+        await postAlert({
+          color: COLOR.red,
+          headerEmoji: '🔴',
+          headerText: `Domain still EXPIRED — ${record.host}`,
+          event: 'domain_expired_reminder',
+          record,
+          suggestions: domainSuggestions(domainDays, domainExpiry),
+        });
       }
     }
   }
