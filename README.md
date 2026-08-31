@@ -138,7 +138,7 @@ Enforcement is **server-side on every write** — the interface hides what a rol
 - **Web app** — Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS. A single design-token system drives the whole UI in one coherent dark theme.
 - **Engine** — TypeScript, [Playwright](https://playwright.dev) for real-browser form testing, and lightweight HTML parsing for fast change detection.
 - **Data** — PostgreSQL for structured data; captured page snapshots are kept on disk for diffing.
-- **Testing** — [Vitest](https://vitest.dev) for the engine's detection and analysis logic.
+- **Testing** — [Vitest](https://vitest.dev) for the engine's detection and analysis logic, and [Playwright](https://playwright.dev) end-to-end tests for the web app.
 
 ---
 
@@ -177,6 +177,14 @@ npm test          # run the engine test suite
 cd ui
 npm install
 npm run dev       # http://localhost:3000
+```
+
+**End-to-end tests** (Playwright) run the web app in a browser. They're hermetic — auth, database, and Slack are disabled for the run, so they need no secrets and touch no real services:
+
+```bash
+cd ui
+npx playwright install chromium   # one-time browser download
+npm run test:e2e                  # boots the app and runs the e2e suite
 ```
 
 Configuration (auth, database, and optional integrations) is supplied through environment variables — copy `.env.example` and fill in your own values.
@@ -296,7 +304,7 @@ npm run start -- --url https://yoursite.com --monitor watch --watch-interval 360
 ## Contributing
 
 1. Branch off `main`.
-2. Make your change; keep the engine and the web app type-clean (`npm run lint` in each) and green (`npm test` at the root).
+2. Make your change; keep the engine and the web app type-clean (`npm run lint` in each) and green — the engine unit tests (`npm test` at the root) **and** the web app's end-to-end tests (`npm run test:e2e` in `ui/`) must pass before you commit.
 3. Open a pull request describing what changed and why.
 
 The codebase leans on a shared component kit and a single set of design tokens for the UI, and deterministic, well-tested heuristics in the engine — please match the surrounding style rather than introducing parallel patterns.

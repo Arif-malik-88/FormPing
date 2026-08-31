@@ -12,6 +12,11 @@ build/
 .cache/
 coverage/
 
+# Playwright (E2E) — generated artifacts, never committed
+test-results/
+playwright-report/
+playwright/.cache/
+
 # Monitor runtime data (user-specific snapshots)
 data/
 
