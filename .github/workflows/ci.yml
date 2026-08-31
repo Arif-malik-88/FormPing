@@ -1,0 +1,52 @@
+name: CI
+
+# Runs on every push to main and on every pull request, so a change is verified
+# on GitHub — not just locally — before it merges (Working Agreement, Rule 8).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege: the workflow only needs to read the repo.
+permissions:
+  contents: read
+
+jobs:
+  engine:
+    name: Engine — typecheck & unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Typecheck (tsc)
+        run: npm run lint
+      - name: Unit tests (Vitest)
+        run: npm test
+
+  web:
+    name: Web app — typecheck & e2e
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci
+      - name: Typecheck (tsc)
+        run: npx tsc --noEmit
+      - name: Install Playwright browser + system deps
+        run: npx playwright install --with-deps chromium
+      # The e2e config is hermetic (auth/Supabase/Slack blanked), so this needs
+      # no secrets — it boots the app in open-gate + file-storage mode.
+      - name: End-to-end tests (Playwright)
+        run: npm run test:e2e
