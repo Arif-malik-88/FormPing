@@ -12,6 +12,7 @@ Find, fill and verify contact forms on sites you own or are authorized to test, 
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-06B6D4?style=flat&logo=tailwindcss&logoColor=white)
 ![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
+![CI](https://github.com/waseembashir/FormPing/actions/workflows/ci.yml/badge.svg)
 
 </div>
 
@@ -306,6 +307,8 @@ npm run start -- --url https://yoursite.com --monitor watch --watch-interval 360
 1. Branch off `main`.
 2. Make your change; keep the engine and the web app type-clean (`npm run lint` in each) and green — the engine unit tests (`npm test` at the root) **and** the web app's end-to-end tests (`npm run test:e2e` in `ui/`) must pass before you commit.
 3. Open a pull request describing what changed and why.
+
+**CI runs on every push and PR** (GitHub Actions): the engine's typecheck + unit tests and the web app's typecheck + Playwright e2e must all be green before merge.
 
 The codebase leans on a shared component kit and a single set of design tokens for the UI, and deterministic, well-tested heuristics in the engine — please match the surrounding style rather than introducing parallel patterns.
 
