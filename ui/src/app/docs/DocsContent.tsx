@@ -182,7 +182,7 @@ export default function DocsContent() {
 
               {/* ══ Contact Forms ══ */}
               <Section id="form-tester" title="Form Tester" eyebrow="Contact Forms">
-                <P>Run an <strong className="text-ink">instant check</strong> on any URL: FormPing finds the contact page, locates the form, fills it with test data, optionally submits it, and confirms the success (thank-you) state.</P>
+                <P>Run an <strong className="text-ink">instant check</strong> on any URL: FormPing finds the contact page, locates the form, fills it with test data, optionally submits it, and confirms the success (thank-you) state. It finds the form even when the contact page has an unusual name or sits on the homepage — not just at a standard <code>/contact</code> address.</P>
                 <Table
                   headers={['Mode', 'What it does']}
                   rows={[

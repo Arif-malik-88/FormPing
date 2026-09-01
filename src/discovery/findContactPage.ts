@@ -5,6 +5,7 @@ import { loadHtml, extractLinks, extractTitle, extractHeading, extractText } fro
 import { normalizeUrl } from '../utils/url.js';
 import { normalizeText, containsAny } from '../utils/text.js';
 import { scoreContactLinks } from './scoreContactLinks.js';
+import { selectCandidateUrls, rankByFormSignature } from './contentDiscovery.js';
 import { fetchSitemapUrls } from './sitemap.js';
 import { logger } from '../utils/logger.js';
 
@@ -318,6 +319,44 @@ export async function findContactPage(
       candidates = merged;
     } else {
       logger.info(`Sitemap: ${sitemapUrls.length} URLs but none matched contact patterns`);
+    }
+  }
+
+  // ── Content-discovery fallback (FR-59) ───────────────────────────────────
+  // Slug/anchor scoring + sitemap found nothing. Before AI or giving up, fetch a
+  // bounded pool of pages (homepage + nav/footer/sitemap links, minus excludes)
+  // and pick one that actually HOLDS a contact form — regardless of its slug.
+  // Free + deterministic; reuses the homepage HTML we already have. Downstream
+  // Playwright still confirms/tests the form on the chosen page.
+  if (candidates.length === 0) {
+    const CONTENT_POOL_CAP = 8;
+    const poolUrls = selectCandidateUrls(normalized, rawLinks, sitemapUrls, {
+      excludePathPatterns: config.excludePathPatterns,
+      contactPathPatterns: config.contactPathPatterns,
+      contactTextPatterns: config.contactTextPatterns,
+      cap: CONTENT_POOL_CAP,
+    });
+    const fetched = await Promise.all(
+      poolUrls.map(async (u) => {
+        if (u === normalized && html) return { url: u, html };
+        const h = await fetchHtml(u, config.timeout);
+        return h ? { url: u, html: h } : null;
+      }),
+    );
+    const withHtml = fetched.filter((f): f is { url: string; html: string } => f !== null);
+    const ranked = rankByFormSignature(withHtml, config.contactPathPatterns);
+    logger.info(
+      `Content-discovery fallback (FR-59): scanned ${withHtml.length}/${poolUrls.length} pages, ` +
+        `${ranked.length} with a contact form`,
+    );
+    if (ranked.length > 0) {
+      const bestPage = ranked[0]!;
+      logger.info(`Content-discovery picked ${bestPage.url} (form score ${bestPage.score})`);
+      return {
+        candidate: { url: bestPage.url, score: 1, signals: bestPage.signals, pageScore: 0.8, totalScore: 0.8 },
+        allCandidates: ranked.map((r) => ({ url: r.url, score: r.score, signals: r.signals })),
+        usedAiFallback: false,
+      };
     }
   }
 

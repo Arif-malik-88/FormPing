@@ -67,7 +67,7 @@ Every action that changes or removes data is confirmed first, and the copy alway
 
 Given a URL, the engine:
 
-1. Discovers the contact page using deterministic heuristics (path matching + anchor-text scoring).
+1. Discovers the contact page using deterministic heuristics (path matching + anchor-text scoring). If a site doesn't use a conventional contact slug, a **content-driven fallback** scans the homepage, navigation, and sitemap pages and picks the one that actually holds a contact form — so the form is found regardless of the page's URL.
 2. Verifies the top candidates by loading them and scoring the page content.
 3. Detects the main contact form (field types, submit-button text, layout signals).
 4. Fills it with configurable test data.
