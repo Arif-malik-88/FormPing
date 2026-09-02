@@ -1,75 +1,80 @@
 import { cx } from '@/components/ui';
 
 /**
- * FR-64 — the "key facts" about a detected form, rendered as small styled chips
- * so they're scannable and consistent across the Form Tester card and the Form
- * Scheduler run rows: form type (native / third-party + provider), how it's
- * mounted (in-page vs iframe), single- vs multi-step, and field count. We
- * deliberately do NOT show the raw form id/UUID — the page/slug (shown as the
- * headline by the caller) is the meaningful identifier.
+ * FR-63/FR-64 — one shared "what we found" summary, used by BOTH the Form Tester
+ * card and the Form Scheduler run rows so they read identically. Renders an
+ * explanatory sentence with the key facts as highlighted pills: the form TYPE in
+ * accent, structure / field-count / embed-kind as neutral pills, CAPTCHA in amber.
  */
 
-type Tone = 'neutral' | 'info' | 'warn';
+type Size = 'sm' | 'lg';
+type Tone = 'type' | 'fact' | 'captcha';
 
-const TONES: Record<Tone, string> = {
-  neutral: 'bg-panel-raised text-ink-secondary ring-line-strong',
-  info: 'bg-accent/12 text-accent-soft ring-accent/25',
-  warn: 'bg-warn/12 text-warn ring-warn/25',
-};
-
-export function Chip({ children, tone = 'neutral' }: { children: React.ReactNode; tone?: Tone }) {
+function Pill({ children, tone, size }: { children: React.ReactNode; tone: Tone; size: Size }) {
+  const tones: Record<Tone, string> = {
+    type: 'border-accent/30 bg-accent/12 text-accent-soft',
+    fact: 'border-line-strong bg-panel-raised text-ink-secondary',
+    captcha: 'border-warn/30 bg-warn/12 text-warn',
+  };
   return (
-    <span className={cx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1', TONES[tone])}>
+    <span className={cx('mx-0.5 inline-flex items-center rounded-md border font-semibold', size === 'lg' ? 'px-2 py-0.5' : 'px-1.5 py-0.5', tones[tone])}>
       {children}
     </span>
   );
 }
 
-export interface FormFacts {
+export interface FormSummaryProps {
   formType?: 'native' | 'third-party';
   embedProvider?: string | null;
   embedKind?: 'iframe' | 'script' | 'container' | null;
   isMultiStep?: boolean;
   fieldCount?: number;
-  /** True only when step-ness is actually known (new records) — legacy runs omit it. */
+  /** Only show the structure pill when step-ness is actually known (new records). */
   stepKnown?: boolean;
   captchaPresent?: boolean;
+  size?: Size;
 }
 
-function mountLabel(kind?: string | null): string {
-  switch (kind) {
-    case 'iframe': return 'iframe embed';
-    case 'script': return 'script embed';
-    case 'container': return 'embedded';
-    default: return 'embedded';
-  }
-}
+export function FormSummary({
+  formType,
+  embedProvider,
+  embedKind,
+  isMultiStep,
+  fieldCount,
+  stepKnown,
+  captchaPresent,
+  size = 'sm',
+}: FormSummaryProps) {
+  const embed = formType === 'third-party';
+  const native = formType === 'native' || (!embed && (fieldCount ?? 0) > 0);
+  if (!embed && !native) return null;
 
-/** A row of chips summarising the detected form. Renders nothing if there's no
- *  form fact to show. */
-export function FormFactChips(facts: FormFacts) {
-  const embed = facts.formType === 'third-party';
-  const native = facts.formType === 'native' || (!embed && (facts.fieldCount ?? 0) > 0);
-  const chips: React.ReactNode[] = [];
+  const text = size === 'lg' ? 'text-[15px]' : 'text-xs';
 
-  if (embed) {
-    chips.push(<Chip key="type" tone="info">Third-party{facts.embedProvider ? ` · ${facts.embedProvider}` : ''}</Chip>);
-    chips.push(<Chip key="mount">{mountLabel(facts.embedKind)}</Chip>);
-  } else if (native) {
-    chips.push(<Chip key="type" tone="info">Native form</Chip>);
-    chips.push(<Chip key="mount">In-page (not an iframe)</Chip>);
-  }
-
-  if (facts.stepKnown) {
-    chips.push(<Chip key="step">{facts.isMultiStep ? 'Multi-step' : 'Single-step'}</Chip>);
-  }
-  if (typeof facts.fieldCount === 'number' && facts.fieldCount > 0) {
-    chips.push(<Chip key="fields">{facts.fieldCount} field{facts.fieldCount === 1 ? '' : 's'}</Chip>);
-  }
-  if (facts.captchaPresent) {
-    chips.push(<Chip key="captcha" tone="warn">CAPTCHA</Chip>);
-  }
-
-  if (chips.length === 0) return null;
-  return <div className="flex flex-wrap items-center gap-1.5">{chips}</div>;
+  return (
+    <p className={cx('leading-loose text-ink-muted', text)}>
+      We found a{' '}
+      {native ? (
+        <>
+          <Pill tone="type" size={size}>Native form</Pill>
+          {' — it’s '}
+          {stepKnown && <Pill tone="fact" size={size}>{isMultiStep ? 'Multi-step' : 'Single-step'}</Pill>}
+          {typeof fieldCount === 'number' && fieldCount > 0 && (
+            <>{stepKnown ? ' with ' : ' '}<Pill tone="fact" size={size}>{fieldCount} fields</Pill></>
+          )}
+          {', built into the page '}
+          <span className="text-ink-faint">(not an iframe)</span>
+          {captchaPresent && <>, and it&rsquo;s <Pill tone="captcha" size={size}>CAPTCHA</Pill> protected</>}.
+        </>
+      ) : (
+        <>
+          <Pill tone="type" size={size}>Third-party{embedProvider ? ` · ${embedProvider}` : ''}</Pill>
+          {' form, embedded via '}
+          <Pill tone="fact" size={size}>{embedKind ?? 'an embed'}</Pill>{' '}
+          <span className="text-ink-faint">(cross-origin — can&rsquo;t auto-fill)</span>
+          {captchaPresent && <>, <Pill tone="captcha" size={size}>CAPTCHA</Pill> protected</>}.
+        </>
+      )}
+    </p>
+  );
 }

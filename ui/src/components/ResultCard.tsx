@@ -1,10 +1,9 @@
 'use client';
 import { useState } from 'react';
 import type { SiteResult } from '@/types';
-import { StatusBadge, ReasonCodeBadge } from './StatusBadge';
 import { getReasonMessage, type Severity } from '@/lib/reasonMessages';
-import { friendlyNotes } from '@/lib/friendlyNotes';
-import { FormFactChips } from './FormFactChips';
+import { runVerdict } from '@/lib/formWatch/verdict';
+import { FormSummary } from './FormFactChips';
 
 const BANNER_STYLES: Record<Severity, { wrap: string; icon: string; title: string }> = {
   success: { wrap: 'bg-ok/10 border-ok/20', icon: '✓', title: 'text-ok' },
@@ -12,20 +11,6 @@ const BANNER_STYLES: Record<Severity, { wrap: string; icon: string; title: strin
   warn: { wrap: 'bg-warn/10 border-warn/20', icon: '⚠', title: 'text-warn' },
   error: { wrap: 'bg-danger/10 border-danger/20', icon: '✕', title: 'text-danger' },
 };
-
-function FieldRow({ label, value, mono = false }: { label: string; value: string | null; mono?: boolean }) {
-  if (!value) return null;
-  return (
-    <div className="flex gap-2 text-xs">
-      <span className="w-32 shrink-0 text-ink-faint">{label}</span>
-      <span className={`break-all text-ink-secondary ${mono ? 'font-mono' : ''}`}>{value}</span>
-    </div>
-  );
-}
-
-function CheckIcon({ ok }: { ok: boolean }) {
-  return ok ? <span className="text-xs text-ok">✓</span> : <span className="text-xs text-ink-faint">✗</span>;
-}
 
 function Pill({ label, active, color }: { label: string; active: boolean; color: string }) {
   if (!active) return null;
@@ -42,13 +27,36 @@ function pathOf(url: string | null): string {
   if (!url) return '';
   try { return new URL(url).pathname || '/'; } catch { return url; }
 }
-/** Small neutral marker for informational sub-lines (a fact, not a pass/fail). */
-function Dot() {
-  return <span className="text-xs text-ink-faint">•</span>;
+/** A properly-sized status mark (check / cross in a tinted circle) for the
+ *  "what we found" headline — aligned with the title, not a drowning glyph. */
+function StatusMark({ ok }: { ok: boolean }) {
+  return (
+    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${ok ? 'bg-ok/15 text-ok' : 'bg-danger/15 text-danger'}`}>
+      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden>
+        {ok
+          ? <path strokeLinecap="round" strokeLinejoin="round" d="M4 10.5l3.5 3.5L16 5.5" />
+          : <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l8 8M14 6l-8 8" />}
+      </svg>
+    </span>
+  );
+}
+/** Mode-aware header badge — a healthy safe/detect run reads "OK", not amber
+ *  "WARN". Mirrors the Scheduler verdict so both surfaces agree. FR-63. */
+function VerdictBadge({ level }: { level: 'healthy' | 'attention' | 'failing' }) {
+  const map = {
+    healthy: { cls: 'bg-ok/15 text-ok ring-ok/30', dot: 'bg-ok', label: 'OK' },
+    attention: { cls: 'bg-warn/15 text-warn ring-warn/30', dot: 'bg-warn', label: 'Attention' },
+    failing: { cls: 'bg-danger/15 text-danger ring-danger/30', dot: 'bg-danger', label: 'Failed' },
+  }[level];
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ring-1 ${map.cls}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${map.dot}`} />
+      {map.label}
+    </span>
+  );
 }
 
 export function ResultCard({ result }: { result: SiteResult }) {
-  const [expanded, setExpanded] = useState(false);
   const [showJson, setShowJson] = useState(false);
   const domain = getDomain(result.normalizedUrl);
 
@@ -63,8 +71,6 @@ export function ResultCard({ result }: { result: SiteResult }) {
   const reason = getReasonMessage(result.reasonCode);
   const banner = BANNER_STYLES[reason.severity];
   const hasErrors = result.errors && result.errors.length > 0;
-  // Hide developer-internal notes (scores/signals/byte counts) from the card. FR-64.
-  const notes = friendlyNotes(result.notes);
 
   return (
     <div className={`fp-rise overflow-hidden rounded-xl border ${border} bg-panel`}>
@@ -87,7 +93,7 @@ export function ResultCard({ result }: { result: SiteResult }) {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className="font-mono text-xs text-ink-faint">{formatMs(result.durationMs)}</span>
-          <StatusBadge status={result.finalStatus} />
+          <VerdictBadge level={runVerdict(result.reasonCode, result.formFound, result.finalStatus).level} />
         </div>
       </div>
 
@@ -119,29 +125,25 @@ export function ResultCard({ result }: { result: SiteResult }) {
         </div>
       )}
 
-      {/* Quick status row */}
-      <div className="flex flex-wrap items-center gap-2 px-4 pb-3">
-        <ReasonCodeBadge code={result.reasonCode} />
-        <Pill label="CAPTCHA" active={result.captchaDetected} color="bg-warn/15 text-warn" />
-        <Pill label="Anti-Bot" active={result.antiBotDetected} color="bg-danger/15 text-danger" />
-        <Pill label="Thank-You ✓" active={result.thankYouDetected} color="bg-ok/15 text-ok" />
-        <Pill label="Inline Success ✓" active={result.inlineSuccessDetected} color="bg-ok/15 text-ok" />
-      </div>
+      {/* Quick status flags — only when something noteworthy is present */}
+      {(result.captchaDetected || result.antiBotDetected || result.thankYouDetected || result.inlineSuccessDetected) && (
+        <div className="flex flex-wrap items-center gap-2 px-4 pb-3">
+          <Pill label="CAPTCHA" active={result.captchaDetected} color="bg-warn/15 text-warn" />
+          <Pill label="Anti-Bot" active={result.antiBotDetected} color="bg-danger/15 text-danger" />
+          <Pill label="Thank-You ✓" active={result.thankYouDetected} color="bg-ok/15 text-ok" />
+          <Pill label="Inline Success ✓" active={result.inlineSuccessDetected} color="bg-ok/15 text-ok" />
+        </div>
+      )}
 
       {/* What we found — plain, accurate summary: where the form is + what kind */}
       {(() => {
         const hasEmbed = result.formType === 'third-party';
         const hasNativeForm = result.formFound && !hasEmbed;
         const aFormExists = hasNativeForm || hasEmbed;
-        const fieldNames = (() => {
-          const names = (result.fields ?? []).map((f) => f.label?.trim()).filter(Boolean) as string[];
-          if (!names.length) return null;
-          const shown = names.slice(0, 6);
-          const more = names.length > shown.length ? `, +${names.length - shown.length} more` : '';
-          return `${shown.join(', ')}${more}`;
-        })();
         const pageKnown = Boolean(result.resolvedContactPage || result.finalUrl);
         const pagePath = pathOf(result.resolvedContactPage) || pathOf(result.finalUrl) || '/';
+        // Show the FULL url of the page that holds the form, so it's directly clickable/knowable.
+        const pageUrl = result.resolvedContactPage || result.finalUrl || result.normalizedUrl;
         // In default (non-landing) mode, FormPing may search the site and end up
         // testing a DIFFERENT page than the URL typed. Surface that plainly so the
         // result isn't confusing ("I entered X, why does it say Y?"). FR-64.
@@ -151,118 +153,52 @@ export function ResultCard({ result }: { result: SiteResult }) {
         // Nothing useful to add beyond the reason banner (e.g. contact page not found).
         if (!aFormExists && !pageKnown) return null;
         return (
-          <div className="space-y-1.5 px-4 pb-3">
-            {/* Headline — where the form lives (or that none was found there) */}
-            <div className="flex items-start gap-2 text-xs">
-              <span className="mt-0.5"><CheckIcon ok={aFormExists} /></span>
-              <div className="min-w-0 space-y-0.5">
-                <p className="text-ink-secondary">
-                  <span className="font-medium text-ink">{aFormExists ? 'Form found on' : 'No form found on'}</span>{' '}
-                  <span className="break-all font-mono text-ink-faint">{pagePath}</span>
-                </p>
-
-                <div className="pt-1">
-                  <FormFactChips
-                    formType={result.formType}
-                    embedProvider={result.embedProvider}
-                    embedKind={result.embedKind}
-                    isMultiStep={result.isMultiStep}
-                    fieldCount={result.fieldCount}
-                    stepKnown={hasNativeForm}
-                  />
-                </div>
-                {hasNativeForm && fieldNames && (
-                  <p className="text-ink-faint">{fieldNames}{result.isMultiStep ? ' · revealed across steps' : ''}</p>
-                )}
-                {hasEmbed && <p className="text-ink-faint">A cross-origin embed FormPing can&rsquo;t auto-fill — verify it manually.</p>}
-              </div>
+          <div className="mx-4 mb-3 rounded-lg border border-line bg-panel-raised/40 px-5 py-4">
+            {/* Headline — big + obvious: found or not, and the FULL url */}
+            <div className="flex items-center gap-3">
+              <StatusMark ok={aFormExists} />
+              <p className="min-w-0 text-base">
+                <span className="font-semibold text-ink">{aFormExists ? 'Form found on' : 'No form found on'}</span>{' '}
+                <span className="break-all font-mono text-sm text-ink-muted">{pageUrl}</span>
+              </p>
             </div>
 
-            {/* Landing-page runs test only the given page — worth stating in the
-                user's own toggle language. Normal runs need no note: the path in
-                the headline already says where the form is. No internal jargon. */}
-            {result.landingPageMode && (
-              <div className="flex items-center gap-2 pl-6 text-xs text-ink-faint">
-                <Dot />
-                <span>Landing-page mode — only this page was tested</span>
+            {/* Summary sentence — type + structure + fields as highlighted pills */}
+            {(hasNativeForm || hasEmbed) && (
+              <div className="mt-3 pl-[40px]">
+                <FormSummary
+                  size="lg"
+                  formType={result.formType}
+                  embedProvider={result.embedProvider}
+                  embedKind={result.embedKind}
+                  isMultiStep={result.isMultiStep}
+                  fieldCount={result.fieldCount}
+                  stepKnown={hasNativeForm}
+                  captchaPresent={result.captchaDetected}
+                />
               </div>
             )}
+
+            {/* Landing-page / tested-elsewhere context — the user's own toggle language */}
+            {result.landingPageMode && (
+              <p className="mt-3 pl-[34px] text-xs text-ink-faint">Landing-page mode — only this page was tested.</p>
+            )}
             {testedElsewhere && (
-              <div className="flex items-start gap-2 pl-6 text-xs text-ink-faint">
-                <Dot />
-                <span>
-                  You entered <span className="font-mono">{enteredLabel}</span> — we searched the site and tested the contact form found at{' '}
-                  <span className="font-mono">{pagePath}</span>. Turn on Landing page to test only the page you enter.
-                </span>
-              </div>
+              <p className="mt-3 pl-[34px] text-xs leading-relaxed text-ink-faint">
+                You entered <span className="font-mono text-ink-muted">{enteredLabel}</span> — we searched the site and tested the contact form at{' '}
+                <span className="font-mono text-ink-muted">{pagePath}</span>. Turn on Landing page to test only the page you enter.
+              </p>
             )}
           </div>
         );
       })()}
 
-      {/* Expand/collapse footer */}
-      <div className="flex items-center divide-x divide-line border-t border-line">
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="flex-1 px-4 py-2 text-left text-xs text-ink-muted transition-colors hover:bg-panel-raised hover:text-ink"
-        >
-          {notes.length > 0
-            ? `${expanded ? '▲ Hide' : '▼ Show'} ${notes.length} note${notes.length !== 1 ? 's' : ''}`
-            : expanded ? '▲ Hide details' : '▼ Show details'}
-        </button>
-        <a
-          href={`/form-watch?url=${encodeURIComponent(result.normalizedUrl)}`}
-          className="whitespace-nowrap px-4 py-2 text-xs text-ink-muted transition-colors hover:bg-panel-raised hover:text-accent-soft"
-          title="Set up scheduled monitoring — the Form Scheduler opens with this URL prefilled; you pick the mode + frequency"
-        >
-          👁 Monitor…
-        </a>
+      {/* Footer: raw JSON for devs (everything else is already on the card) */}
+      <div className="flex items-center justify-end border-t border-line">
         <button onClick={() => setShowJson(!showJson)} className="px-4 py-2 font-mono text-xs text-ink-faint transition-colors hover:bg-panel-raised hover:text-ink">
           {showJson ? '{ hide }' : '{ JSON }'}
         </button>
-        <button
-          onClick={() => navigator.clipboard.writeText(JSON.stringify(result, null, 2))}
-          className="px-4 py-2 text-xs text-ink-faint transition-colors hover:bg-panel-raised hover:text-ink"
-          title="Copy JSON"
-        >
-          ⎘ Copy
-        </button>
       </div>
-
-      {/* Expanded notes + details */}
-      {expanded && (
-        <div className="fp-rise space-y-3 border-t border-line px-4 pb-4 pt-2">
-          {notes.length > 0 && (
-            <div>
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-ink-faint">Notes</p>
-              <ul className="space-y-1">
-                {notes.map((note, i) => (
-                  <li key={i} className="flex gap-2 text-xs text-ink-secondary">
-                    <span className="shrink-0 text-ink-faint">·</span>
-                    {note}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <div className="space-y-1">
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-ink-faint">Details</p>
-            <FieldRow label="Mode" value={result.mode} />
-            <FieldRow label="Contact page" value={result.resolvedContactPage} mono />
-            <FieldRow label="Final URL" value={result.finalUrl} mono />
-            <FieldRow label="Redirect URL" value={result.redirectUrl} mono />
-            <FieldRow label="Submission" value={result.submissionResult} />
-            {result.formIdentifier && (
-              <>
-                <FieldRow label="Form ID" value={result.formIdentifier.id} mono />
-                <FieldRow label="Form action" value={result.formIdentifier.action} mono />
-                <FieldRow label="Form method" value={result.formIdentifier.method} mono />
-              </>
-            )}
-            {result.error && <FieldRow label="Error" value={result.error} />}
-          </div>
-        </div>
-      )}
 
       {/* Raw JSON */}
       {showJson && (
