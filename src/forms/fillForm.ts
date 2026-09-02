@@ -57,6 +57,16 @@ export interface FillResult {
   stepsTraversed: number;
   /** Per-CAPTCHA state on the final step ("absent" | "pending" | "solved"). */
   captchaState: CaptchaState;
+  /** True when the walk reached the final step (no further Next control) — i.e.
+   *  we're at the submit control, not stranded mid-wizard. FR-63. */
+  reachedSubmit: boolean;
+  /** True when we widened the walk to the enclosing wizard container because the
+   *  form's steps/fields live outside the <form> element. FR-63. */
+  wizardContainerUsed: boolean;
+  /** Distinct fields seen across ALL steps of the walk (radio groups collapsed).
+   *  Accurate for multi-step forms whose earlier steps live outside the <form>,
+   *  where form-scoped detection undercounts. FR-63. */
+  fieldsSeen: number;
 }
 
 /** Attribute-selector-safe quoting — handles field names like names[first_name] */
@@ -269,21 +279,27 @@ const SUBMIT_BUTTON_TEXT = /\b(?:submit|send(?:\s+message)?|send\s+it|contact\s+
  * = button|undefined). Some wizards put Next outside the <form>, so
  * we also look in the form's parent.
  */
-async function findNextButton(page: Page, formIndex: number): Promise<Locator | null> {
-  // Pull all candidate buttons from the form and its parent, with metadata
+async function findNextButton(page: Page, formIndex: number, rootSelector?: string): Promise<Locator | null> {
+  // Pull all candidate buttons from the search scope, with metadata
   const candidates = await page.evaluate(
-    (args: { idx: number; nextRe: string; submitRe: string }) => {
-      const { idx, nextRe, submitRe } = args;
+    (args: { idx: number; nextRe: string; submitRe: string; rootSelector?: string }) => {
+      const { idx, nextRe, submitRe, rootSelector } = args;
       const nextR = new RegExp(nextRe.slice(1, -2), 'i');
       const submitR = new RegExp(submitRe.slice(1, -2), 'i');
       const forms = Array.from(document.querySelectorAll('form'));
-      const target = forms[idx];
-      if (!target) return [];
+      const target = forms[idx] ?? null;
 
-      // Search scope: the form itself + its parent (wizards sometimes put
-      // nav buttons in a wrapper around the form)
-      const searchRoots: Element[] = [target];
-      if (target.parentElement) searchRoots.push(target.parentElement);
+      // Search scope: the tagged wizard container when scoped (Next controls
+      // live outside the <form>, FR-63), else the form itself + its parent.
+      let searchRoots: Element[] = [];
+      if (rootSelector) {
+        const c = document.querySelector(rootSelector);
+        if (c) searchRoots = [c];
+      } else if (target) {
+        searchRoots = [target];
+        if (target.parentElement) searchRoots.push(target.parentElement);
+      }
+      if (searchRoots.length === 0) return [];
 
       const seen = new Set<Element>();
       const out: Array<{ text: string; tag: string; type: string; visible: boolean; cssPath: string }> = [];
@@ -335,27 +351,30 @@ async function findNextButton(page: Page, formIndex: number): Promise<Locator | 
       idx: formIndex,
       nextRe: NEXT_BUTTON_TEXT.toString(),
       submitRe: SUBMIT_BUTTON_TEXT.toString(),
+      rootSelector,
     },
   );
 
   if (candidates.length === 0) return null;
 
   // Use Playwright's text-based locator since cssPath isn't always reliable.
-  // The form parent scope keeps us from clicking unrelated Next buttons
+  // Scoping to the form/container keeps us from clicking unrelated Next buttons
   // elsewhere on the page (sliders, carousels, etc.).
   const firstText = candidates[0]!.text;
-  const formLoc = page.locator('form').nth(formIndex);
-  const wrapperLoc = formLoc.locator('xpath=..'); // form's parent
+  const scopeLoc = rootSelector ? page.locator(rootSelector) : page.locator('form').nth(formIndex);
 
-  // Try inside form first, then in the wrapper. Match the literal text.
-  const inFormBtn = formLoc.getByRole('button', { name: firstText, exact: true });
-  if ((await inFormBtn.count()) > 0) return inFormBtn.first();
+  const inScopeBtn = scopeLoc.getByRole('button', { name: firstText, exact: true });
+  if ((await inScopeBtn.count()) > 0) return inScopeBtn.first();
 
-  const inWrapperBtn = wrapperLoc.getByRole('button', { name: firstText, exact: true });
-  if ((await inWrapperBtn.count()) > 0) return inWrapperBtn.first();
+  // Form scope only: also try the form's immediate wrapper.
+  if (!rootSelector) {
+    const wrapperLoc = scopeLoc.locator('xpath=..');
+    const inWrapperBtn = wrapperLoc.getByRole('button', { name: firstText, exact: true });
+    if ((await inWrapperBtn.count()) > 0) return inWrapperBtn.first();
+  }
 
   // Fallback to plain text locator
-  return formLoc.locator(`button:has-text("${firstText}")`).first();
+  return scopeLoc.locator(`button:has-text("${firstText}")`).first();
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -376,17 +395,25 @@ interface ExtractedField {
   checkboxLabel: string;
 }
 
-async function extractVisibleFields(page: Page, formIndex: number): Promise<ExtractedField[]> {
-  return await page.evaluate((idx: number) => {
+async function extractVisibleFields(page: Page, formIndex: number, rootSelector?: string): Promise<ExtractedField[]> {
+  return await page.evaluate((args: { idx: number; rootSelector?: string }) => {
+    const { idx, rootSelector } = args;
     const forms = Array.from(document.querySelectorAll('form'));
-    const targetForm = forms[idx];
-    if (!targetForm) return [];
+    const targetForm = forms[idx] ?? null;
+    // Scope: the target <form> normally; the tagged wizard container when the
+    // steps/fields live outside the form (FR-63).
+    const root: Element | null = rootSelector ? document.querySelector(rootSelector) : targetForm;
+    if (!root) return [];
 
     const inputs = Array.from(
-      targetForm.querySelectorAll(
+      root.querySelectorAll(
         'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not([type="file"]), textarea, select',
       ),
-    );
+    ).filter((el) => {
+      // In container scope, never touch inputs that belong to a DIFFERENT form.
+      const owner = el.closest('form');
+      return !owner || owner === targetForm;
+    });
 
     return inputs
       .map((el) => {
@@ -436,7 +463,7 @@ async function extractVisibleFields(page: Page, formIndex: number): Promise<Extr
         };
       })
       .filter((f) => f.visible && !f.readonly);
-  }, formIndex);
+  }, { idx: formIndex, rootSelector });
 }
 
 interface SingleStepResult {
@@ -446,6 +473,9 @@ interface SingleStepResult {
   honeypotsSkipped: string[];
   honeypotProvider?: string;
   honeypotReason?: string;
+  /** Collapse-keys of the distinct fields seen on this step — a radio GROUP
+   *  counts once (keyed by name), so the cross-step total is accurate. FR-63. */
+  fieldKeys: string[];
 }
 
 /** Fill all currently-visible fields in one pass. Used inside the multi-step loop. */
@@ -454,6 +484,7 @@ async function fillSingleStep(
   form: FormCandidate,
   config: AppConfig,
   step: number,
+  rootSelector?: string,
 ): Promise<SingleStepResult> {
   const formIndex = form.index;
   const filledFields: FilledField[] = [];
@@ -462,9 +493,10 @@ async function fillSingleStep(
   const honeypotsSkipped: string[] = [];
   let honeypotProvider: string | undefined;
   let honeypotReason: string | undefined;
+  const fieldKeys: string[] = [];
 
-  const fields = await extractVisibleFields(page, formIndex);
-  if (fields.length === 0) return { filledFields, skippedFields, errors, honeypotsSkipped };
+  const fields = await extractVisibleFields(page, formIndex, rootSelector);
+  if (fields.length === 0) return { filledFields, skippedFields, errors, honeypotsSkipped, fieldKeys };
 
   logger.debug(`Step ${step}: filling ${fields.length} visible field(s) in form[${formIndex}]`);
 
@@ -492,11 +524,15 @@ async function fillSingleStep(
     }
   }
 
-  const formLocator = page.locator('form').nth(formIndex);
+  // Base locator for typing: the wizard container when scoped (fields may sit
+  // outside the <form>), else the form itself. FR-63.
+  const formLocator = rootSelector ? page.locator(rootSelector) : page.locator('form').nth(formIndex);
 
   for (const field of fields) {
     const role = classifyField(field.name, field.id, field.placeholder, field.label, field.type);
     const fieldKey = field.name || field.id || field.type;
+    // Count distinct fields (a radio GROUP counts once, keyed by name). FR-63.
+    fieldKeys.push(field.isRadio ? `radio:${field.name || field.id}` : fieldKey);
 
     const aiKey = field.id || field.name;
     if (aiKey && honeypotKeys.has(aiKey)) {
@@ -578,6 +614,7 @@ async function fillSingleStep(
     honeypotsSkipped,
     ...(honeypotProvider ? { honeypotProvider } : {}),
     ...(honeypotReason ? { honeypotReason } : {}),
+    fieldKeys,
   };
 }
 
@@ -593,6 +630,49 @@ async function fillSingleStep(
 // ─────────────────────────────────────────────────────────────────────────
 
 const MAX_WIZARD_STEPS = 8;
+const WIZARD_TAG = 'data-fp-wizard';
+
+/** Climb from the target form to the nearest ancestor (≤6 levels) that holds a
+ *  visible Next/Continue control, and tag it. This is the "wizard container" for
+ *  forms whose steps live OUTSIDE the <form> element. Returns true if tagged. FR-63. */
+async function tagWizardContainer(page: Page, formIndex: number): Promise<boolean> {
+  // NOTE: everything runs in the browser — keep it inline (no named function
+  // consts), otherwise tsx/esbuild's keepNames injects a __name() helper that
+  // isn't defined in the page context (ReferenceError: __name is not defined).
+  return page.evaluate(
+    (args: { idx: number; nextRe: string; tag: string }) => {
+      const { idx, nextRe, tag } = args;
+      const nextR = new RegExp(nextRe.slice(1, -2), 'i');
+      const form = document.querySelectorAll('form')[idx];
+      if (!form) return false;
+      let cur: Element | null = form.parentElement;
+      for (let i = 0; i < 6 && cur && cur !== document.body; i++) {
+        const btns = Array.from(
+          cur.querySelectorAll('button, input[type="button"], input[type="submit"], [role="button"], a'),
+        );
+        let found = false;
+        for (const el of btns) {
+          const t = (el.textContent || (el as HTMLInputElement).value || '').trim();
+          if (!t || t.length > 50 || !nextR.test(t)) continue;
+          const s = window.getComputedStyle(el);
+          if (s.display === 'none' || s.visibility === 'hidden') continue;
+          const r = el.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) { found = true; break; }
+        }
+        if (found) { cur.setAttribute(tag, '1'); return true; }
+        cur = cur.parentElement;
+      }
+      return false;
+    },
+    { idx: formIndex, nextRe: NEXT_BUTTON_TEXT.toString(), tag: WIZARD_TAG },
+  );
+}
+
+async function untagWizardContainer(page: Page): Promise<void> {
+  await page
+    .evaluate((tag: string) => document.querySelector(`[${tag}="1"]`)?.removeAttribute(tag), WIZARD_TAG)
+    .catch(() => { /* ignore */ });
+}
 
 export async function fillForm(
   page: Page,
@@ -606,12 +686,35 @@ export async function fillForm(
   let honeypotProvider: string | undefined;
   let honeypotReason: string | undefined;
   let stepsTraversed = 0;
+  let reachedSubmit = false;
+  const fieldKeySeen = new Set<string>();
+
+  // If the detected <form> has NO visible fields on entry, its steps/fields
+  // likely live outside the <form> (a wizard whose <form> wraps only the final,
+  // hidden step). Widen the walk to the enclosing wizard container. Normal forms
+  // (fields visible immediately) keep the exact form-scoped path below. FR-63.
+  let rootSelector: string | undefined;
+  let wizardContainerUsed = false;
+  const initialVisible = await extractVisibleFields(page, form.index);
+  if (initialVisible.length === 0) {
+    try {
+      wizardContainerUsed = await tagWizardContainer(page, form.index);
+    } catch (err) {
+      logger.warn(`Wizard-container detection failed (continuing form-scoped): ${shortenError(err)}`);
+      wizardContainerUsed = false;
+    }
+    if (wizardContainerUsed) {
+      rootSelector = `[${WIZARD_TAG}="1"]`;
+      logger.info('Multi-step: form has no visible fields — walking the enclosing wizard container (steps outside <form>)');
+    }
+  }
 
   for (let step = 1; step <= MAX_WIZARD_STEPS; step++) {
     stepsTraversed = step;
-    const stepResult = await fillSingleStep(page, form, config, step);
+    const stepResult = await fillSingleStep(page, form, config, step, rootSelector);
     filledFields.push(...stepResult.filledFields);
     skippedFields.push(...stepResult.skippedFields);
+    for (const k of stepResult.fieldKeys) fieldKeySeen.add(k);
     errors.push(...stepResult.errors);
     honeypotsSkipped.push(...stepResult.honeypotsSkipped);
     if (stepResult.honeypotProvider && !honeypotProvider) {
@@ -621,9 +724,10 @@ export async function fillForm(
       honeypotReason = stepResult.honeypotReason;
     }
 
-    // Look for a Next button — if none, we're on the final step.
-    const nextBtn = await findNextButton(page, form.index);
+    // Look for a Next button — if none, we're on the final step (at submit).
+    const nextBtn = await findNextButton(page, form.index, rootSelector);
     if (!nextBtn) {
+      reachedSubmit = true;
       if (step > 1) logger.info(`Multi-step form: completed ${step} step(s)`);
       break;
     }
@@ -644,8 +748,11 @@ export async function fillForm(
   }
 
   if (stepsTraversed === MAX_WIZARD_STEPS) {
-    logger.warn(`Hit MAX_WIZARD_STEPS (${MAX_WIZARD_STEPS}) — there may be more steps; submitting anyway`);
+    logger.warn(`Hit MAX_WIZARD_STEPS (${MAX_WIZARD_STEPS}) — there may be more steps`);
   }
+
+  // Done walking — remove the temporary container tag we added. FR-63.
+  if (wizardContainerUsed) await untagWizardContainer(page);
 
   // ── Final-step CAPTCHA inspection ─────────────────────────────────────
   // Wait briefly for invisible CAPTCHAs (Turnstile in auto mode, reCAPTCHA
@@ -688,6 +795,9 @@ export async function fillForm(
       ...(honeypotReason ? { honeypotReason } : {}),
       stepsTraversed,
       captchaState,
+      reachedSubmit,
+      wizardContainerUsed,
+      fieldsSeen: fieldKeySeen.size,
     };
   }
 
@@ -701,5 +811,8 @@ export async function fillForm(
     ...(honeypotReason ? { honeypotReason } : {}),
     stepsTraversed,
     captchaState,
+    reachedSubmit,
+    wizardContainerUsed,
+    fieldsSeen: fieldKeySeen.size,
   };
 }
