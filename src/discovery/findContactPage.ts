@@ -358,6 +358,44 @@ export async function findContactPage(
         usedAiFallback: false,
       };
     }
+
+    // ── Tier 2: Playwright escalation (FR-62) ──────────────────────────────
+    // The cheap fetch found no form — either this site BLOCKS our lightweight
+    // fetcher (waseembashir did), or the form is JS-rendered / hidden in a
+    // multi-step widget. Render the top candidates in a real browser and score
+    // the RENDERED html: Cheerio over page.content() sees JS-injected AND
+    // display:none multi-step forms. Bounded, and only runs when the cheap pass
+    // came up empty — so fast/static sites never pay for it.
+    const RENDER_CAP = 5;
+    const renderedPages: { url: string; html: string }[] = [];
+    for (const u of poolUrls.slice(0, RENDER_CAP)) {
+      try {
+        const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
+        ctx.setDefaultNavigationTimeout(config.navigationTimeout);
+        const pg = await ctx.newPage();
+        await pg.goto(u, { waitUntil: 'domcontentloaded' });
+        await pg.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => { /* ignore */ });
+        const rendered = await pg.content();
+        await ctx.close();
+        renderedPages.push({ url: u, html: rendered });
+      } catch (err) {
+        logger.debug(`Content-discovery render failed for ${u}: ${err}`);
+      }
+    }
+    const renderedRanked = rankByFormSignature(renderedPages, config.contactPathPatterns);
+    logger.info(
+      `Content-discovery Playwright escalation (FR-62): rendered ${renderedPages.length}/${Math.min(poolUrls.length, RENDER_CAP)} pages, ` +
+        `${renderedRanked.length} with a contact form`,
+    );
+    if (renderedRanked.length > 0) {
+      const bestPage = renderedRanked[0]!;
+      logger.info(`Content-discovery (rendered) picked ${bestPage.url} (form score ${bestPage.score})`);
+      return {
+        candidate: { url: bestPage.url, score: 1, signals: bestPage.signals, pageScore: 0.8, totalScore: 0.8 },
+        allCandidates: renderedRanked.map((r) => ({ url: r.url, score: r.score, signals: r.signals })),
+        usedAiFallback: false,
+      };
+    }
   }
 
   // ── AI rescue ──────────────────────────────────────────────────────────

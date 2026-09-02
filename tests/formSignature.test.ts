@@ -56,6 +56,16 @@ describe('scoreContactFormSignature (FR-59)', () => {
     expect(scoreContactFormSignature(html).score).toBeLessThanOrEqual(0);
   });
 
+  it('matches "Send My Message" and scores a no-textarea lead form (FR-62)', () => {
+    const html = form(`
+      <input name="name"><input type="email"><input name="brand"><input name="website">
+      <button type="submit">Send My Message</button>
+    `);
+    // name(15) + email(15) + submit-intent(15) = 45; proves the "Send My Message"
+    // pattern matches even without a textarea.
+    expect(scoreContactFormSignature(html).score).toBeGreaterThanOrEqual(40);
+  });
+
   it('returns 0 when there is no form at all', () => {
     expect(scoreContactFormSignature(wrap('<p>Just some text, no form here.</p>')).score).toBe(0);
   });
