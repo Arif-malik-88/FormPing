@@ -191,12 +191,12 @@ export default function DocsContent() {
                     [<Code key="0">Detect-only</Code>, 'Just confirms a form is present. No fill, no submit.'],
                   ]}
                 />
-                <P>Each result is a clear verdict — <strong className="text-ink">healthy</strong>, <strong className="text-ink">needs attention</strong>, or <strong className="text-ink">failing</strong> — with a plain-English reason. CAPTCHA and anti-bot protection are detected and reported, never bypassed.</P>
+                <P>Each result is a clear verdict — <strong className="text-ink">healthy</strong>, <strong className="text-ink">needs attention</strong>, or <strong className="text-ink">failing</strong> — with a plain-English reason. It also shows what was found: the page the form is on, whether it’s a <strong className="text-ink">native</strong> in-page form or a <strong className="text-ink">third-party</strong> one (Typeform, HubSpot, …), how many fields and their names, and whether it’s a <strong className="text-ink">single- or multi-step</strong> form. CAPTCHA and anti-bot protection are detected and reported, never bypassed.</P>
                 <Note>
-                  <strong>Landing-page mode.</strong> By default the tester crawls the site to discover a separate contact page. Turn on <strong>Landing page</strong> when the form is on the exact URL you gave (a standalone landing page with no separate contact page) — it tests that URL directly, and is lenient enough to accept a quiz, assessment, or booking form, not just a classic contact form.
+                  <strong>Landing-page mode.</strong> By default the tester searches your site to find the contact form (and tells you which page it tested if that differs from the URL you entered). Turn on <strong>Landing page</strong> when you want to test the exact URL you gave — a standalone landing page, or when the form is a quiz, assessment, or booking style that a whole-site search might skip. It tests only that page, and is lenient enough to accept those non-standard forms.
                 </Note>
                 <Note>
-                  <strong>It tells you <em>why</em>, not just “not found”.</strong> When no contact form is submitted you get one of three clear outcomes: <strong>No form on the page</strong>, <strong>Found a form — but not a contact form</strong> (with the score and which fields are missing), or <strong>Third-party embed found</strong> — a hosted Typeform, HubSpot, Calendly, Jotform, Tally, or GoHighLevel form. An embed genuinely exists but can’t be auto-submitted, so it’s detected and named for you to verify by hand.
+                  <strong>It tells you <em>why</em>, not just “not found”.</strong> When no contact form is submitted you get a clear outcome: <strong>No form on the page</strong>; <strong>Found a form — but not a contact form</strong> (with which contact fields are missing); <strong>Third-party embed found</strong> — a hosted Typeform, HubSpot, Calendly, Jotform, Tally, or GoHighLevel form that genuinely exists but can’t be auto-submitted across origins, so it’s named for you to check by hand; or <strong>Multi-step form found</strong> — the form was detected but its fields span several steps, so it’s flagged for manual checking (step-through filling is coming).
                 </Note>
                 <Note>Your results (and the URL) stay on screen when you switch tabs or refresh. <strong>Clear</strong> wipes the view but keeps the saved result that Projects uses — “clear the view, keep the data.” Any result also has a <strong>Monitor…</strong> button to turn it into a scheduled check.</Note>
               </Section>
@@ -206,7 +206,7 @@ export default function DocsContent() {
                 <UL>
                   <LI>Add a URL, a check frequency (e.g. every 3 days), and a mode. A baseline check runs immediately, then repeats on your interval.</LI>
                   <LI><strong className="text-ink">Pause / Resume</strong> any time (keeps its history), or <strong>Delete</strong> to remove it. Each card shows a recent-runs trend — % healthy plus a sparkline.</LI>
-                  <LI>Each run records the verdict, the reason, what changed since last time, and a suggested next action — and sends a Slack alert.</LI>
+                  <LI>Each run records the verdict, the reason, and the same details as the Tester — the form found, its type, field count, and single/multi-step — plus what changed since last time and a suggested next action, and sends a Slack alert.</LI>
                 </UL>
                 <Note tone="warn"><strong>Live mode submits a real entry every cycle</strong>, which lands in the client’s inbox/CRM. Use it only on forms you’re authorized to monitor — the test data identifies it as a health check.</Note>
               </Section>
