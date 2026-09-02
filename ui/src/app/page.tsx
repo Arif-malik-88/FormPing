@@ -179,7 +179,7 @@ export default function Home() {
               <KeptNotice title={flash} onDismiss={() => setFlash(null)} />
             </div>
           )}
-          <ResultsPanel results={results} progress={progress} logs={logs} running={running} onClear={handleClear} />
+          <ResultsPanel results={results} progress={progress} logs={logs} running={running} landingPage={config.landingPage} mode={config.mode} onClear={handleClear} />
         </div>
       </main>
 

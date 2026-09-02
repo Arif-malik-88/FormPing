@@ -51,6 +51,10 @@ const ATTENTION = new Set([
   'NO_REDIRECT_NO_SUCCESS',
   'NON_CONTACT_FORM_FOUND',
   'THIRD_PARTY_EMBED_FORM',
+  // A multi-step form was DETECTED but we can't fill/submit through its steps
+  // yet — the form exists (not a red "broken"), but monitoring can't confirm a
+  // submission, so it's amber "worth a look". FR-64.
+  'MULTI_STEP_FORM_DETECTED',
 ]);
 
 const LABELS: Record<string, string> = {
@@ -62,6 +66,7 @@ const LABELS: Record<string, string> = {
   FORM_NOT_FOUND: 'No form found on the page',
   NON_CONTACT_FORM_FOUND: 'Found a form — not a contact form',
   THIRD_PARTY_EMBED_FORM: 'Third-party embed form found',
+  MULTI_STEP_FORM_DETECTED: 'Multi-step form found',
   CONTACT_PAGE_NOT_FOUND: 'No contact page found',
   CONTACT_PAGE_AMBIGUOUS: 'Contact page ambiguous',
   FORM_AMBIGUOUS: 'Multiple forms — ambiguous',

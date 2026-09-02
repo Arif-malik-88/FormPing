@@ -6,6 +6,8 @@ import { runVerdict, type VerdictLevel } from '@/lib/formWatch/verdict';
 import { TrendBar, type TrendTone } from '@/components/TrendBar';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cx, KeptNotice } from '@/components/ui';
+import { friendlyNotes } from '@/lib/friendlyNotes';
+import { FormFactChips } from '@/components/FormFactChips';
 
 const LEVEL_STYLE: Record<VerdictLevel | 'pending', { dot: string; text: string; label: string }> = {
   healthy: { dot: 'bg-ok', text: 'text-ok', label: 'Healthy' },
@@ -13,6 +15,13 @@ const LEVEL_STYLE: Record<VerdictLevel | 'pending', { dot: string; text: string;
   failing: { dot: 'bg-danger', text: 'text-danger', label: 'Failing' },
   pending: { dot: 'bg-idle', text: 'text-ink-muted', label: 'Pending first run' },
 };
+
+const MODE_LABEL: Record<string, string> = { 'detect-only': 'Detect', safe: 'Safe', live: 'Live' };
+
+function pathOf(url: string | null): string {
+  if (!url) return '';
+  try { return new URL(url).pathname || '/'; } catch { return url; }
+}
 
 function relativeTime(iso: string | null): string {
   if (!iso) return '—';
@@ -131,10 +140,15 @@ export function ScheduleCard({
           <div className="min-w-0">
             <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className={cx('inline-flex items-center gap-1.5 text-xs font-semibold', style.text)}>
-                <span className={cx('h-2 w-2 rounded-full', style.dot)} />
-                {style.label}
+                <span className={cx('h-2 w-2 rounded-full', style.dot, level === 'pending' && 'animate-pulse motion-reduce:animate-none')} />
+                {level === 'pending' ? 'Setting up' : style.label}
               </span>
               {verdict && <span className="text-[11px] text-ink-muted">· {verdict.label}</span>}
+              {level === 'pending' && (
+                <span className="text-[11px] text-ink-muted">
+                  · running the first check {schedule.landingPage ? 'on this page' : 'across your site'}…
+                </span>
+              )}
               {schedule.paused && (
                 <span className="rounded bg-panel-raised px-1.5 py-0.5 text-[11px] font-medium text-ink-muted ring-1 ring-line-strong">Paused</span>
               )}
@@ -186,6 +200,21 @@ export function ScheduleCard({
           </p>
         )}
 
+        {/* Live can't actually submit multi-step / third-party forms yet — say so
+            up front so a Live schedule that never submits isn't a surprise. FR-64.
+            (Multi-step submission is FR-63; cross-origin embeds can't be submitted.) */}
+        {schedule.mode === 'live' &&
+          (schedule.lastReasonCode === 'MULTI_STEP_FORM_DETECTED' || schedule.lastReasonCode === 'THIRD_PARTY_EMBED_FORM') && (
+            <p className="mt-2.5 rounded-md border border-warn/25 bg-warn/10 px-3 py-2 text-[11px] text-warn">
+              Live mode can’t submit this form yet — it’s a{' '}
+              {schedule.lastReasonCode === 'THIRD_PARTY_EMBED_FORM' ? 'third-party embedded' : 'multi-step'} form. Each run will
+              keep reporting it as <strong>detected</strong> (not submitted).{' '}
+              {schedule.lastReasonCode === 'THIRD_PARTY_EMBED_FORM'
+                ? 'Cross-origin embeds can’t be auto-submitted — verify it manually.'
+                : 'Step-through submission is coming soon; use Detect or Safe in the meantime.'}
+            </p>
+          )}
+
         <button type="button" onClick={toggleExpand} className="mt-3 text-xs font-medium text-ink-muted transition-colors hover:text-ink">
           {expanded ? '▾ Hide run history' : '▸ View run history'}
         </button>
@@ -236,21 +265,41 @@ function RunRow({ run }: { run: FormRunRecord }) {
         <span className="text-[11px] text-ink-faint">{new Date(run.ranAt).toLocaleString()}</span>
       </div>
       <div className="mt-1 text-[11px] text-ink-faint">
-        {run.mode ? `${run.mode} · ` : ''}submission: {run.submissionResult} · {Math.round(run.durationMs / 1000)}s
-        {run.fingerprint.captchaDetected ? ' · CAPTCHA present' : ''}
-        <span className="text-ink-faint"> · {run.reasonCode}</span>
+        {MODE_LABEL[run.mode] ?? run.mode} mode · {Math.round(run.durationMs / 1000)}s
       </div>
-      {run.fingerprint.formFound && (
-        <div className="mt-1 text-[11px] text-ink-muted">
-          Form detected
-          {run.fingerprint.formConfidence > 0 && ` · ${Math.round(run.fingerprint.formConfidence * 100)}% confidence`}
-          {run.fingerprint.formMethod && ` · ${run.fingerprint.formMethod.toUpperCase()}`}
-          {run.fingerprint.formId && (<> · id <code className="rounded bg-panel-raised px-1 text-ink-secondary">{run.fingerprint.formId}</code></>)}
-        </div>
-      )}
-      {run.notes.length > 0 && (
+      {(() => {
+        const fp = run.fingerprint;
+        const embed = fp.formType === 'third-party';
+        const foundPath = pathOf(fp.contactPage);
+        if (!fp.formFound && !embed) return null;
+        // Step-ness is only shown when actually known (new-format records);
+        // legacy runs without the facts omit it rather than guess.
+        const stepKnown = fp.formType === 'native' || fp.isMultiStep === true;
+        const names = (fp.fields ?? []).map((f) => f.label?.trim()).filter(Boolean) as string[];
+        const shown = names.slice(0, 6);
+        const more = names.length > shown.length ? `, +${names.length - shown.length} more` : '';
+        return (
+          <div className="mt-1.5 space-y-1 text-[11px] text-ink-muted">
+            <div>
+              <span className="font-medium text-ink-secondary">Form found</span>
+              {foundPath && <> on <span className="font-mono text-ink-faint">{foundPath}</span></>}
+            </div>
+            <FormFactChips
+              formType={fp.formType}
+              embedProvider={fp.embedProvider}
+              embedKind={fp.embedKind}
+              isMultiStep={fp.isMultiStep}
+              fieldCount={fp.fieldCount}
+              stepKnown={stepKnown}
+              captchaPresent={fp.captchaDetected}
+            />
+            {!embed && shown.length > 0 && <div className="text-ink-faint">{shown.join(', ')}{more}</div>}
+          </div>
+        );
+      })()}
+      {friendlyNotes(run.notes).length > 0 && (
         <ul className="mt-1.5 space-y-1">
-          {run.notes.map((n, i) => (
+          {friendlyNotes(run.notes).map((n, i) => (
             <li key={i} className="flex gap-1.5 text-[11px] text-ink-faint"><span className="shrink-0 text-ink-faint">•</span><span>{n}</span></li>
           ))}
         </ul>

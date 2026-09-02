@@ -75,6 +75,11 @@ export function SchedulerCommandBar({ url, onUrl, days, onDays, mode, onMode, la
             className="w-full bg-transparent font-mono text-[15px] text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
           />
         </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
+          {landingPage
+            ? 'Landing page is on — each check tests only the exact page you enter, not the rest of the site.'
+            : 'Each check searches the whole site to find the contact form. Monitoring one specific page? Turn on Landing page to check just the URL you enter.'}
+        </p>
       </div>
 
       {/* Controls */}
@@ -142,7 +147,7 @@ export function SchedulerCommandBar({ url, onUrl, days, onDays, mode, onMode, la
         {/* Landing */}
         <label className="flex cursor-pointer items-center gap-2">
           <Toggle checked={landingPage} onChange={onLanding} disabled={adding} />
-          <span className="text-xs font-medium text-ink-secondary" title="Test the form on this exact URL — skip searching for a separate contact page.">Landing page</span>
+          <span className="text-xs font-medium text-ink-secondary" title="Check only this exact page — no site search. Use it for standalone landing pages, or when the form is a quiz / booking / 'work with me' style that the default whole-site search might skip. Also faster (no crawling).">Landing page</span>
         </label>
 
         <div className="ml-auto">
@@ -153,9 +158,17 @@ export function SchedulerCommandBar({ url, onUrl, days, onDays, mode, onMode, la
         </div>
       </div>
 
-      {mode === 'live' && (
+      {/* Per-mode note: neutral, informational for Detect/Safe; a red safety
+          warning for Live (it submits on every run). FR-64 */}
+      {mode === 'live' ? (
         <div className="border-t border-danger/20 bg-danger/5 px-4 py-2 text-xs text-danger last:rounded-b-2xl sm:px-5">
           ⚠ Live mode submits the form on every scheduled run. Use only on sites you own or are authorized to test.
+        </div>
+      ) : (
+        <div className="border-t border-line bg-panel px-4 py-2 text-xs text-ink-muted last:rounded-b-2xl sm:px-5">
+          {mode === 'detect-only'
+            ? 'Detect mode — each check only confirms the contact form still exists. Nothing is filled or submitted.'
+            : 'Safe mode — each check finds the form and fills it with test data, but never submits. Nothing is sent to the site.'}
         </div>
       )}
 

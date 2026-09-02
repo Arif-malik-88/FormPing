@@ -27,6 +27,12 @@ export interface FormIdentifier {
   method: string | null;
 }
 
+/** A single detected field (label + input type) — for "Name, Email, Message". FR-64. */
+export interface DetectedFormField {
+  label: string;
+  type: string;
+}
+
 export interface SiteResult {
   inputUrl: string;
   normalizedUrl: string;
@@ -51,6 +57,15 @@ export interface SiteResult {
   errors: string[];
   durationMs: number;
   error?: string;
+
+  // ── Detected-form facts (FR-64) — see engine src/types.ts SiteResult ────────
+  formType?: 'native' | 'third-party';
+  embedProvider?: string | null;
+  embedKind?: 'iframe' | 'script' | 'container' | null;
+  fieldCount?: number;
+  fields?: DetectedFormField[];
+  isMultiStep?: boolean;
+  landingPageMode?: boolean;
 }
 
 export interface RunConfig {

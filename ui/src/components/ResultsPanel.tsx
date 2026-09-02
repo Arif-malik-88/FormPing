@@ -1,5 +1,5 @@
 'use client';
-import type { SiteResult, RunProgress } from '@/types';
+import type { SiteResult, RunProgress, SubmitMode } from '@/types';
 import { ResultCard } from './ResultCard';
 
 interface Props {
@@ -7,6 +7,10 @@ interface Props {
   progress: RunProgress | null;
   logs: string[];
   running: boolean;
+  /** Landing-page toggle for the in-flight run — drives the loader copy. */
+  landingPage?: boolean;
+  /** Mode for the in-flight run — drives the loader copy. */
+  mode?: SubmitMode;
   /** Clear the on-screen view + URL input (not the server-stored result). */
   onClear?: () => void;
 }
@@ -20,16 +24,103 @@ function StatPill({ count, label, color }: { count: number; label: string; color
   );
 }
 
-function ProgressBar({ current, total }: { current: number; total: number }) {
-  const pct = total > 0 ? (current / total) * 100 : 0;
+/** Determinate for a batch (know how many of N are done); a gentle pulsing track
+ *  for a single URL (one long check with no measurable sub-steps). */
+function RunBar({ current, total }: { current: number; total: number }) {
+  if (total > 1) {
+    const pct = (current / total) * 100;
+    return (
+      <div className="h-1 w-full overflow-hidden rounded-full bg-line">
+        <div className="h-full rounded-full bg-accent transition-all duration-300" style={{ width: `${pct}%` }} />
+      </div>
+    );
+  }
+  return <div className="h-1 w-full animate-pulse rounded-full bg-accent/60 motion-reduce:animate-none" />;
+}
+
+// Map raw engine log lines to a friendly, user-facing phase. We NEVER show the
+// raw logs (version strings, proxy state, byte counts, "Discovering contact
+// page" — all internal); instead we surface a plain phrase tied to real
+// progress. Scanned newest-first so the latest meaningful step wins. FR-64.
+const PHASE_RULES: [RegExp, string][] = [
+  [/submit|submitting|submitted/i, 'Submitting the form…'],
+  [/\bfill(ing|ed)?\b/i, 'Filling the form…'],
+  [/form found|contact form detected|form detected/i, 'Form found — checking it…'],
+  [/contact page:/i, 'Found the page — looking for the form…'],
+  [/discovering contact page|lightweight fetch|falling back to playwright|contact page loaded|reload/i, 'Finding the contact form…'],
+  [/landing-page mode/i, 'Loading the page…'],
+];
+function friendlyPhase(logs: string[]): string | null {
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const line = logs[i]!;
+    for (const [re, phrase] of PHASE_RULES) if (re.test(line)) return phrase;
+  }
+  return null;
+}
+
+/** Contextual "we're testing…" loader. The copy tells the user exactly what the
+ *  run is doing — a whole-site check vs a single landing page — so the wait is
+ *  clear, not a blank spinner, and NEVER exposes raw engine logs. FR-64. */
+function RunningLoader({
+  progress,
+  landingPage,
+  mode,
+  logs,
+}: {
+  progress: RunProgress | null;
+  landingPage?: boolean;
+  mode?: SubmitMode;
+  logs: string[];
+}) {
+  const headline = landingPage ? 'Testing this page' : 'Testing the whole site';
+  const finish =
+    mode === 'live' ? 'find the form, fill it, and submit a test message'
+    : mode === 'detect-only' ? 'find the contact form and confirm it'
+    : 'find the contact form and fill it';
+  const sub = landingPage
+    ? `Landing-page mode — we test only the page you gave: ${finish}.`
+    : `Looking across your site for the contact form, then we ${finish}.`;
+  const total = progress?.total ?? 0;
+  const current = progress?.current ?? 0;
+  const cur = progress?.currentUrl;
+  const phase = friendlyPhase(logs);
   return (
-    <div className="h-1 w-full overflow-hidden rounded-full bg-line">
-      <div className="h-full rounded-full bg-accent transition-all duration-300" style={{ width: `${pct}%` }} />
+    <div className="fp-rise overflow-hidden rounded-xl border border-line bg-panel p-5">
+      <div className="flex items-center gap-4">
+        {/* animated ping rings — on-brand (form + ping) */}
+        <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+          <span className="absolute inline-flex h-10 w-10 animate-ping rounded-full bg-accent/15 [animation-duration:2s] motion-reduce:animate-none" aria-hidden />
+          <span className="absolute h-12 w-12 rounded-full border border-accent/15" aria-hidden />
+          <span className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-panel-raised text-accent-soft ring-1 ring-line-strong">
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden>
+              <rect x="4" y="3" width="16" height="18" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
+              <path d="M8 8h8M8 12h8M8 16h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-ink">{headline}</p>
+            {total > 1 && <span className="shrink-0 font-mono text-xs text-ink-faint">{current}/{total}</span>}
+          </div>
+          <p className="mt-0.5 text-xs leading-relaxed text-ink-muted">{sub}</p>
+          {(phase || cur) && (
+            <p className="mt-1.5 flex min-w-0 items-center gap-1.5 text-xs text-ink-faint">
+              <span className="inline-flex h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent" />
+              {phase && <span className="shrink-0">{phase}</span>}
+              {cur && <span className="truncate font-mono text-ink-faint/70">{phase ? '· ' : ''}{cur}</span>}
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="mt-3">
+        <RunBar current={current} total={total} />
+      </div>
     </div>
   );
 }
 
-export function ResultsPanel({ results, progress, logs, running, onClear }: Props) {
+export function ResultsPanel({ results, progress, logs, running, landingPage, mode, onClear }: Props) {
   const pass = results.filter((r) => r.finalStatus === 'pass').length;
   const fail = results.filter((r) => r.finalStatus === 'fail').length;
   const warn = results.filter((r) => r.finalStatus === 'warn').length;
@@ -49,22 +140,12 @@ export function ResultsPanel({ results, progress, logs, running, onClear }: Prop
 
   return (
     <div className="space-y-4">
-      {/* Stats bar */}
-      {(results.length > 0 || running) && (
-        <div className="rounded-xl border border-line bg-panel p-4">
-          {running && progress && (
-            <div className="mb-3 space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-accent" />
-                  <span className="max-w-xs truncate font-mono text-ink-secondary">{progress.currentUrl || 'Running…'}</span>
-                </div>
-                <span className="shrink-0 font-mono text-ink-faint">{progress.current}/{progress.total}</span>
-              </div>
-              <ProgressBar current={progress.current} total={progress.total} />
-            </div>
-          )}
+      {/* Running loader — contextual copy (whole-site vs landing page) */}
+      {running && <RunningLoader progress={progress} landingPage={landingPage} mode={mode} logs={logs} />}
 
+      {/* Stats bar — only once there are results (no "0 TOTAL" mid-run) */}
+      {results.length > 0 && (
+        <div className="rounded-xl border border-line bg-panel p-4">
           <div className="flex flex-wrap items-center gap-2">
             <StatPill count={results.length} label="Total" color="bg-panel-raised text-ink-secondary" />
             {pass > 0 && <StatPill count={pass} label="Pass" color="bg-ok/10 text-ok" />}
@@ -101,20 +182,9 @@ export function ResultsPanel({ results, progress, logs, running, onClear }: Prop
         </div>
       )}
 
-      {/* Log feed */}
-      {running && logs.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-line bg-panel">
-          <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
-            <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Live log</span>
-          </div>
-          <div className="max-h-32 space-y-1 overflow-y-auto px-4 py-3">
-            {logs.slice(-20).map((log, i) => (
-              <p key={i} className="truncate font-mono text-xs text-ink-muted">{log}</p>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Raw engine logs are intentionally NOT shown to users — they're internal
+          diagnostics (version, proxy state, byte counts, discovery steps). The
+          RunningLoader above surfaces a friendly, progress-tracking phase instead. FR-64 */}
 
       {/* Results list */}
       <div className="space-y-3">
