@@ -9,7 +9,7 @@ const NEGATIVE_SUBMIT_PATTERNS = [/subscribe/i, /newsletter/i, /sign\s*up/i, /re
 const NEGATIVE_FORM_PATTERNS = [/search/i, /newsletter/i, /subscribe/i];
 
 // Positive submit button patterns
-const POSITIVE_SUBMIT_PATTERNS = [/^send$/i, /^submit$/i, /send\s+message/i, /contact\s+us/i, /get\s+in\s+touch/i, /^send\s+it$/i, /^go$/i, /^submit\s+form$/i];
+const POSITIVE_SUBMIT_PATTERNS = [/^send$/i, /^submit$/i, /send\b[\w\s]{0,20}\bmessage/i, /contact\s+us/i, /get\s+in\s+touch/i, /^send\s+it$/i, /^go$/i, /^submit\s+form$/i, /let'?s\s+(talk|connect|chat)/i, /send\s+(my\s+)?(enquiry|inquiry|request|details)/i];
 
 interface FormInfo {
   index: number;
@@ -20,6 +20,11 @@ interface FormInfo {
   fields: FieldInfo[];
   submitText: string;
   allText: string;
+  /** False when the form is inside a display:none / visibility:hidden / zero-size
+   *  container — e.g. a step of a multi-step widget that's revealed on "Next"
+   *  (FR-62). Kept (not filtered out) so a hidden-but-real contact form is still
+   *  detected; visibility is weighed at selection time. */
+  visible: boolean;
 }
 
 interface FieldInfo {
@@ -102,9 +107,11 @@ async function extractForms(page: Page): Promise<FormInfo[]> {
         fields,
         submitText,
         allText: form.textContent?.slice(0, 500) ?? '',
-        _visible: formVisible,
+        visible: formVisible,
       };
-    }).filter((f) => (f as any)._visible);
+    });
+    // FR-62: return ALL forms (including hidden ones — multi-step steps sit at
+    // display:none until revealed). Selection in findContactForm weighs `visible`.
   }) as Promise<FormInfo[]>;
 }
 
@@ -193,6 +200,10 @@ export interface FindContactFormResult {
    *  the user asserted the form is on this page — i.e. it scored below the
    *  contact-form threshold but was taken anyway (FR-28). */
   acceptedByLandingLeniency: boolean;
+  /** True when the accepted form sits inside a hidden multi-step widget (a
+   *  display:none step revealed via "Next"). It's DETECTED, but the runner should
+   *  not attempt a blind fill in safe/live mode — stepping through is Phase 2 (FR-62). */
+  hiddenMultiStep: boolean;
 }
 
 export async function findContactForm(
@@ -223,8 +234,19 @@ export async function findContactForm(
 
   scored.sort((a, b) => b.score - a.score);
 
+  // FR-62: prefer a VISIBLE form. A hidden form (a multi-step step sitting at
+  // display:none until "Next" is clicked) is only taken when it clearly signals a
+  // contact form, so we never pick up stray hidden/junk forms.
+  const visById = new Map(rawForms.map((f) => [f.index, f.visible]));
+  const isVisible = (c: FormCandidate) => visById.get(c.index) === true;
+  const HIDDEN_ACCEPT_MIN = 25;
+
   let usedAiFallback = false;
-  const best = scored[0];
+  const bestOverall = scored[0];
+  let best = scored.find(isVisible);
+  if ((!best || best.score < 0) && bestOverall && !isVisible(bestOverall) && bestOverall.score >= HIDDEN_ACCEPT_MIN) {
+    best = bestOverall;
+  }
 
   // AI rescue path: deterministic scoring rejected every form. Before giving
   // up, ask the AI to look at all forms (with their fields) and decide if any
@@ -253,6 +275,7 @@ export async function findContactForm(
           usedAiFallback,
           embeds,
           acceptedByLandingLeniency: false,
+          hiddenMultiStep: !isVisible(picked),
         };
       }
     }
@@ -260,22 +283,29 @@ export async function findContactForm(
 
   if (!best || best.score < 0) {
     // Landing-page leniency (FR-28): the user asserted "the form is on THIS
-    // page", so if there IS a visible native form, accept the best-scoring one
-    // even though it didn't clear the contact-form threshold. A quiz /
-    // assessment / booking / non-standard form is still a real form we should
-    // test — better than a false "no contact form found". Non-landing runs keep
-    // the strict threshold (there we're auto-discovering, so precision matters).
-    if (config.landingPage && best) {
-      logger.debug(`Landing-page leniency: accepting best form index=${best.index} score=${best.score} (below threshold)`);
+    // page", so accept the best-scoring form — visible OR a hidden multi-step one
+    // (FR-62) — even below the contact-form threshold. Non-landing runs keep the
+    // strict threshold (auto-discovery, so precision matters).
+    if (config.landingPage && bestOverall) {
+      const hidden = !isVisible(bestOverall);
+      logger.debug(`Landing-page leniency: accepting form index=${bestOverall.index} score=${bestOverall.score}${hidden ? ' (hidden/multi-step)' : ''} (below threshold)`);
       return {
-        form: { ...best, signals: [...best.signals, 'accepted in landing-page mode (below contact-form threshold)'] },
+        form: {
+          ...bestOverall,
+          signals: [
+            ...bestOverall.signals,
+            'accepted in landing-page mode (below contact-form threshold)',
+            ...(hidden ? ['hidden/multi-step form (revealed via steps)'] : []),
+          ],
+        },
         allForms: scored,
         usedAiFallback,
         embeds,
         acceptedByLandingLeniency: true,
+        hiddenMultiStep: hidden,
       };
     }
-    return { form: null, allForms: scored, usedAiFallback, embeds, acceptedByLandingLeniency: false };
+    return { form: null, allForms: scored, usedAiFallback, embeds, acceptedByLandingLeniency: false, hiddenMultiStep: false };
   }
 
   // If ambiguous (two forms within 5 points) and AI is enabled, fall back to AI
@@ -294,6 +324,16 @@ export async function findContactForm(
     }
   }
 
-  logger.debug(`Best form: index=${chosen.index} score=${chosen.score} signals=[${chosen.signals.join(', ')}]`);
-  return { form: chosen, allForms: scored, usedAiFallback, embeds, acceptedByLandingLeniency: false };
+  const chosenHidden = !isVisible(chosen);
+  logger.debug(`Best form: index=${chosen.index} score=${chosen.score}${chosenHidden ? ' (hidden/multi-step)' : ''} signals=[${chosen.signals.join(', ')}]`);
+  return {
+    form: chosenHidden
+      ? { ...chosen, signals: [...chosen.signals, 'hidden/multi-step form (revealed via steps)'] }
+      : chosen,
+    allForms: scored,
+    usedAiFallback,
+    embeds,
+    acceptedByLandingLeniency: false,
+    hiddenMultiStep: chosenHidden,
+  };
 }
