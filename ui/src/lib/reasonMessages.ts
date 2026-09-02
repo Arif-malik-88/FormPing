@@ -58,6 +58,11 @@ const MESSAGES: Record<string, ReasonMessage> = {
     description: 'Fields could not be interacted with. This can happen with custom inputs, shadow-DOM components, or JS-controlled widgets. See errors below.',
     severity: 'warn',
   },
+  MULTI_STEP_FORM_DETECTED: {
+    title: 'Form found — multi-step',
+    description: 'The contact form was found, but its fields are split across steps revealed one at a time (a "Next"-style wizard). FormPing detected it; stepping through to fill each panel isn\'t supported yet, so verify it manually for now. Nothing is broken.',
+    severity: 'info',
+  },
   SAFE_MODE_NO_SUBMIT: {
     title: 'Safe mode — form filled, not submitted',
     description: 'The form was filled successfully. Switch to Live mode to submit for real.',
