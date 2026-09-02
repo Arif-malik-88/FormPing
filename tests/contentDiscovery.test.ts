@@ -94,6 +94,20 @@ describe('selectCandidateUrls (FR-59)', () => {
     expect(new Set(urls).size).toBe(urls.length);
   });
 
+  it('ranks a hint-less lead page (/partner-with-me) up, not just /contact (FR-62)', () => {
+    const urls = selectCandidateUrls(
+      'https://x.com/',
+      [
+        { href: '/about', text: 'About' },
+        { href: '/partner-with-me', text: 'Partner with me' },
+      ],
+      [],
+      { ...OPTS, cap: 3 },
+    );
+    // homepage first, then /partner-with-me (broad lead-page hint) before /about
+    expect(urls[1]).toBe('https://x.com/partner-with-me');
+  });
+
   it('ranks contact-ish links above generic deep ones', () => {
     const urls = selectCandidateUrls(
       'https://x.com/',
