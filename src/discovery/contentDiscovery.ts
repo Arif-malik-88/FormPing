@@ -46,6 +46,14 @@ export interface SelectOpts {
   cap: number;
 }
 
+// Broad "this might be a contact / lead page" vocabulary (FR-62) — used ONLY to
+// RANK which pages the fallback scans, never as a gate. Wider than the strict
+// contact slugs so hint-less lead pages (/partner-with-me, /work-with-us,
+// /book-a-call, /lets-talk) rise into the scan set instead of being crowded out.
+const CANDIDATE_HINT_PATTERNS: RegExp[] = [
+  /contact|get[-\s]?in[-\s]?touch|reach|connect|partner|work[-\s]?with|collaborat|hire|book|quote|enquir|inquir|get[-\s]?started|join|let'?s[-\s]?(talk|chat|connect)|say[-\s]?hello|say[-\s]?hi/i,
+];
+
 /**
  * FR-59 — choose which pages the content-discovery fallback should fetch: the
  * homepage (always — catches homepage-only forms) plus same-origin nav/footer
@@ -74,8 +82,11 @@ export function selectCandidateUrls(
     if (opts.excludePathPatterns.some((p) => p.test(path))) return;
     seen.add(key);
     let rank = 0;
+    const text = hintText ? normalizeText(hintText) : '';
     if (opts.contactPathPatterns.some((p) => p.test(path))) rank += 3;
-    if (hintText && opts.contactTextPatterns.some((p) => p.test(normalizeText(hintText)))) rank += 2;
+    if (text && opts.contactTextPatterns.some((p) => p.test(text))) rank += 2;
+    // Broad lead-page hint (path OR anchor text) — the FR-62 widening.
+    if (CANDIDATE_HINT_PATTERNS.some((p) => p.test(path) || (text !== '' && p.test(text)))) rank += 2;
     if (path.split('/').filter(Boolean).length <= 1) rank += 1; // shallow pages first
     ranked.push({ url: resolved, rank });
   };
