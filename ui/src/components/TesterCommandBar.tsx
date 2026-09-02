@@ -82,6 +82,11 @@ export function TesterCommandBar({ value, onChange, onRun, onStop, running, conf
             className="w-full bg-transparent font-mono text-[15px] text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
           />
         </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
+          {config.landingPage
+            ? 'Landing page is on — we test only the exact page you enter, not the rest of the site.'
+            : 'We search the whole site to find the contact form. Testing one specific page? Turn on Landing page to check just the URL you enter.'}
+        </p>
       </div>
 
       {/* Control bar */}
@@ -117,7 +122,7 @@ export function TesterCommandBar({ value, onChange, onRun, onStop, running, conf
         {/* Landing toggle */}
         <label className="flex cursor-pointer items-center gap-2">
           <Toggle checked={config.landingPage} onChange={(v) => set('landingPage', v)} disabled={running} />
-          <span className="text-xs font-medium text-ink-secondary" title="Test the form on this exact URL — skip searching for a separate contact page.">Landing page</span>
+          <span className="text-xs font-medium text-ink-secondary" title="Test only this exact page — no site search. Use it for standalone landing pages, or when the form is a quiz / booking / 'work with me' style that the default whole-site search might skip. Also faster (no crawling).">Landing page</span>
         </label>
 
         <span className="hidden h-7 w-px shrink-0 self-center bg-line lg:block" aria-hidden />
@@ -142,10 +147,17 @@ export function TesterCommandBar({ value, onChange, onRun, onStop, running, conf
         </div>
       </div>
 
-      {/* Live-mode safety note */}
-      {config.mode === 'live' && (
+      {/* Per-mode note: neutral, informational for Detect/Safe; a red safety
+          warning for Live (it sends a real message). FR-64 */}
+      {config.mode === 'live' ? (
         <div className="border-t border-danger/20 bg-danger/5 px-4 py-2 text-xs text-danger last:rounded-b-2xl sm:px-5">
           ⚠ Live mode submits real forms. Use only on sites you own or are authorized to test.
+        </div>
+      ) : (
+        <div className="border-t border-line bg-panel px-4 py-2 text-xs text-ink-muted last:rounded-b-2xl sm:px-5">
+          {config.mode === 'detect-only'
+            ? 'Detect mode — we only confirm a contact form exists on the page. Nothing is filled or submitted.'
+            : 'Safe mode — we find the form and fill it with test data, but never submit. Nothing is sent to the site.'}
         </div>
       )}
 
