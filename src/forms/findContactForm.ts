@@ -229,7 +229,16 @@ export async function findContactForm(
       action: form.action,
       method: form.method,
     };
-    return { index: form.index, identifier, score, signals, negativeSignals };
+    return {
+      index: form.index,
+      identifier,
+      score,
+      signals,
+      negativeSignals,
+      // Carry the detected fields (label + type) so the runner can report
+      // "N fields: Name, Email, Message …" on the result card. FR-64.
+      fields: form.fields.map((f) => ({ label: f.label || f.placeholder || f.name, type: f.type })),
+    };
   });
 
   scored.sort((a, b) => b.score - a.score);

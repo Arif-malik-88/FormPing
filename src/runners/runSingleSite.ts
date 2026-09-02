@@ -6,6 +6,7 @@ import { findContactForm } from '../forms/findContactForm.js';
 import { fillForm } from '../forms/fillForm.js';
 import { submitForm } from '../forms/submitForm.js';
 import { detectCaptcha, detectAntiBot } from '../forms/detectSuccess.js';
+import { nativeFormFacts, embedFormFacts } from './formFacts.js';
 import {
   newPage,
   closePage,
@@ -95,6 +96,10 @@ export async function runSingleSite(
       baseResult.resolvedContactPage = normalizedUrl;
       baseResult.contactPageFound = true;
       baseResult.contactPageConfidence = 1;
+      // Flag so the card knows discovery was skipped — it must NOT render a
+      // "contact page 100%" confidence bar (there was nothing to discover; the
+      // user asserted the URL). FR-64.
+      baseResult.landingPageMode = true;
       baseResult.notes.push(
         'Landing-page mode: tested the form on the given URL directly (contact-page discovery skipped)',
       );
@@ -246,7 +251,7 @@ export async function runSingleSite(
       }
 
       // ── Step 3: Find contact form ──────────────────────────────────────────
-      const { form, allForms, embeds, acceptedByLandingLeniency } = await findContactForm(page, config);
+      const { form, allForms, embeds, acceptedByLandingLeniency, hiddenMultiStep } = await findContactForm(page, config);
 
       if (!form) {
         // If the contact page itself looks like a hosting-provider block
@@ -281,8 +286,10 @@ export async function runSingleSite(
         //     Report it (Attention, not a hard fail — nothing is actually broken).
         if (embeds.length > 0) {
           const names = embeds.map((e) => e.provider).join(', ');
+          const embedFacts = embedFormFacts(embeds);
           return {
             ...baseResult,
+            ...embedFacts,
             finalUrl: page.url(),
             captchaDetected,
             finalStatus: 'warn',
@@ -332,7 +339,10 @@ export async function runSingleSite(
           reasonCode: 'FORM_NOT_FOUND',
           notes: [
             ...baseResult.notes,
-            `No form found on the page (contact page was ${pageHtml.length}B, ${formTagCount} <form> tags in HTML).`,
+            `No form found on the page (${pageHtml.length}B, ${formTagCount} <form> tags in HTML).`,
+            ...(config.landingPage
+              ? ['Landing-page mode tested this exact URL — if the form lives on a different page, turn Landing-page mode off to let FormPing discover the contact page.']
+              : []),
           ],
           durationMs: Date.now() - start,
         };
@@ -343,13 +353,24 @@ export async function runSingleSite(
       baseResult.formConfidence = formConfidence;
       baseResult.formIdentifier = form.identifier;
 
-      // Surface WHY this form was accepted (score + signals) in the result, so
-      // the run history explains the detection rather than a bare "found" (FR-28).
+      // Attach the human-facing form facts (type / field count + names /
+      // multi-step) so every downstream card — Tester and Scheduler, all modes —
+      // can describe what was found. Refined after fill (stepsTraversed). FR-64.
+      const facts = nativeFormFacts(form, { hiddenMultiStep });
+      baseResult.formType = facts.formType;
+      baseResult.fieldCount = facts.fieldCount;
+      baseResult.fields = facts.fields;
+      baseResult.isMultiStep = facts.isMultiStep;
+
+      // Plain, user-facing detection note (FR-64). The detector score + signal
+      // list are developer-internal and confusing on the result card / run log —
+      // they're logged for debugging just below, not surfaced to users.
       baseResult.notes.push(
         acceptedByLandingLeniency
-          ? `Accepted this page's form in Landing-page mode despite a low contact score (${form.score}) — signals: ${form.signals.join(', ') || 'none'}.`
-          : `Contact form detected — score ${form.score} (signals: ${form.signals.join(', ') || 'none'}).`,
+          ? 'Contact form detected on this page (accepted in Landing-page mode).'
+          : 'Contact form detected.',
       );
+      logger.debug(`Form score=${form.score} signals=[${form.signals.join(', ')}]`);
 
       logger.info(`Form found (confidence=${formConfidence.toFixed(2)}): ${JSON.stringify(form.identifier)}`);
 
@@ -394,6 +415,7 @@ export async function runSingleSite(
       // Multi-step diagnostic: only surface when we actually advanced past
       // step 1, so we don't clutter notes on every single-step form.
       if (stepsTraversed > 1) {
+        baseResult.isMultiStep = true;
         baseResult.notes.push(
           `Multi-step form: traversed ${stepsTraversed} step(s) before reaching submit`,
         );
@@ -444,12 +466,29 @@ export async function runSingleSite(
       }
 
       if (filledFields.length === 0) {
+        // A hidden multi-step form is DETECTED but its fields live in steps that
+        // are revealed on "Next" — a blind fill can't reach them yet (walking the
+        // steps is Phase 2, FR-63). Report it as "found, multi-step", NOT the
+        // scary "could not fill required fields" that reads like a broken form. FR-64.
+        if (baseResult.isMultiStep || hiddenMultiStep) {
+          return {
+            ...baseResult,
+            finalUrl: page.url(),
+            finalStatus: 'warn',
+            reasonCode: 'MULTI_STEP_FORM_DETECTED',
+            notes: [
+              ...baseResult.notes,
+              `Detected a multi-step form (${baseResult.fieldCount ?? 0} field(s) across its steps). The form was found, but stepping through to fill each panel isn't supported yet — verify it manually for now.`,
+            ],
+            durationMs: Date.now() - start,
+          };
+        }
         return {
           ...baseResult,
           finalUrl: page.url(),
           finalStatus: 'warn',
           reasonCode: 'REQUIRED_FIELDS_UNSUPPORTED',
-          notes: [`All ${skippedFields.length} field(s) skipped — see errors for details`],
+          notes: [...baseResult.notes, `All ${skippedFields.length} field(s) skipped — see errors for details`],
           durationMs: Date.now() - start,
         };
       }
