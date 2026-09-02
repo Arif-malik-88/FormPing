@@ -28,6 +28,11 @@ export type ReasonCode =
   // so the card can say "found, multi-step" instead of "could not fill". Walking
   // the steps to fill/submit is Phase 2 (FR-63). FR-64.
   | 'MULTI_STEP_FORM_DETECTED'
+  // Live mode: a multi-step/wizard form was filled through its steps, but the
+  // submission was deliberately HELD because it wasn't a clean, complete entry
+  // (didn't reach the final step, or no email was filled) — so we don't drop a
+  // partial/junk submission into the client's inbox. FR-63.
+  | 'SUBMIT_HELD_INCOMPLETE'
   | 'SAFE_MODE_NO_SUBMIT'
   | 'DETECT_ONLY'
   | 'SUBMIT_FAILED'

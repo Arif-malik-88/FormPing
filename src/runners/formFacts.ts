@@ -49,6 +49,21 @@ export function embedFormFacts(embeds: EmbedDetection[]): EmbedFormFacts | null 
   return { formType: 'third-party', embedProvider: first.provider, embedKind: first.kind };
 }
 
+/**
+ * FR-63 — decide whether to HOLD a live submission on a multi-step/wizard form.
+ * Walking a wizard means we chose values on earlier steps, so we only submit for
+ * real when we reached the final step AND filled an email (a real, lead-shaped
+ * entry). Non-wizard forms are never held here. Pure — unit-tested.
+ */
+export function shouldHoldMultiStepSubmit(opts: {
+  isWizard: boolean;
+  reachedSubmit: boolean;
+  filledEmail: boolean;
+}): boolean {
+  if (!opts.isWizard) return false;
+  return !(opts.reachedSubmit && opts.filledEmail);
+}
+
 /** Human phrase for how an embed is mounted — for the card copy. */
 export function embedKindLabel(kind: EmbedDetection['kind']): string {
   switch (kind) {
