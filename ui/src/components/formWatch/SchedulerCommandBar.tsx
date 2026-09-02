@@ -151,9 +151,16 @@ export function SchedulerCommandBar({ url, onUrl, days, onDays, mode, onMode, la
         </label>
 
         <div className="ml-auto">
-          <button type="submit" disabled={adding || url.trim().length === 0} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-b from-accent to-accent-strong px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-accent-deep/40 ring-1 ring-accent-soft/20 transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">
-            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden><path d="M10 5a.75.75 0 01.75.75v3.5h3.5a.75.75 0 010 1.5h-3.5v3.5a.75.75 0 01-1.5 0v-3.5h-3.5a.75.75 0 010-1.5h3.5v-3.5A.75.75 0 0110 5z" /></svg>
-            {adding ? 'Adding…' : 'Add monitor'}
+          <button type="submit" disabled={adding || url.trim().length === 0} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-b from-accent to-accent-strong px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-accent-deep/40 ring-1 ring-accent-soft/20 transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">
+            {adding ? (
+              <svg className="h-4 w-4 animate-spin motion-reduce:animate-none" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" className="opacity-25" />
+                <path d="M21 12a9 9 0 00-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden><path d="M10 5a.75.75 0 01.75.75v3.5h3.5a.75.75 0 010 1.5h-3.5v3.5a.75.75 0 01-1.5 0v-3.5h-3.5a.75.75 0 010-1.5h3.5v-3.5A.75.75 0 0110 5z" /></svg>
+            )}
+            {adding ? 'Adding monitor…' : 'Add monitor'}
           </button>
         </div>
       </div>
