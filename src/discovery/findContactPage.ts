@@ -6,6 +6,7 @@ import { normalizeUrl } from '../utils/url.js';
 import { normalizeText, containsAny } from '../utils/text.js';
 import { scoreContactLinks } from './scoreContactLinks.js';
 import { selectCandidateUrls, rankByFormSignature } from './contentDiscovery.js';
+import { scoreContactFormSignature } from './formSignature.js';
 import { fetchSitemapUrls } from './sitemap.js';
 import { logger } from '../utils/logger.js';
 
@@ -367,17 +368,30 @@ export async function findContactPage(
     // display:none multi-step forms. Bounded, and only runs when the cheap pass
     // came up empty — so fast/static sites never pay for it.
     const RENDER_CAP = 5;
+    // A clear contact-form signature — as soon as one candidate renders with a
+    // score this high we stop rendering the rest, which is what cut the ~55s
+    // hard-site cost down to roughly one page render. FR-63.
+    const STRONG_SIGNATURE = 40;
+    // Cap each render so one hanging page can't burn the whole budget; the full
+    // navigationTimeout is for the primary flow, not this bounded escalation.
+    const renderTimeout = Math.min(config.navigationTimeout, 12000);
     const renderedPages: { url: string; html: string }[] = [];
     for (const u of poolUrls.slice(0, RENDER_CAP)) {
       try {
         const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
-        ctx.setDefaultNavigationTimeout(config.navigationTimeout);
+        ctx.setDefaultNavigationTimeout(renderTimeout);
         const pg = await ctx.newPage();
-        await pg.goto(u, { waitUntil: 'domcontentloaded' });
-        await pg.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => { /* ignore */ });
+        await pg.goto(u, { waitUntil: 'domcontentloaded', timeout: renderTimeout });
+        await pg.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => { /* ignore */ });
         const rendered = await pg.content();
         await ctx.close();
         renderedPages.push({ url: u, html: rendered });
+        // Short-circuit: a strong contact-form signature means we've found it —
+        // don't render the remaining candidates.
+        if (scoreContactFormSignature(rendered).score >= STRONG_SIGNATURE) {
+          logger.info(`Content-discovery render: strong contact form on ${u} — short-circuiting`);
+          break;
+        }
       } catch (err) {
         logger.debug(`Content-discovery render failed for ${u}: ${err}`);
       }

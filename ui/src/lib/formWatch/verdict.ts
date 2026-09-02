@@ -55,6 +55,9 @@ const ATTENTION = new Set([
   // yet — the form exists (not a red "broken"), but monitoring can't confirm a
   // submission, so it's amber "worth a look". FR-64.
   'MULTI_STEP_FORM_DETECTED',
+  // Multi-step form was filled but the live submission was held back (not a
+  // clean entry) — worth a look, not a breakage. FR-63.
+  'SUBMIT_HELD_INCOMPLETE',
 ]);
 
 const LABELS: Record<string, string> = {
@@ -67,6 +70,7 @@ const LABELS: Record<string, string> = {
   NON_CONTACT_FORM_FOUND: 'Found a form — not a contact form',
   THIRD_PARTY_EMBED_FORM: 'Third-party embed form found',
   MULTI_STEP_FORM_DETECTED: 'Multi-step form found',
+  SUBMIT_HELD_INCOMPLETE: 'Multi-step filled — submission held',
   CONTACT_PAGE_NOT_FOUND: 'No contact page found',
   CONTACT_PAGE_AMBIGUOUS: 'Contact page ambiguous',
   FORM_AMBIGUOUS: 'Multiple forms — ambiguous',

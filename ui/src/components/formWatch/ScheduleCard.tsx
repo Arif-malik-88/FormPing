@@ -7,7 +7,7 @@ import { TrendBar, type TrendTone } from '@/components/TrendBar';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cx, KeptNotice } from '@/components/ui';
 import { friendlyNotes } from '@/lib/friendlyNotes';
-import { FormFactChips } from '@/components/FormFactChips';
+import { FormSummary } from '@/components/FormFactChips';
 
 const LEVEL_STYLE: Record<VerdictLevel | 'pending', { dot: string; text: string; label: string }> = {
   healthy: { dot: 'bg-ok', text: 'text-ok', label: 'Healthy' },
@@ -18,10 +18,6 @@ const LEVEL_STYLE: Record<VerdictLevel | 'pending', { dot: string; text: string;
 
 const MODE_LABEL: Record<string, string> = { 'detect-only': 'Detect', safe: 'Safe', live: 'Live' };
 
-function pathOf(url: string | null): string {
-  if (!url) return '';
-  try { return new URL(url).pathname || '/'; } catch { return url; }
-}
 
 function relativeTime(iso: string | null): string {
   if (!iso) return '—';
@@ -200,18 +196,20 @@ export function ScheduleCard({
           </p>
         )}
 
-        {/* Live can't actually submit multi-step / third-party forms yet — say so
-            up front so a Live schedule that never submits isn't a surprise. FR-64.
-            (Multi-step submission is FR-63; cross-origin embeds can't be submitted.) */}
+        {/* Up-front heads-up when a Live schedule's last run couldn't submit for
+            real — a cross-origin embed (never submittable) or a multi-step form
+            that couldn't be filled/held. So a Live schedule that never submits
+            isn't a surprise. FR-63/FR-64. */}
         {schedule.mode === 'live' &&
-          (schedule.lastReasonCode === 'MULTI_STEP_FORM_DETECTED' || schedule.lastReasonCode === 'THIRD_PARTY_EMBED_FORM') && (
+          (schedule.lastReasonCode === 'MULTI_STEP_FORM_DETECTED' ||
+            schedule.lastReasonCode === 'THIRD_PARTY_EMBED_FORM' ||
+            schedule.lastReasonCode === 'SUBMIT_HELD_INCOMPLETE') && (
             <p className="mt-2.5 rounded-md border border-warn/25 bg-warn/10 px-3 py-2 text-[11px] text-warn">
-              Live mode can’t submit this form yet — it’s a{' '}
-              {schedule.lastReasonCode === 'THIRD_PARTY_EMBED_FORM' ? 'third-party embedded' : 'multi-step'} form. Each run will
-              keep reporting it as <strong>detected</strong> (not submitted).{' '}
               {schedule.lastReasonCode === 'THIRD_PARTY_EMBED_FORM'
-                ? 'Cross-origin embeds can’t be auto-submitted — verify it manually.'
-                : 'Step-through submission is coming soon; use Detect or Safe in the meantime.'}
+                ? 'This is a third-party embedded form — a cross-origin embed can’t be auto-submitted. Live runs report it as detected; verify it manually.'
+                : schedule.lastReasonCode === 'SUBMIT_HELD_INCOMPLETE'
+                  ? 'This multi-step form gets filled, but Live held the submission because the run didn’t cleanly reach the end with an email — no partial entry is sent. Verify it manually.'
+                  : 'This multi-step form couldn’t be auto-filled on the last run. Live can’t submit what it can’t fill — verify it manually.'}
             </p>
           )}
 
@@ -270,21 +268,17 @@ function RunRow({ run }: { run: FormRunRecord }) {
       {(() => {
         const fp = run.fingerprint;
         const embed = fp.formType === 'third-party';
-        const foundPath = pathOf(fp.contactPage);
         if (!fp.formFound && !embed) return null;
         // Step-ness is only shown when actually known (new-format records);
         // legacy runs without the facts omit it rather than guess.
         const stepKnown = fp.formType === 'native' || fp.isMultiStep === true;
-        const names = (fp.fields ?? []).map((f) => f.label?.trim()).filter(Boolean) as string[];
-        const shown = names.slice(0, 6);
-        const more = names.length > shown.length ? `, +${names.length - shown.length} more` : '';
         return (
-          <div className="mt-1.5 space-y-1 text-[11px] text-ink-muted">
+          <div className="mt-2 space-y-1.5 text-[11px] text-ink-muted">
             <div>
               <span className="font-medium text-ink-secondary">Form found</span>
-              {foundPath && <> on <span className="font-mono text-ink-faint">{foundPath}</span></>}
+              {fp.contactPage && <> on <span className="break-all font-mono text-ink-faint">{fp.contactPage}</span></>}
             </div>
-            <FormFactChips
+            <FormSummary
               formType={fp.formType}
               embedProvider={fp.embedProvider}
               embedKind={fp.embedKind}
@@ -293,7 +287,6 @@ function RunRow({ run }: { run: FormRunRecord }) {
               stepKnown={stepKnown}
               captchaPresent={fp.captchaDetected}
             />
-            {!embed && shown.length > 0 && <div className="text-ink-faint">{shown.join(', ')}{more}</div>}
           </div>
         );
       })()}

@@ -13,6 +13,8 @@ const NOTE_NOISE = [
   /\d+\s?B\b/i,           // byte counts, e.g. "1234B"
   /<form>?\s*tags?|form tags/i, // "0 <form> tags in HTML"
   /candidate\(s\)/i,      // "Tried 8 candidate(s)"
+  /^filled\s+\d+\s+field/i,  // "Filled 3 field(s): …" — the count is already shown
+  /^skipped\s+\d+\s+field/i, // "Skipped 11 field(s): radio:… " — internal + noisy
 ];
 
 export function friendlyNotes(notes: string[]): string[] {

@@ -60,8 +60,13 @@ const MESSAGES: Record<string, ReasonMessage> = {
   },
   MULTI_STEP_FORM_DETECTED: {
     title: 'Form found — multi-step',
-    description: 'The contact form was found, but its fields are split across steps revealed one at a time (a "Next"-style wizard). FormPing detected it; stepping through to fill each panel isn\'t supported yet, so verify it manually for now. Nothing is broken.',
+    description: 'The contact form was found, but its fields are split across steps revealed one at a time (a "Next"-style wizard). FormPing detected it but could not fill it this time. Nothing is broken — verify it manually for now.',
     severity: 'info',
+  },
+  SUBMIT_HELD_INCOMPLETE: {
+    title: 'Multi-step form filled — submission held',
+    description: 'FormPing walked the steps of this multi-step form and filled it, but deliberately did NOT submit — the run either didn\'t reach the final step or couldn\'t enter a valid email, so submitting would send an incomplete entry. No junk lands in the inbox; verify the form by hand.',
+    severity: 'warn',
   },
   SAFE_MODE_NO_SUBMIT: {
     title: 'Safe mode — form filled, not submitted',

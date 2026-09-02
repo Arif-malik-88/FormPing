@@ -1,6 +1,20 @@
 'use client';
+import { useEffect, useState } from 'react';
 import type { SiteResult, RunProgress, SubmitMode } from '@/types';
 import { ResultCard } from './ResultCard';
+import { runVerdict } from '@/lib/formWatch/verdict';
+
+// Plain, on-brand facts shown while a test runs — makes the wait feel purposeful
+// and teaches what the tool is doing. Rotated in the loader. FR-63.
+const RUN_FACTS = [
+  'A broken contact form can quietly lose leads for weeks before anyone notices.',
+  'Most forms fail silently — no error shows, the message just never arrives.',
+  'We fill the form with realistic test data, so the run behaves like a real visitor.',
+  'In Safe mode nothing is ever sent — we stop right before submitting.',
+  'Multi-step forms are walked one step at a time, just like a person would.',
+  'Embedded forms (Typeform, HubSpot, Calendly…) are detected even inside an iframe.',
+  'A green thank-you page isn’t proof — we watch for the real success signal after submit.',
+];
 
 interface Props {
   results: SiteResult[];
@@ -35,7 +49,7 @@ function RunBar({ current, total }: { current: number; total: number }) {
       </div>
     );
   }
-  return <div className="h-1 w-full animate-pulse rounded-full bg-accent/60 motion-reduce:animate-none" />;
+  return <div className="fp-indeterminate h-1 w-full rounded-full bg-line" />;
 }
 
 // Map raw engine log lines to a friendly, user-facing phase. We NEVER show the
@@ -84,6 +98,12 @@ function RunningLoader({
   const current = progress?.current ?? 0;
   const cur = progress?.currentUrl;
   const phase = friendlyPhase(logs);
+  // Rotate a "did you know" fact every few seconds while the run is in flight.
+  const [factIdx, setFactIdx] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setFactIdx((i) => (i + 1) % RUN_FACTS.length), 8000);
+    return () => clearInterval(t);
+  }, []);
   return (
     <div className="fp-rise overflow-hidden rounded-xl border border-line bg-panel p-5">
       <div className="flex items-center gap-4">
@@ -116,15 +136,26 @@ function RunningLoader({
       <div className="mt-3">
         <RunBar current={current} total={total} />
       </div>
+      {/* Rotating fact — makes the wait purposeful + teaches what the tool does */}
+      <div className="mt-3 flex items-start gap-2 border-t border-line pt-3">
+        <svg viewBox="0 0 24 24" fill="none" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-soft" aria-hidden>
+          <path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.6.6 1 1.2 1 2h6c0-.8.4-1.4 1-2A6 6 0 0012 3z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <p key={factIdx} className="fp-rise text-xs leading-relaxed text-ink-muted">
+          <span className="font-semibold text-ink-secondary">Did you know?</span> {RUN_FACTS[factIdx]}
+        </p>
+      </div>
     </div>
   );
 }
 
 export function ResultsPanel({ results, progress, logs, running, landingPage, mode, onClear }: Props) {
-  const pass = results.filter((r) => r.finalStatus === 'pass').length;
-  const fail = results.filter((r) => r.finalStatus === 'fail').length;
-  const warn = results.filter((r) => r.finalStatus === 'warn').length;
-  const error = results.filter((r) => r.finalStatus === 'error').length;
+  // Tally by mode-aware verdict (not raw status), so a healthy safe/detect run
+  // counts as OK — never a misleading "WARN". Matches the per-result badge. FR-63.
+  const levels = results.map((r) => runVerdict(r.reasonCode, r.formFound, r.finalStatus).level);
+  const ok = levels.filter((l) => l === 'healthy').length;
+  const attention = levels.filter((l) => l === 'attention').length;
+  const failed = levels.filter((l) => l === 'failing').length;
 
   const downloadJson = () => {
     const blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' });
@@ -148,10 +179,9 @@ export function ResultsPanel({ results, progress, logs, running, landingPage, mo
         <div className="rounded-xl border border-line bg-panel p-4">
           <div className="flex flex-wrap items-center gap-2">
             <StatPill count={results.length} label="Total" color="bg-panel-raised text-ink-secondary" />
-            {pass > 0 && <StatPill count={pass} label="Pass" color="bg-ok/10 text-ok" />}
-            {fail > 0 && <StatPill count={fail} label="Fail" color="bg-danger/10 text-danger" />}
-            {warn > 0 && <StatPill count={warn} label="Warn" color="bg-warn/10 text-warn" />}
-            {error > 0 && <StatPill count={error} label="Error" color="bg-idle/10 text-ink-muted" />}
+            {ok > 0 && <StatPill count={ok} label="OK" color="bg-ok/10 text-ok" />}
+            {attention > 0 && <StatPill count={attention} label="Attention" color="bg-warn/10 text-warn" />}
+            {failed > 0 && <StatPill count={failed} label="Failed" color="bg-danger/10 text-danger" />}
 
             {results.length > 0 && (
               <div className="ml-auto flex items-center gap-2">

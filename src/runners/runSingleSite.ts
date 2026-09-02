@@ -6,7 +6,7 @@ import { findContactForm } from '../forms/findContactForm.js';
 import { fillForm } from '../forms/fillForm.js';
 import { submitForm } from '../forms/submitForm.js';
 import { detectCaptcha, detectAntiBot } from '../forms/detectSuccess.js';
-import { nativeFormFacts, embedFormFacts } from './formFacts.js';
+import { nativeFormFacts, embedFormFacts, shouldHoldMultiStepSubmit } from './formFacts.js';
 import {
   newPage,
   closePage,
@@ -400,8 +400,18 @@ export async function runSingleSite(
         honeypotReason,
         stepsTraversed,
         captchaState,
+        reachedSubmit,
+        wizardContainerUsed,
+        fieldsSeen,
       } = await fillForm(page, form, config);
       baseResult.errors.push(...fillErrors);
+      if (wizardContainerUsed) baseResult.isMultiStep = true;
+      // For a walked wizard, the accurate field count is what the walk saw across
+      // ALL steps (radio groups collapsed) — form-scoped detection only counted
+      // the fields inside the <form>, missing earlier steps' fields. FR-63.
+      if ((wizardContainerUsed || stepsTraversed > 1) && fieldsSeen > 0) {
+        baseResult.fieldCount = fieldsSeen;
+      }
 
       // Surface honeypot detection in the result notes so users see the AI
       // contributed to a clean submission. Helps users trust the AI feature.
@@ -521,6 +531,32 @@ export async function runSingleSite(
 
       // live mode — actually submit
       const contactPageUrl = page.url();
+
+      // Submit-only-if-clean gate for multi-step / wizard forms (FR-63). Walking
+      // a wizard means we picked choices on earlier steps; only submit for real
+      // when we actually reached the final step AND put in an email (a real,
+      // lead-shaped entry). Otherwise HOLD the submission and say why, rather
+      // than dropping a partial/mis-filled entry into the client's inbox.
+      const isWizard = wizardContainerUsed || baseResult.isMultiStep || stepsTraversed > 1;
+      const filledEmail = filledFields.some((f) => f.type === 'email' || /email/i.test(f.label));
+      if (shouldHoldMultiStepSubmit({ isWizard, reachedSubmit, filledEmail })) {
+        return {
+          ...baseResult,
+          finalUrl: page.url(),
+          finalStatus: 'warn',
+          reasonCode: 'SUBMIT_HELD_INCOMPLETE',
+          notes: [
+            ...baseResult.notes,
+            `Filled ${filledFields.length} field(s) across ${stepsTraversed} step(s), but held back the live submission: ${
+              !reachedSubmit
+                ? 'the walk did not reach the final submit step'
+                : 'no email value was filled, so this would not be a valid lead'
+            }. Verify this multi-step form by hand.`,
+          ],
+          durationMs: Date.now() - start,
+        };
+      }
+
       baseResult.submissionAttempted = true;
 
       const submitResult = await submitForm(page, form, contactPageUrl, config);

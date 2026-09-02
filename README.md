@@ -70,8 +70,8 @@ Given a URL, the engine:
 1. Discovers the contact page using deterministic heuristics (path matching + anchor-text scoring). If a site doesn't use a conventional contact slug, a **content-driven fallback** scans the homepage, navigation, and sitemap pages — rendering them in a real browser when a site is JavaScript-heavy or blocks lightweight fetches — and picks the one that actually holds a contact form, **including a form hidden inside a multi-step widget.** So the form is found regardless of the page's URL or how it's built.
 2. Verifies the top candidates by loading them and scoring the page content.
 3. Detects the main contact form (field types, submit-button text, layout signals).
-4. Fills it with configurable test data.
-5. Optionally submits and watches for a thank-you redirect or an inline success message.
+4. Fills it with configurable test data — including **multi-step wizards**, walking each step (fill → Next → fill) until it reaches the submit control, even when the steps live outside the `<form>` element.
+5. Optionally submits and watches for a thank-you redirect or an inline success message. For a multi-step form in Live mode, submission is **held unless the run cleanly reached the final step and filled an email** — so a partial walk never drops a junk entry into the inbox.
 6. Returns a structured result explaining exactly what happened — in plain language. The result surfaces the key facts about what was found: the page the form sits on, whether it's a **native** in-page form or a **third-party embed** (and which provider, iframe vs script), how many fields and their names, and whether it's a **single- or multi-step** form. The same facts appear on the Form Tester result card and each Form Scheduler run.
 
 **Three test modes** put safety first:
@@ -89,7 +89,8 @@ Given a URL, the engine:
 - **`FORM_NOT_FOUND`** — genuinely nothing: no native form and no known embed.
 - **`NON_CONTACT_FORM_FOUND`** — a form exists but scored as something else (search / newsletter / quiz); the notes carry its score and the missing contact fields.
 - **`THIRD_PARTY_EMBED_FORM`** — a hosted embed (Typeform, HubSpot, Calendly, Jotform, Tally, and similar) is present. It's detected and named so you can verify it by hand, even though it can't be auto-filled across origins.
-- **`MULTI_STEP_FORM_DETECTED`** — the contact form was found, but its fields are split across steps revealed one at a time (a "Next"-style wizard). It's detected (not broken); stepping through to fill each panel isn't supported yet, so it's reported for manual verification.
+- **`MULTI_STEP_FORM_DETECTED`** — a multi-step ("Next"-style wizard) contact form was found but couldn't be filled this run (its steps/fields weren't reachable). Detected, not broken — reported for manual verification. When the wizard *can* be walked, the run fills through the steps and reports `SAFE_MODE_NO_SUBMIT` (safe) or a submit outcome (live) instead.
+- **`SUBMIT_HELD_INCOMPLETE`** — a multi-step form was filled through its steps, but in Live mode the submission was deliberately held because the run didn't cleanly reach the final step or fill an email — so no partial/junk entry is sent.
 
 CAPTCHA and anti-bot systems are **never bypassed** — if one is detected, the run stops and says so.
 
@@ -276,7 +277,8 @@ npm run start -- --url https://yoursite.com --monitor watch --watch-interval 360
 | `CAPTCHA_DETECTED` | CAPTCHA widget found — aborted |
 | `ANTI_BOT_DETECTED` | Anti-bot challenge page — aborted |
 | `REQUIRED_FIELDS_UNSUPPORTED` | Could not fill required fields |
-| `MULTI_STEP_FORM_DETECTED` | Multi-step form found — detected, step-through fill not yet supported |
+| `MULTI_STEP_FORM_DETECTED` | Multi-step form found but couldn't be filled this run |
+| `SUBMIT_HELD_INCOMPLETE` | Multi-step form filled, but live submission held (not a clean/complete entry) |
 | `SAFE_MODE_NO_SUBMIT` | Safe mode — filled but not submitted |
 | `DETECT_ONLY` | Detect-only mode — no interaction |
 | `SUBMIT_FAILED` | Submit click failed |

@@ -182,6 +182,28 @@ body {
 }
 .fp-scan { animation: fp-scan 2.6s ease-in-out infinite; }
 
+/* Indeterminate progress bar — a segment sweeps across the track so a single
+   long-running check reads as "in progress / on the way", not stuck. */
+@keyframes fp-indeterminate {
+  0%   { left: -45%; }
+  100% { left: 100%; }
+}
+.fp-indeterminate {
+  position: relative;
+  overflow: hidden;
+}
+.fp-indeterminate::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -45%;
+  width: 45%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, transparent, rgb(var(--fp-accent)), transparent);
+  animation: fp-indeterminate 1.2s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fp-rise,
   .fp-subnav-in {
@@ -191,6 +213,9 @@ body {
     animation: none;
   }
   .fp-scan {
+    animation: none;
+  }
+  .fp-indeterminate::after {
     animation: none;
   }
 }
