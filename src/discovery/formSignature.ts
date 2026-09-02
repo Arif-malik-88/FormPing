@@ -25,7 +25,7 @@ interface Field {
  */
 const NEGATIVE_FORM_PATTERNS = [/search/i, /newsletter/i, /subscribe/i];
 const NEGATIVE_SUBMIT_PATTERNS = [/subscribe/i, /newsletter/i, /sign\s*up/i, /register/i, /search/i, /log\s*in/i];
-const POSITIVE_SUBMIT_PATTERNS = [/^send$/i, /^submit$/i, /send\s+message/i, /contact\s+us/i, /get\s+in\s+touch/i, /^send\s+it$/i, /^go$/i, /^submit\s+form$/i];
+const POSITIVE_SUBMIT_PATTERNS = [/^send$/i, /^submit$/i, /send\b[\w\s]{0,20}\bmessage/i, /contact\s+us/i, /get\s+in\s+touch/i, /^send\s+it$/i, /^go$/i, /^submit\s+form$/i, /let'?s\s+(talk|connect|chat)/i, /send\s+(my\s+)?(enquiry|inquiry|request|details)/i];
 
 function blob(f: Field): string {
   return `${f.name} ${f.id} ${f.placeholder} ${f.label}`;
