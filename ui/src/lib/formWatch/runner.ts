@@ -21,6 +21,14 @@ export interface RawSiteResult {
   formConfidence?: number;
   formIdentifier?: { id?: string | null; action?: string | null; method?: string | null } | null;
   captchaDetected?: boolean;
+  // Detected-form facts (FR-64) — surfaced in the run log.
+  formType?: 'native' | 'third-party';
+  embedProvider?: string | null;
+  embedKind?: 'iframe' | 'script' | 'container' | null;
+  fieldCount?: number;
+  fields?: { label: string; type: string }[];
+  isMultiStep?: boolean;
+  landingPageMode?: boolean;
   notes?: string[];
   errors?: string[];
   [k: string]: unknown;

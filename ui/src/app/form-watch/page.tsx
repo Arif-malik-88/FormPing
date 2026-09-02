@@ -14,7 +14,9 @@ export default function FormWatchPage() {
 
   const [url, setUrl] = useState('');
   const [days, setDays] = useState(3);
-  const [mode, setMode] = useState<FormWatchMode>('live');
+  // Default to Safe — Live submits a real message on EVERY scheduled run, which
+  // is a dangerous default. The user opts into Live deliberately. FR-64.
+  const [mode, setMode] = useState<FormWatchMode>('safe');
   const [landingPage, setLandingPage] = useState(false);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);

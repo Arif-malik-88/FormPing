@@ -52,6 +52,15 @@ export interface FormFingerprint {
   formAction: string | null;
   formMethod: string | null;
   captchaDetected: boolean;
+  // Detected-form facts (FR-64) — for a result-oriented run log. All optional so
+  // older stored records (without them) still parse.
+  formType?: 'native' | 'third-party';
+  embedProvider?: string | null;
+  embedKind?: 'iframe' | 'script' | 'container' | null;
+  fieldCount?: number;
+  fields?: { label: string; type: string }[];
+  isMultiStep?: boolean;
+  landingPageMode?: boolean;
 }
 
 /** One recorded run of a scheduled form test. */
