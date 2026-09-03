@@ -59,6 +59,9 @@ export function MonitorCommandBar({ url, onUrl, config, onConfig, onRun, onStop,
           <svg className="h-4 w-4 shrink-0 text-ink-faint" viewBox="0 0 20 20" fill="currentColor" aria-hidden><path d="M10 2a8 8 0 100 16 8 8 0 000-16zM3.5 10a6.5 6.5 0 0112.06-3.4l-1.7 1.02a1 1 0 00-.46.7l-.28 1.68-1.5.6a1 1 0 00-.62.93v1.02l-1.3.86a1 1 0 00-.44.83v1.6A6.5 6.5 0 013.5 10z" /></svg>
           <input id="monitor-url" type="text" value={url} onChange={(e) => onUrl(e.target.value)} disabled={running} placeholder="https://client-site.com" spellCheck={false} autoComplete="off" className="w-full bg-transparent font-mono text-[15px] text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50" />
         </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
+          We scan this site&rsquo;s pages and track their content, SEO, forms and scripts — so you can see exactly what changed between checks.
+        </p>
       </div>
 
       {/* Controls */}
@@ -99,10 +102,17 @@ export function MonitorCommandBar({ url, onUrl, config, onConfig, onRun, onStop,
         </div>
       </div>
 
-      {/* Watch note */}
-      {config.monitorMode === 'watch' && (
+      {/* Per-mode note: neutral + informational for Snapshot/Compare; amber for
+          Watch (it runs continuously). FR-65 */}
+      {config.monitorMode === 'watch' ? (
         <div className="border-t border-warn/20 bg-warn/5 px-4 py-2 text-xs text-warn last:rounded-b-2xl sm:px-5">
-          ⏱ Watch re-compares the site continuously (every {Math.max(1, Math.round(config.watchIntervalMs / 3_600_000))}h) until you stop it.
+          Watch mode re-compares the site continuously (every {Math.max(1, Math.round(config.watchIntervalMs / 3_600_000))}h) until you stop it.
+        </div>
+      ) : (
+        <div className="border-t border-line bg-panel px-4 py-2 text-xs text-ink-muted last:rounded-b-2xl sm:px-5">
+          {config.monitorMode === 'snapshot'
+            ? 'Snapshot mode — saves a baseline of the site now. Nothing is compared yet; run Compare later to see what changed.'
+            : 'Compare mode — checks the site against its latest saved baseline and shows what changed since then.'}
         </div>
       )}
 

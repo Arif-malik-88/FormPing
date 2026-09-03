@@ -14,7 +14,8 @@ import { markCleared, unmarkCleared, wasCleared } from '@/lib/clearedInput';
 import type { MonitorConfig, ChangeReport } from '@/types';
 
 const DEFAULT_CONFIG: MonitorConfig = {
-  monitorMode: 'compare',
+  // Snapshot is the default mode — take a baseline first, then Compare later. FR-65.
+  monitorMode: 'snapshot',
   maxPages: 10,
   takeScreenshots: false,
   aiProvider: 'off',
@@ -69,6 +70,9 @@ export default function MonitorPage() {
       if (savedUrl) setUrl(savedUrl);
       const savedConfigRaw = window.localStorage.getItem(STORAGE_KEY_CONFIG);
       if (savedConfigRaw) {
+        // Restore the full saved config, INCLUDING the last-used mode — so a mode
+        // switch persists across refresh. Default (no saved config) is Snapshot
+        // via DEFAULT_CONFIG. FR-65.
         const parsed = JSON.parse(savedConfigRaw) as Partial<MonitorConfig>;
         setConfig((cur) => ({ ...cur, ...parsed }));
       }
@@ -261,6 +265,7 @@ export default function MonitorPage() {
             logs={logs}
             running={running}
             watchActive={watchActive}
+            mode={config.monitorMode}
             onClear={handleClearView}
           />
         </div>
