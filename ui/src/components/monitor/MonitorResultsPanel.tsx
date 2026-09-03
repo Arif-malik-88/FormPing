@@ -1,5 +1,6 @@
 'use client';
-import type { ChangeReport, SnapshotResult } from '@/types';
+import { useEffect, useState } from 'react';
+import type { ChangeReport, SnapshotResult, MonitorMode } from '@/types';
 import { CompareReportCard } from './CompareReportCard';
 import { SnapshotResultCard } from './SnapshotResultCard';
 
@@ -9,11 +10,70 @@ interface Props {
   logs: string[];
   running: boolean;
   watchActive: boolean;
+  /** Current mode — drives the loader copy. */
+  mode: MonitorMode;
   /** Clear the on-screen view + URL input (not the server-stored reports). */
   onClear?: () => void;
 }
 
-export function MonitorResultsPanel({ reports, snapshot, logs, running, watchActive, onClear }: Props) {
+// Plain, on-brand facts shown while a scan runs — purposeful wait, no raw logs. FR-65.
+const SCAN_FACTS = [
+  'A quietly changed price or a removed form can cost leads before anyone notices.',
+  'We track content, SEO tags, forms and scripts — not just the visible text.',
+  'Snapshot saves a baseline; Compare shows what changed since.',
+  'Nothing on the site is changed — we only read it.',
+];
+
+/** Mode-aware scan loader — never shows raw engine/crawler logs. FR-65. */
+function ScanLoader({ mode, watchActive }: { mode: MonitorMode; watchActive: boolean }) {
+  const [factIdx, setFactIdx] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setFactIdx((i) => (i + 1) % SCAN_FACTS.length), 8000);
+    return () => clearInterval(t);
+  }, []);
+
+  const headline = watchActive
+    ? 'Watching your site for changes'
+    : mode === 'snapshot' ? 'Taking a baseline snapshot' : 'Comparing against the baseline';
+  const sub = watchActive
+    ? 'We re-scan your site on a schedule and flag anything that changed — leave this running.'
+    : mode === 'snapshot'
+      ? 'Scanning your site’s pages to save as the baseline you’ll compare against later.'
+      : 'Scanning your site and diffing it against the last saved baseline.';
+
+  return (
+    <div className="fp-rise overflow-hidden rounded-xl border border-line bg-panel p-5">
+      <div className="flex items-center gap-4">
+        <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+          <span className="absolute inline-flex h-10 w-10 animate-ping rounded-full bg-accent/15 [animation-duration:2s] motion-reduce:animate-none" aria-hidden />
+          <span className="absolute h-12 w-12 rounded-full border border-accent/15" aria-hidden />
+          <span className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-panel-raised text-accent-soft ring-1 ring-line-strong">
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden>
+              <rect x="4" y="4" width="16" height="16" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
+              <path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-ink">{headline}</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-ink-muted">{sub}</p>
+        </div>
+      </div>
+      <div className="mt-3 fp-indeterminate h-1 w-full rounded-full bg-line" />
+      <div className="mt-3 flex items-start gap-2 border-t border-line pt-3">
+        <svg viewBox="0 0 24 24" fill="none" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-soft" aria-hidden>
+          <path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.6.6 1 1.2 1 2h6c0-.8.4-1.4 1-2A6 6 0 0012 3z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <p key={factIdx} className="fp-rise text-xs leading-relaxed text-ink-muted">
+          <span className="font-semibold text-ink-secondary">Did you know?</span> {SCAN_FACTS[factIdx]}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export function MonitorResultsPanel({ reports, snapshot, logs, running, watchActive, mode, onClear }: Props) {
+  void logs; // raw crawler logs are intentionally NOT shown to users (FR-65)
   const isEmpty = reports.length === 0 && !snapshot && !running;
   const hasContent = reports.length > 0 || !!snapshot;
 
@@ -35,24 +95,8 @@ export function MonitorResultsPanel({ reports, snapshot, logs, running, watchAct
         </div>
       )}
 
-      {/* Live status / progress */}
-      {running && (
-        <div className="rounded-xl border border-line-strong bg-panel p-4">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex h-2 w-2 rounded-full bg-accent animate-pulse" />
-            <span className="text-sm font-semibold text-ink">
-              {watchActive ? 'Watching for changes' : 'Running'}
-            </span>
-          </div>
-          {logs.length > 0 && (
-            <div className="mt-3 space-y-1 max-h-32 overflow-y-auto">
-              {logs.slice(-12).map((log, i) => (
-                <p key={i} className="text-xs font-mono text-ink-muted truncate">{log}</p>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Live status — friendly mode-aware loader, never raw crawler logs */}
+      {running && <ScanLoader mode={mode} watchActive={watchActive} />}
 
       {/* Snapshot result (only one at a time) */}
       {snapshot && <SnapshotResultCard result={snapshot} />}
