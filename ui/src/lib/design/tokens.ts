@@ -35,6 +35,7 @@ export const palette = {
   warn: '#fbbf24',
   danger: '#ef4444',
   idle: '#64748b',
+  info: '#38bdf8',
 } as const;
 
 export type PaletteKey = keyof typeof palette;

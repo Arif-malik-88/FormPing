@@ -58,6 +58,7 @@ const STATUS_SWATCHES: Array<[string, string]> = [
   ['warn', palette.warn],
   ['danger', palette.danger],
   ['idle', palette.idle],
+  ['info', palette.info],
 ];
 
 const LEVELS: Array<{ level: StatusLevel; word: string; means: string }> = [
@@ -65,6 +66,7 @@ const LEVELS: Array<{ level: StatusLevel; word: string; means: string }> = [
   { level: 'warn', word: 'Attention', means: 'degraded · blocked · needs a look' },
   { level: 'danger', word: 'Failing', means: 'down · critical' },
   { level: 'idle', word: 'Idle', means: 'not monitored · pending · unknown' },
+  { level: 'info', word: 'Detected', means: 'recognised, not a problem · third-party embed' },
 ];
 
 function Swatch({ name, hex }: { name: string; hex: string }) {
