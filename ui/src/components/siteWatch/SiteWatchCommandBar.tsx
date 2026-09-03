@@ -58,6 +58,9 @@ export function SiteWatchCommandBar({ url, onUrl, amount, onAmount, unit, onUnit
             className="w-full bg-transparent font-mono text-[15px] text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
           />
         </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
+          We check that this URL loads and its SSL certificate is valid, on the schedule you set.
+        </p>
       </div>
 
       {/* Controls */}
@@ -104,9 +107,16 @@ export function SiteWatchCommandBar({ url, onUrl, amount, onAmount, unit, onUnit
         </div>
 
         <div className="ml-auto">
-          <button type="submit" disabled={adding || url.trim().length === 0} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-b from-accent to-accent-strong px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-accent-deep/40 ring-1 ring-accent-soft/20 transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">
-            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden><path d="M10 5a.75.75 0 01.75.75v3.5h3.5a.75.75 0 010 1.5h-3.5v3.5a.75.75 0 01-1.5 0v-3.5h-3.5a.75.75 0 010-1.5h3.5v-3.5A.75.75 0 0110 5z" /></svg>
-            {adding ? 'Adding…' : 'Add monitor'}
+          <button type="submit" disabled={adding || url.trim().length === 0} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-b from-accent to-accent-strong px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-accent-deep/40 ring-1 ring-accent-soft/20 transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">
+            {adding ? (
+              <svg className="h-4 w-4 animate-spin motion-reduce:animate-none" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" className="opacity-25" />
+                <path d="M21 12a9 9 0 00-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden><path d="M10 5a.75.75 0 01.75.75v3.5h3.5a.75.75 0 010 1.5h-3.5v3.5a.75.75 0 01-1.5 0v-3.5h-3.5a.75.75 0 010-1.5h3.5v-3.5A.75.75 0 0110 5z" /></svg>
+            )}
+            {adding ? 'Adding monitor…' : 'Add monitor'}
           </button>
         </div>
       </div>
@@ -124,7 +134,7 @@ export function SiteWatchCommandBar({ url, onUrl, amount, onAmount, unit, onUnit
       )}
 
       <p className="border-t border-line px-4 py-2 text-[11px] text-ink-faint last:rounded-b-2xl sm:px-5">
-        Free — no browser, no proxy. Uptime is an HTTP check; SSL reads the certificate expiry. Alerts fire only on change (down / recovered / cert expiring).
+        You&rsquo;ll only get a Slack alert when something changes — the site goes down, comes back up, or a certificate is close to expiring.
       </p>
     </form>
   );
