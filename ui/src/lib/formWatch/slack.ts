@@ -23,6 +23,7 @@ export interface FormNotification {
 
 const LEVEL_EMOJI: Record<string, string> = {
   healthy: '✅',
+  detected: '🔵',
   attention: '🟡',
   failing: '🔴',
 };
@@ -56,10 +57,12 @@ function buildPayload(n: FormNotification): Record<string, unknown> {
   const v = runVerdict(record.reasonCode, record.fingerprint.formFound, record.status);
   const emoji = LEVEL_EMOJI[v.level] ?? '•';
 
-  const headline =
-    v.level === 'healthy'
-      ? `${v.label} — ${record.site}`
-      : `Form ${v.level === 'failing' ? 'failing' : 'needs attention'} — ${record.site}`;
+  // `detected` (third-party embed) and `healthy` both lead with the plain label —
+  // only genuine problems say "failing / needs attention". FR-60.
+  const isProblem = v.level === 'failing' || v.level === 'attention';
+  const headline = !isProblem
+    ? `${v.label} — ${record.site}`
+    : `Form ${v.level === 'failing' ? 'failing' : 'needs attention'} — ${record.site}`;
 
   const blocks: Array<Record<string, unknown>> = [
     {

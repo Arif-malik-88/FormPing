@@ -34,10 +34,15 @@ export async function onRunComplete(schedule: FormSchedule, record: FormRunRecor
   const severity: AlertSeverity =
     verdict.level === 'failing' ? 'critical' : verdict.level === 'attention' ? 'warning' : 'info';
 
+  // `detected` (a recognised third-party embed) is informational, like `healthy` —
+  // NOT a "needs attention" ping. FR-60.
+  const isProblem = verdict.level === 'failing' || verdict.level === 'attention';
   const title =
-    verdict.level === 'healthy'
-      ? `Contact form OK — ${record.site}`
-      : `Contact form ${verdict.level === 'failing' ? 'failing' : 'needs attention'} — ${record.site}`;
+    verdict.level === 'detected'
+      ? `Third-party form detected — ${record.site}`
+      : !isProblem
+        ? `Contact form OK — ${record.site}`
+        : `Contact form ${verdict.level === 'failing' ? 'failing' : 'needs attention'} — ${record.site}`;
 
   const summaryParts = [`${verdict.label} (${record.reasonCode || 'no reason code'})`];
   if (regression) summaryParts.push('Worse than the previous check.');
@@ -46,7 +51,7 @@ export async function onRunComplete(schedule: FormSchedule, record: FormRunRecor
   await dispatchAlert(
     {
       kind: 'form',
-      event: verdict.level === 'healthy' ? 'form_ok' : 'form_problem',
+      event: isProblem ? 'form_problem' : 'form_ok',
       severity,
       title,
       summary: summaryParts.join(' '),
