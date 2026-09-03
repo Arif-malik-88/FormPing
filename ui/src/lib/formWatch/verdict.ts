@@ -13,7 +13,7 @@
 
 import type { FormRunStatus } from './types';
 
-export type VerdictLevel = 'healthy' | 'attention' | 'failing';
+export type VerdictLevel = 'healthy' | 'detected' | 'attention' | 'failing';
 
 export interface RunVerdict {
   level: VerdictLevel;
@@ -27,6 +27,11 @@ export interface RunVerdict {
 const HEALTHY = new Set(['THANK_YOU_REDIRECT', 'INLINE_SUCCESS_ONLY', 'PASS', 'SAFE_MODE_NO_SUBMIT']);
 // Detect-only is healthy only if a form was actually detected.
 const DETECT_ONLY = 'DETECT_ONLY';
+// A recognised, expected outcome that isn't a problem AND isn't a clean submit:
+// a third-party embed IS present and named, but it's a cross-origin form we can't
+// auto-fill/submit. Its own "detected" level (sky/info) — never amber "attention"
+// (nothing is wrong) and never green "healthy" (we didn't actually test a submit). FR-60.
+const DETECTED = new Set(['THIRD_PARTY_EMBED_FORM']);
 // The form is broken / submission genuinely failed.
 const FAILING = new Set([
   'FORM_NOT_FOUND',
@@ -50,7 +55,6 @@ const ATTENTION = new Set([
   'BLOCKED_BY_HOST',
   'NO_REDIRECT_NO_SUCCESS',
   'NON_CONTACT_FORM_FOUND',
-  'THIRD_PARTY_EMBED_FORM',
   // A multi-step form was DETECTED but we can't fill/submit through its steps
   // yet — the form exists (not a red "broken"), but monitoring can't confirm a
   // submission, so it's amber "worth a look". FR-64.
@@ -68,7 +72,7 @@ const LABELS: Record<string, string> = {
   DETECT_ONLY: 'Form detected',
   FORM_NOT_FOUND: 'No form found on the page',
   NON_CONTACT_FORM_FOUND: 'Found a form — not a contact form',
-  THIRD_PARTY_EMBED_FORM: 'Third-party embed form found',
+  THIRD_PARTY_EMBED_FORM: 'Third-party form detected',
   MULTI_STEP_FORM_DETECTED: 'Multi-step form found',
   SUBMIT_HELD_INCOMPLETE: 'Multi-step filled — submission held',
   CONTACT_PAGE_NOT_FOUND: 'No contact page found',
@@ -94,6 +98,7 @@ export function runVerdict(
 
   if (rawStatus === 'error') return { level: 'failing', label: LABELS[reasonCode] ?? 'Run error' };
   if (HEALTHY.has(reasonCode)) return { level: 'healthy', label };
+  if (DETECTED.has(reasonCode)) return { level: 'detected', label };
   if (reasonCode === DETECT_ONLY) {
     return formFound
       ? { level: 'healthy', label }
