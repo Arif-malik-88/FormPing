@@ -11,6 +11,7 @@ import { FormSummary } from '@/components/FormFactChips';
 
 const LEVEL_STYLE: Record<VerdictLevel | 'pending', { dot: string; text: string; label: string }> = {
   healthy: { dot: 'bg-ok', text: 'text-ok', label: 'Healthy' },
+  detected: { dot: 'bg-info', text: 'text-info', label: 'Third-party form detected' },
   attention: { dot: 'bg-warn', text: 'text-warn', label: 'Needs attention' },
   failing: { dot: 'bg-danger', text: 'text-danger', label: 'Failing' },
   pending: { dot: 'bg-idle', text: 'text-ink-muted', label: 'Pending first run' },
@@ -68,8 +69,10 @@ export function ScheduleCard({
 
   const recentRuns = (runs ?? []).slice(0, 12).reverse();
   const levels = recentRuns.map((r) => runVerdict(r.reasonCode, r.fingerprint.formFound, r.status).level);
-  const passPct = levels.length ? Math.round((levels.filter((l) => l === 'healthy').length / levels.length) * 100) : null;
-  const trendTones: TrendTone[] = levels.map((l) => (l === 'healthy' ? 'emerald' : l === 'failing' ? 'red' : 'amber'));
+  // A detected third-party embed is a fine outcome — count it as OK for the pass
+  // rate and give it its own sky bar in the trend (not amber). FR-60.
+  const passPct = levels.length ? Math.round((levels.filter((l) => l === 'healthy' || l === 'detected').length / levels.length) * 100) : null;
+  const trendTones: TrendTone[] = levels.map((l) => (l === 'healthy' ? 'emerald' : l === 'detected' ? 'sky' : l === 'failing' ? 'red' : 'amber'));
 
   async function loadRuns() {
     setLoadingRuns(true);
@@ -196,20 +199,25 @@ export function ScheduleCard({
           </p>
         )}
 
+        {/* Recognised third-party embed on a Live schedule — a settled "detected"
+            state, not a warning: it just runs on the provider's domain, so Live
+            can't submit through it. Info-toned (sky), never amber. FR-60. */}
+        {schedule.mode === 'live' && schedule.lastReasonCode === 'THIRD_PARTY_EMBED_FORM' && (
+          <p className="mt-2.5 rounded-md border border-info/25 bg-info/10 px-3 py-2 text-[11px] text-info">
+            This is a third-party form running on the provider’s own domain — a recognised setup, nothing is wrong. Live can’t submit through it, so it’s reported as detected; open it to send a quick manual test.
+          </p>
+        )}
+
         {/* Up-front heads-up when a Live schedule's last run couldn't submit for
-            real — a cross-origin embed (never submittable) or a multi-step form
-            that couldn't be filled/held. So a Live schedule that never submits
-            isn't a surprise. FR-63/FR-64. */}
+            real — a multi-step form that couldn't be filled/held. So a Live
+            schedule that never submits isn't a surprise. FR-63/FR-64. */}
         {schedule.mode === 'live' &&
           (schedule.lastReasonCode === 'MULTI_STEP_FORM_DETECTED' ||
-            schedule.lastReasonCode === 'THIRD_PARTY_EMBED_FORM' ||
             schedule.lastReasonCode === 'SUBMIT_HELD_INCOMPLETE') && (
             <p className="mt-2.5 rounded-md border border-warn/25 bg-warn/10 px-3 py-2 text-[11px] text-warn">
-              {schedule.lastReasonCode === 'THIRD_PARTY_EMBED_FORM'
-                ? 'This is a third-party embedded form — a cross-origin embed can’t be auto-submitted. Live runs report it as detected; verify it manually.'
-                : schedule.lastReasonCode === 'SUBMIT_HELD_INCOMPLETE'
-                  ? 'This multi-step form gets filled, but Live held the submission because the run didn’t cleanly reach the end with an email — no partial entry is sent. Verify it manually.'
-                  : 'This multi-step form couldn’t be auto-filled on the last run. Live can’t submit what it can’t fill — verify it manually.'}
+              {schedule.lastReasonCode === 'SUBMIT_HELD_INCOMPLETE'
+                ? 'This multi-step form gets filled, but Live held the submission because the run didn’t cleanly reach the end with an email — no partial entry is sent. Verify it manually.'
+                : 'This multi-step form couldn’t be auto-filled on the last run. Live can’t submit what it can’t fill — verify it manually.'}
             </p>
           )}
 
