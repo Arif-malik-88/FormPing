@@ -2,23 +2,26 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { SiteSchedule, SiteCheckRecord, UptimeClass } from '@/lib/siteWatch/types';
+import { STATUS, type StatusLevel } from '@/lib/design/status';
 import { TrendBar, type TrendTone } from '@/components/TrendBar';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { cx, KeptNotice } from '@/components/ui';
+import { Badge, StatusPill, StatusText, cx, KeptNotice } from '@/components/ui';
 
-const UPTIME_STYLE: Record<UptimeClass | 'pending', { dot: string; text: string; label: string }> = {
-  up: { dot: 'bg-ok', text: 'text-ok', label: 'Up' },
-  down: { dot: 'bg-danger', text: 'text-danger', label: 'Down' },
-  blocked: { dot: 'bg-warn', text: 'text-warn', label: 'Reachable (challenged)' },
-  pending: { dot: 'bg-idle', text: 'text-ink-muted', label: 'Pending first check' },
+// Canonical status vocabulary (FR-35/FR-65) — one language across every surface.
+const UPTIME: Record<UptimeClass | 'pending', { level: StatusLevel; label: string }> = {
+  up: { level: 'ok', label: 'Up' },
+  down: { level: 'danger', label: 'Down' },
+  blocked: { level: 'warn', label: 'Reachable — challenged' },
+  pending: { level: 'idle', label: 'Setting up — first check running…' },
 };
 
-function expiryStyle(days: number | null, valid: boolean | undefined, kind: 'SSL' | 'Domain'): { text: string; label: string } {
-  if (valid === false || days == null) return { text: 'text-ink-faint', label: `${kind}: n/a` };
-  if (days <= 0) return { text: 'text-danger', label: `${kind} expired` };
-  if (days <= 7) return { text: 'text-danger', label: `${kind} expires in ${days}d` };
-  if (days <= 30) return { text: 'text-warn', label: `${kind}: ${days}d left` };
-  return { text: 'text-ok', label: `${kind}: ${days}d left` };
+/** Cert / domain expiry → a canonical level + a plain label. */
+function expiry(days: number | null, valid: boolean | undefined, kind: 'SSL' | 'Domain'): { level: StatusLevel; label: string } {
+  if (valid === false || days == null) return { level: 'idle', label: `${kind} n/a` };
+  if (days <= 0) return { level: 'danger', label: `${kind} expired` };
+  if (days <= 7) return { level: 'danger', label: `${kind} expires in ${days}d` };
+  if (days <= 30) return { level: 'warn', label: `${kind} ${days}d left` };
+  return { level: 'ok', label: `${kind} ${days}d left` };
 }
 
 function relativeTime(iso: string | null): string {
@@ -62,9 +65,9 @@ export function SiteCard({
   const holding = useRef(false);
 
   const up: UptimeClass | 'pending' = schedule.lastClassification ?? 'pending';
-  const u = UPTIME_STYLE[up];
-  const ssl = expiryStyle(schedule.lastSslDaysRemaining ?? null, schedule.lastSslValid, 'SSL');
-  const domain = expiryStyle(schedule.lastDomainDaysRemaining ?? null, schedule.lastDomainValid, 'Domain');
+  const u = UPTIME[up];
+  const ssl = expiry(schedule.lastSslDaysRemaining ?? null, schedule.lastSslValid, 'SSL');
+  const domain = expiry(schedule.lastDomainDaysRemaining ?? null, schedule.lastDomainValid, 'Domain');
 
   async function loadChecks() {
     setLoading(true);
@@ -122,15 +125,12 @@ export function SiteCard({
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className={cx('inline-flex items-center gap-1.5 text-xs font-semibold', u.text)}>
-                <span className={cx('h-2 w-2 rounded-full', u.dot)} />
-                {u.label}
-              </span>
-              {up !== 'pending' && schedule.lastResponseMs != null && <span className="text-[11px] text-ink-faint">{schedule.lastResponseMs}ms</span>}
-              <span className={cx('text-[11px] font-medium', ssl.text)}>{ssl.label}</span>
-              <span className={cx('text-[11px] font-medium', domain.text)}>{domain.label}</span>
-              {schedule.paused && <span className="rounded bg-panel-raised px-1.5 py-0.5 text-[11px] font-medium text-ink-muted ring-1 ring-line-strong">Paused</span>}
+            <div className="mb-1.5 flex flex-wrap items-center gap-2">
+              <StatusPill level={u.level} pulse={up === 'pending'}>{u.label}</StatusPill>
+              {up !== 'pending' && schedule.lastResponseMs != null && <Badge tone="neutral">{schedule.lastResponseMs} ms</Badge>}
+              <StatusText level={ssl.level}>{ssl.label}</StatusText>
+              <StatusText level={domain.level}>{domain.label}</StatusText>
+              {schedule.paused && <Badge tone="neutral">Paused</Badge>}
             </div>
             <a href={schedule.url} target="_blank" rel="noreferrer" className="block truncate text-sm font-medium text-ink hover:text-accent-soft" title={schedule.url}>
               {schedule.url}
@@ -197,25 +197,72 @@ export function SiteCard({
 
 function Field({ label, value, valueClass = 'text-ink-secondary' }: { label: string; value: string; valueClass?: string }) {
   return (
-    <div className="text-[11px]">
-      <span className="text-ink-faint">{label}: </span>
-      <span className={valueClass}>{value}</span>
+    <div>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">{label}</p>
+      <p className={cx('mt-0.5 text-[13px]', valueClass)}>{value}</p>
     </div>
   );
 }
 
-function CheckRow({ check }: { check: SiteCheckRecord }) {
-  const u = UPTIME_STYLE[check.uptime.classification] ?? UPTIME_STYLE.down;
-  const { statusCode, responseMs, error } = check.uptime;
-  const ssl = check.ssl;
-  const httpValue = statusCode != null ? `${statusCode}${error ? ` — ${error}` : ''}` : error ?? 'no response';
+/** A sized check / cross / ! in a tinted circle — clear at a glance. FR-65. */
+function UptimeMark({ level }: { level: StatusLevel }) {
+  const cls =
+    level === 'ok' ? 'bg-ok/15 text-ok'
+    : level === 'warn' ? 'bg-warn/15 text-warn'
+    : level === 'danger' ? 'bg-danger/15 text-danger'
+    : 'bg-idle/15 text-ink-muted';
+  return (
+    <span className={cx('flex h-6 w-6 shrink-0 items-center justify-center rounded-full', cls)}>
+      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden>
+        {level === 'ok'
+          ? <path strokeLinecap="round" strokeLinejoin="round" d="M4 10.5l3.5 3.5L16 5.5" />
+          : level === 'danger'
+            ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l8 8M14 6l-8 8" />
+            : <path strokeLinecap="round" strokeLinejoin="round" d="M10 5.5v5M10 13.5v.5" />}
+      </svg>
+    </span>
+  );
+}
 
-  let sslValue = 'n/a (not HTTPS)';
+const UPTIME_SENTENCE: Record<UptimeClass, string> = {
+  up: 'Your site is up',
+  down: 'Your site is down',
+  blocked: 'Your site is reachable — the host challenged us',
+};
+function httpMeaning(code: number | null): string {
+  if (code == null) return '';
+  if (code >= 200 && code < 300) return 'OK';
+  if (code >= 300 && code < 400) return 'Redirect';
+  if (code === 401 || code === 403) return 'Blocked / unauthorized';
+  if (code === 404) return 'Not found';
+  if (code === 429) return 'Rate-limited';
+  if (code >= 500) return 'Server error';
+  if (code >= 400) return 'Client error';
+  return '';
+}
+function speedLabel(ms: number): string {
+  return ms < 300 ? 'fast' : ms < 1000 ? 'okay' : 'slow';
+}
+
+function CheckRow({ check }: { check: SiteCheckRecord }) {
+  const cls = check.uptime.classification;
+  const u = UPTIME[cls] ?? UPTIME.down;
+  const { statusCode, responseMs, error } = check.uptime;
+  const meaning = httpMeaning(statusCode);
+  const httpValue = statusCode != null
+    ? `${statusCode}${meaning ? ` · ${meaning}` : ''}${error ? ` — ${error}` : ''}`
+    : error ?? 'No response';
+
+  const ssl = check.ssl;
+  let sslValue = 'n/a — not served over HTTPS';
   let sslClass = 'text-ink-muted';
   if (ssl) {
     if (ssl.ok && ssl.daysRemaining != null) {
       const expiry = ssl.validTo ? new Date(ssl.validTo).toLocaleDateString() : '?';
-      sslValue = ssl.daysRemaining <= 0 ? `EXPIRED (was valid to ${expiry})` : `${ssl.daysRemaining} day${ssl.daysRemaining === 1 ? '' : 's'} left (expires ${expiry})`;
+      const issuer = ssl.issuer ? ` · ${ssl.issuer}` : '';
+      sslValue = ssl.daysRemaining <= 0
+        ? `Expired (was valid to ${expiry})${issuer}`
+        : `${ssl.daysRemaining} day${ssl.daysRemaining === 1 ? '' : 's'} left${issuer} — expires ${expiry}`;
       sslClass = ssl.daysRemaining <= 7 ? 'text-danger' : ssl.daysRemaining <= 30 ? 'text-warn' : 'text-ink-secondary';
     } else {
       sslValue = ssl.error ?? 'check failed';
@@ -229,7 +276,10 @@ function CheckRow({ check }: { check: SiteCheckRecord }) {
   if (domain) {
     if (domain.ok && domain.daysRemaining != null) {
       const expiry = domain.expiryDate ? new Date(domain.expiryDate).toLocaleDateString() : '?';
-      domainValue = domain.daysRemaining <= 0 ? `EXPIRED (was valid to ${expiry})` : `${domain.daysRemaining} day${domain.daysRemaining === 1 ? '' : 's'} left (expires ${expiry})`;
+      const registrar = domain.registrar ? ` · ${domain.registrar}` : '';
+      domainValue = domain.daysRemaining <= 0
+        ? `Expired (was valid to ${expiry})${registrar}`
+        : `${domain.daysRemaining} day${domain.daysRemaining === 1 ? '' : 's'} left${registrar} — expires ${expiry}`;
       domainClass = domain.daysRemaining <= 7 ? 'text-danger' : domain.daysRemaining <= 30 ? 'text-warn' : 'text-ink-secondary';
     } else {
       domainValue = domain.error ?? 'check failed';
@@ -238,17 +288,17 @@ function CheckRow({ check }: { check: SiteCheckRecord }) {
   }
 
   return (
-    <div className="rounded-lg border border-line bg-ground/40 p-2.5">
+    <div className="rounded-lg border border-line bg-ground/40 p-3.5">
       <div className="flex items-center justify-between gap-2">
-        <span className={cx('inline-flex items-center gap-1.5 text-xs font-medium', u.text)}>
-          <span className={cx('h-2 w-2 rounded-full', u.dot)} />
-          {u.label}
-        </span>
+        <div className="flex items-center gap-2.5">
+          <UptimeMark level={u.level} />
+          <span className={cx('text-sm font-semibold', STATUS[u.level].text)}>{UPTIME_SENTENCE[cls] ?? u.label}</span>
+        </div>
         <span className="text-[11px] text-ink-faint">{new Date(check.checkedAt).toLocaleString()}</span>
       </div>
-      <div className="mt-1.5 grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
+      <div className="mt-3 grid grid-cols-1 gap-x-5 gap-y-2.5 pl-[34px] sm:grid-cols-2">
         <Field label="HTTP status" value={httpValue} />
-        <Field label="Response time" value={`${responseMs} ms`} />
+        <Field label="Response time" value={`${responseMs} ms · ${speedLabel(responseMs)}`} />
         <Field label="SSL certificate" value={sslValue} valueClass={sslClass} />
         <Field label="Domain registration" value={domainValue} valueClass={domainClass} />
       </div>
