@@ -137,6 +137,9 @@ function hasFormResult(h: UrlHealth): boolean {
 function formWorking(h: UrlHealth, internal: boolean): boolean | null {
   if (h.form.monitored || h.form.stopped) {
     if (h.form.level === 'healthy') return true;
+    // A recognised third-party embed is present and expected — reads as working
+    // on the client-facing page, not a broken/unknown form. FR-60.
+    if (h.form.level === 'detected') return true;
     if (!internal && h.form.reasonCode && NOT_LOCATABLE.has(h.form.reasonCode)) return null;
     if (h.form.level === 'attention' || h.form.level === 'failing') return false;
     return null;

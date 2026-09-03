@@ -18,19 +18,21 @@ import type {
 } from '@/lib/projects/types';
 import { runVerdict } from '@/lib/formWatch/verdict';
 
-export type Tone = 'emerald' | 'amber' | 'red' | 'slate';
+export type Tone = 'emerald' | 'amber' | 'red' | 'slate' | 'sky';
 
 export const TONE_DOT: Record<Tone, string> = {
   emerald: 'bg-ok',
   amber: 'bg-warn',
   red: 'bg-danger',
   slate: 'bg-idle',
+  sky: 'bg-info',
 };
 export const TONE_TEXT: Record<Tone, string> = {
   emerald: 'text-ok',
   amber: 'text-warn',
   red: 'text-danger',
   slate: 'text-ink-muted',
+  sky: 'text-info',
 };
 /** Soft pill/badge fill + text for a tone. */
 export const TONE_SOFT: Record<Tone, string> = {
@@ -38,6 +40,7 @@ export const TONE_SOFT: Record<Tone, string> = {
   amber: 'bg-warn/12 text-warn',
   red: 'bg-danger/12 text-danger',
   slate: 'bg-idle/12 text-ink-secondary',
+  sky: 'bg-info/12 text-info',
 };
 /** Left severity edge for cards. */
 export const TONE_EDGE: Record<Tone, string> = {
@@ -45,10 +48,12 @@ export const TONE_EDGE: Record<Tone, string> = {
   amber: 'bg-warn/80',
   red: 'bg-danger/90',
   slate: 'bg-idle/70',
+  sky: 'bg-info/80',
 };
 
 export const FORM_TONE: Record<FormHealthLevel, Tone> = {
   healthy: 'emerald',
+  detected: 'sky',
   attention: 'amber',
   failing: 'red',
   pending: 'slate',

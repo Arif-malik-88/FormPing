@@ -7,7 +7,10 @@
 
 import type { ProjectRollup, UrlHealth } from './types';
 
-const FORM_RANK: Record<string, number> = { healthy: 0, pending: 1, attention: 2, failing: 3 };
+// `detected` (a recognised third-party embed) contributes no real severity — it
+// sits just above healthy so it wins the label over a plain-healthy sibling, but
+// never trips the attention threshold. FR-60.
+const FORM_RANK: Record<string, number> = { healthy: 0, detected: 0.5, pending: 1, attention: 2, failing: 3 };
 const UP_RANK: Record<string, number> = { up: 0, unknown: 1, blocked: 2, down: 3 };
 
 /** Collapse a project's per-URL health into a worst-case rollup. */
@@ -19,6 +22,7 @@ export function rollupFromHealth(health: UrlHealth[]): ProjectRollup {
   let domainSoonest: number | null = null;
   let lastChecked: string | null = null;
   let monitored = false;
+  let hasDetected = false;
 
   const newer = (a: string | null, b: string | null | undefined) => (b && (!a || b > a) ? b : a);
 
@@ -28,6 +32,7 @@ export function rollupFromHealth(health: UrlHealth[]): ProjectRollup {
     // `monitored` tracks LIVE monitors only, so the status word stays honest.
     if (h.form.monitored || h.form.stopped) {
       if (h.form.monitored) monitored = true;
+      if (h.form.level === 'detected') hasDetected = true;
       if (h.form.level && (!formLevel || FORM_RANK[h.form.level] > FORM_RANK[formLevel])) {
         formLevel = h.form.level;
         formLabel = h.form.label;
@@ -60,5 +65,5 @@ export function rollupFromHealth(health: UrlHealth[]): ProjectRollup {
   else if (domainSoonest != null && domainSoonest <= 30) severity = Math.max(severity, 15);
   if (!monitored) severity = -1; // unmonitored sinks to the bottom
 
-  return { monitored, formLevel, formLabel, upState, sslSoonest, domainSoonest, lastChecked, severity };
+  return { monitored, formLevel, formLabel, hasDetected, upState, sslSoonest, domainSoonest, lastChecked, severity };
 }
