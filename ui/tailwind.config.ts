@@ -43,6 +43,7 @@ const config: Config = {
         warn: token('--fp-warn'),
         danger: token('--fp-danger'),
         idle: token('--fp-idle'),
+        info: token('--fp-info'),
       },
       fontFamily: {
         mono: ['JetBrains Mono', 'Fira Code', 'Cascadia Code', 'ui-monospace', 'monospace'],

@@ -27,6 +27,7 @@ function hostOf(url: string | undefined): string {
 
 const FORM_WORD: Record<string, string> = {
   healthy: 'Healthy',
+  detected: 'Detected',
   attention: 'Attention',
   failing: 'Failing',
   pending: 'Pending',

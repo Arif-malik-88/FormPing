@@ -45,6 +45,7 @@
   --fp-warn: 251 191 36;        /* #fbbf24  amber-400 — attention / degraded */
   --fp-danger: 239 68 68;       /* #ef4444  red-500 — failing / down / delete */
   --fp-idle: 100 116 139;       /* #64748b  slate-500 — not monitored / unknown */
+  --fp-info: 56 189 248;        /* #38bdf8  sky-400 — detected / recognised, not a problem */
 }
 
 * {

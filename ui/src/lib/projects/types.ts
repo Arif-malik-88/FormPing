@@ -28,7 +28,7 @@ export interface Project {
   updatedBy?: string | null;
 }
 
-export type FormHealthLevel = 'healthy' | 'attention' | 'failing' | 'pending';
+export type FormHealthLevel = 'healthy' | 'detected' | 'attention' | 'failing' | 'pending';
 export type SiteUpState = 'up' | 'down' | 'blocked' | 'unknown';
 
 /** Derived health for one URL in a project (read from the existing monitors). */
@@ -110,6 +110,9 @@ export interface ProjectRollup {
   /** Worst contact-form level across the project's URLs. */
   formLevel?: FormHealthLevel;
   formLabel?: string;
+  /** At least one URL's form is a recognised third-party embed ("detected").
+   *  Surfaces the sky "Detected" pill when nothing worse needs attention. FR-60. */
+  hasDetected?: boolean;
   /** Worst uptime state across the project's URLs. */
   upState?: SiteUpState;
   /** Soonest SSL expiry (min days) across the project's URLs, or null. */

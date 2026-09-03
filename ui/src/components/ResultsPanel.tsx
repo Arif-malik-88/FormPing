@@ -154,6 +154,7 @@ export function ResultsPanel({ results, progress, logs, running, landingPage, mo
   // counts as OK — never a misleading "WARN". Matches the per-result badge. FR-63.
   const levels = results.map((r) => runVerdict(r.reasonCode, r.formFound, r.finalStatus).level);
   const ok = levels.filter((l) => l === 'healthy').length;
+  const detected = levels.filter((l) => l === 'detected').length;
   const attention = levels.filter((l) => l === 'attention').length;
   const failed = levels.filter((l) => l === 'failing').length;
 
@@ -180,6 +181,7 @@ export function ResultsPanel({ results, progress, logs, running, landingPage, mo
           <div className="flex flex-wrap items-center gap-2">
             <StatPill count={results.length} label="Total" color="bg-panel-raised text-ink-secondary" />
             {ok > 0 && <StatPill count={ok} label="OK" color="bg-ok/10 text-ok" />}
+            {detected > 0 && <StatPill count={detected} label="Detected" color="bg-info/10 text-info" />}
             {attention > 0 && <StatPill count={attention} label="Attention" color="bg-warn/10 text-warn" />}
             {failed > 0 && <StatPill count={failed} label="Failed" color="bg-danger/10 text-danger" />}
 

@@ -35,7 +35,7 @@ export function buildSuggestions(record: FormRunRecord, changes: string[]): stri
       break;
     case 'THIRD_PARTY_EMBED_FORM':
       out.push(
-        'The form is a third-party embed (named in the notes) — it works but FormPing can\'t auto-submit through a cross-origin embed. Verify it manually, and consider a provider-native check (e.g. a Typeform/HubSpot test submission) for ongoing assurance.',
+        'This is a third-party form (named in the notes) — a recognised, expected setup, nothing is wrong. It runs on the provider\'s own domain, so FormPing can confirm it\'s present but can\'t submit through it. Open it and send a quick test entry now and then, or add the provider\'s own notification check for ongoing assurance.',
       );
       break;
     case 'VALIDATION_ERROR':

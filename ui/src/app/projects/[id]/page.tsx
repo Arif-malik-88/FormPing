@@ -25,7 +25,7 @@ import { Button, StatusPill, Modal, cx } from '@/components/ui';
 import { fromProjectRollup, STATUS } from '@/lib/design/status';
 import { useMe, canRole } from '@/lib/auth/useMe';
 
-const FORM_WORD: Record<string, string> = { healthy: 'Healthy', attention: 'Attention', failing: 'Failing', pending: 'Pending' };
+const FORM_WORD: Record<string, string> = { healthy: 'Healthy', detected: 'Detected', attention: 'Attention', failing: 'Failing', pending: 'Pending' };
 function expiryTone(days: number | null): Tone | undefined {
   if (days == null) return undefined;
   if (days <= 14) return 'red';

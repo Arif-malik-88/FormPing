@@ -5,13 +5,14 @@
  * tones.
  */
 
-export type TrendTone = 'emerald' | 'amber' | 'red' | 'slate';
+export type TrendTone = 'emerald' | 'amber' | 'red' | 'slate' | 'sky';
 
 const BAR: Record<TrendTone, string> = {
   emerald: 'bg-ok/80',
   amber: 'bg-warn/80',
   red: 'bg-danger/80',
   slate: 'bg-idle/70',
+  sky: 'bg-info/80',
 };
 
 export function TrendBar({ tones, title }: { tones: TrendTone[]; title?: string }) {

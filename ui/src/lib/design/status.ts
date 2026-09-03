@@ -11,6 +11,7 @@
  *   warn    amber    — needs attention / degraded / blocked
  *   danger  rose     — failing / down / critical
  *   idle    slate    — not monitored / pending / unknown
+ *   info    sky      — detected / recognised, not a problem (e.g. a third-party embed)
  *
  * The class strings reference the design tokens (`ok`, `warn`, `danger`, `idle`
  * from tailwind.config.ts), so colour stays centralised. Domain values map into a
@@ -20,7 +21,7 @@
 
 import type { FormHealthLevel, ProjectRollup, SiteUpState } from '@/lib/projects/types';
 
-export type StatusLevel = 'ok' | 'warn' | 'danger' | 'idle';
+export type StatusLevel = 'ok' | 'warn' | 'danger' | 'idle' | 'info';
 
 export interface StatusStyle {
   /** bg class for a solid dot */
@@ -65,11 +66,20 @@ export const STATUS: Record<StatusLevel, StatusStyle> = {
     ring: 'ring-white/10',
     edge: 'bg-idle/70',
   },
+  info: {
+    dot: 'bg-info',
+    text: 'text-info',
+    soft: 'bg-info/12 text-info',
+    ring: 'ring-info/30',
+    edge: 'bg-info/80',
+  },
 };
 
-/** Whether a level should visibly "live" (pulsing dot) — only actively-good/bad. */
+/** Whether a level should visibly "live" (pulsing dot) — only actively-good/bad.
+ *  `info` is a settled, recognised state (a detected embed), so it stays steady
+ *  like `idle` rather than pulsing. */
 export function isLive(level: StatusLevel): boolean {
-  return level !== 'idle';
+  return level !== 'idle' && level !== 'info';
 }
 
 // ── Domain → canonical level ──────────────────────────────────────────────────
@@ -78,6 +88,8 @@ export function fromFormLevel(l: FormHealthLevel | undefined | null): StatusLeve
   switch (l) {
     case 'healthy':
       return 'ok';
+    case 'detected':
+      return 'info';
     case 'attention':
       return 'warn';
     case 'failing':
@@ -114,14 +126,18 @@ export function fromChangeSeverity(sev: 'low' | 'medium' | 'high' | undefined, c
  *
  *   ○ Not monitoring  (idle)   — no live scheduler
  *   ● Monitoring      (ok)     — live + everything healthy
+ *   ● Detected        (info)   — live + healthy, with a recognised third-party embed
  *   ● Attention       (warn)   — live + something needs a look
  *   ● Failing         (danger) — live + something down
  *
- * `severity` thresholds match the existing rollup severity scale.
+ * `severity` thresholds match the existing rollup severity scale. The `info`
+ * ("Detected") state is a flavour of healthy — shown only when nothing worse
+ * needs attention, so a real problem always wins the pill. FR-60.
  */
 export function fromProjectRollup(r: ProjectRollup): { level: StatusLevel; label: string } {
   if (!r.monitored) return { level: 'idle', label: 'Not monitoring' };
   if (r.severity >= 30) return { level: 'danger', label: 'Failing' };
   if (r.severity >= 15) return { level: 'warn', label: 'Attention' };
+  if (r.hasDetected) return { level: 'info', label: 'Detected' };
   return { level: 'ok', label: 'Monitoring' };
 }

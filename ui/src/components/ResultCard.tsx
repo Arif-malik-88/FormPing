@@ -5,11 +5,19 @@ import { getReasonMessage, type Severity } from '@/lib/reasonMessages';
 import { runVerdict } from '@/lib/formWatch/verdict';
 import { FormSummary } from './FormFactChips';
 
-const BANNER_STYLES: Record<Severity, { wrap: string; icon: string; title: string }> = {
-  success: { wrap: 'bg-ok/10 border-ok/20', icon: '✓', title: 'text-ok' },
-  info: { wrap: 'bg-idle/10 border-line-strong', icon: 'ℹ', title: 'text-ink-secondary' },
-  warn: { wrap: 'bg-warn/10 border-warn/20', icon: '⚠', title: 'text-warn' },
-  error: { wrap: 'bg-danger/10 border-danger/20', icon: '✕', title: 'text-danger' },
+// Banner icons are real SVGs (no emoji glyphs — house design rule). `info` reads
+// as a recognised, informational state (a detected third-party embed). FR-60.
+const BANNER_ICON: Record<Severity, JSX.Element> = {
+  success: <path strokeLinecap="round" strokeLinejoin="round" d="M4 10.5l3.5 3.5L16 5.5" />,
+  info: <path strokeLinecap="round" strokeLinejoin="round" d="M10 13.5v-4M10 6.7v.1M10 2.5a7.5 7.5 0 100 15 7.5 7.5 0 000-15z" />,
+  warn: <path strokeLinecap="round" strokeLinejoin="round" d="M10 7.5v3.5M10 13.7v.1M8.6 3.4L2.3 14.5A1.6 1.6 0 003.7 17h12.6a1.6 1.6 0 001.4-2.5L11.4 3.4a1.6 1.6 0 00-2.8 0z" />,
+  error: <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l8 8M14 6l-8 8" />,
+};
+const BANNER_STYLES: Record<Severity, { wrap: string; title: string }> = {
+  success: { wrap: 'bg-ok/10 border-ok/20', title: 'text-ok' },
+  info: { wrap: 'bg-info/10 border-info/25', title: 'text-info' },
+  warn: { wrap: 'bg-warn/10 border-warn/20', title: 'text-warn' },
+  error: { wrap: 'bg-danger/10 border-danger/20', title: 'text-danger' },
 };
 
 function Pill({ label, active, color }: { label: string; active: boolean; color: string }) {
@@ -42,9 +50,10 @@ function StatusMark({ ok }: { ok: boolean }) {
 }
 /** Mode-aware header badge — a healthy safe/detect run reads "OK", not amber
  *  "WARN". Mirrors the Scheduler verdict so both surfaces agree. FR-63. */
-function VerdictBadge({ level }: { level: 'healthy' | 'attention' | 'failing' }) {
+function VerdictBadge({ level }: { level: 'healthy' | 'detected' | 'attention' | 'failing' }) {
   const map = {
     healthy: { cls: 'bg-ok/15 text-ok ring-ok/30', dot: 'bg-ok', label: 'OK' },
+    detected: { cls: 'bg-info/15 text-info ring-info/30', dot: 'bg-info', label: 'Detected' },
     attention: { cls: 'bg-warn/15 text-warn ring-warn/30', dot: 'bg-warn', label: 'Attention' },
     failing: { cls: 'bg-danger/15 text-danger ring-danger/30', dot: 'bg-danger', label: 'Failed' },
   }[level];
@@ -99,7 +108,9 @@ export function ResultCard({ result }: { result: SiteResult }) {
 
       {/* Reason banner */}
       <div className={`mx-4 mb-3 flex items-start gap-2.5 rounded-lg border px-3 py-2.5 ${banner.wrap}`}>
-        <span className={`${banner.title} mt-0.5 shrink-0 text-sm font-bold leading-5`}>{banner.icon}</span>
+        <svg viewBox="0 0 20 20" className={`${banner.title} mt-0.5 h-4 w-4 shrink-0`} fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+          {BANNER_ICON[reason.severity]}
+        </svg>
         <div className="min-w-0">
           <p className={`text-sm font-semibold ${banner.title}`}>{reason.title}</p>
           {reason.description && <p className="mt-0.5 text-xs leading-relaxed text-ink-muted">{reason.description}</p>}
@@ -177,6 +188,22 @@ export function ResultCard({ result }: { result: SiteResult }) {
                   captchaPresent={result.captchaDetected}
                 />
               </div>
+            )}
+
+            {/* Third-party embed — the one useful action is to open it and send a
+                quick manual test, since we can't submit through a cross-origin form. FR-60. */}
+            {hasEmbed && (
+              <a
+                href={pageUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 ml-[40px] inline-flex items-center gap-1.5 rounded-lg bg-info/10 px-3 py-1.5 text-xs font-semibold text-info ring-1 ring-info/25 transition-colors hover:bg-info/15"
+              >
+                Open the form
+                <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 4H5.5A1.5 1.5 0 004 5.5v9A1.5 1.5 0 005.5 16h9a1.5 1.5 0 001.5-1.5V13M12 4h4v4M16 4l-7 7" />
+                </svg>
+              </a>
             )}
 
             {/* Landing-page / tested-elsewhere context — the user's own toggle language */}

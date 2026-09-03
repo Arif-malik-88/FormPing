@@ -34,9 +34,9 @@ const MESSAGES: Record<string, ReasonMessage> = {
     severity: 'warn',
   },
   THIRD_PARTY_EMBED_FORM: {
-    title: 'Third-party embed form found',
-    description: 'The page embeds a hosted form (Typeform, HubSpot, Calendly, Jotform, Tally, …), named in the run notes. The form exists, but it is a cross-origin embed FormPing cannot auto-fill or submit — verify it manually. Monitoring can confirm the embed is present but not submit through it.',
-    severity: 'warn',
+    title: 'Third-party form detected',
+    description: 'This page uses a hosted form (Typeform, HubSpot, Calendly, Jotform, Tally, …), named in the run notes. We confirmed it is present and named its provider — this is a recognised, expected setup, not a problem. It just runs on the provider’s own domain, so FormPing can’t fill or submit it for you. Open it to send a quick manual test.',
+    severity: 'info',
   },
   FORM_AMBIGUOUS: {
     title: 'Multiple candidate forms',

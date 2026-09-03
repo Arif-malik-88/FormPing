@@ -44,6 +44,10 @@ export function compareFingerprints(
 /** True when the mode-aware health verdict got worse than the previous run. */
 export function isRegression(prev: VerdictLevel | null, curr: VerdictLevel): boolean {
   if (!prev) return false;
-  const rank: Record<VerdictLevel, number> = { healthy: 2, attention: 1, failing: 0 };
+  // `detected` (a recognised third-party embed) is a "fine" outcome, same tier as
+  // healthy: switching a native form to/from an embed is a notable change (surfaced
+  // via changes[]) but NOT a health regression. Only slipping to attention/failing
+  // regresses. FR-60.
+  const rank: Record<VerdictLevel, number> = { healthy: 2, detected: 2, attention: 1, failing: 0 };
   return rank[curr] < rank[prev];
 }
