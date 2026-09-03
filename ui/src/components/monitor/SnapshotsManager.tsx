@@ -147,8 +147,9 @@ export function SnapshotsManager({ url, disabled, refreshKey, onCleared }: Props
             <span className="text-ink-faint font-mono">{formatBytes(info.totalBytes)}</span>
           </p>
           {confirming && (
-            <p className="text-xs text-danger mt-1.5 leading-relaxed">
-              ⚠ This will delete all {info.count} snapshot{info.count !== 1 ? 's' : ''} and screenshots. Click again to confirm.
+            <p className="flex items-start gap-1.5 text-xs text-danger mt-1.5 leading-relaxed">
+              <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M10 6.5v4M10 13.5v.3M8.6 3.9L2.5 15a1.6 1.6 0 001.4 2.4h12.2A1.6 1.6 0 0017.5 15L11.4 3.9a1.6 1.6 0 00-2.8 0z" /></svg>
+              <span>This will delete all {info.count} snapshot{info.count !== 1 ? 's' : ''} and screenshots. Click again to confirm.</span>
             </p>
           )}
         </div>
