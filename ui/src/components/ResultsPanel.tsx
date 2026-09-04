@@ -93,7 +93,7 @@ function RunningLoader({
     : 'find the contact form and fill it';
   const sub = landingPage
     ? `Landing-page mode — we test only the page you gave: ${finish}.`
-    : `Looking across your site for the contact form, then we ${finish}.`;
+    : 'Scanning your whole site for its forms, then testing the contact form.';
   const total = progress?.total ?? 0;
   const current = progress?.current ?? 0;
   const cur = progress?.currentUrl;
@@ -106,11 +106,11 @@ function RunningLoader({
   }, []);
   return (
     <div className="fp-rise overflow-hidden rounded-xl border border-line bg-panel p-5">
-      <div className="flex items-center gap-4">
-        {/* animated ping rings — on-brand (form + ping) */}
-        <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
-          <span className="absolute inline-flex h-10 w-10 animate-ping rounded-full bg-accent/15 [animation-duration:2s] motion-reduce:animate-none" aria-hidden />
-          <span className="absolute h-12 w-12 rounded-full border border-accent/15" aria-hidden />
+      <div className="flex items-start gap-4">
+        {/* animated ping rings — on-brand (form + ping). Top-aligned with the heading. */}
+        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center">
+          <span className="absolute inline-flex h-9 w-9 animate-ping rounded-full bg-accent/15 [animation-duration:2s] motion-reduce:animate-none" aria-hidden />
+          <span className="absolute h-11 w-11 rounded-full border border-accent/15" aria-hidden />
           <span className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-panel-raised text-accent-soft ring-1 ring-line-strong">
             <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden>
               <rect x="4" y="3" width="16" height="18" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
@@ -123,9 +123,17 @@ function RunningLoader({
             <p className="text-sm font-semibold text-ink">{headline}</p>
             {total > 1 && <span className="shrink-0 font-mono text-xs text-ink-faint">{current}/{total}</span>}
           </div>
-          <p className="mt-0.5 text-xs leading-relaxed text-ink-muted">{sub}</p>
+          <p className="mt-1 text-xs leading-relaxed text-ink-muted">{sub}</p>
+          {!landingPage && (
+            <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-ink-faint">
+              <svg viewBox="0 0 20 20" className="mt-0.5 h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 5.5V10l2.5 1.5M10 2.5a7.5 7.5 0 100 15 7.5 7.5 0 000-15z" />
+              </svg>
+              Bigger sites have more pages, so this can take a little while.
+            </p>
+          )}
           {(phase || cur) && (
-            <p className="mt-1.5 flex min-w-0 items-center gap-1.5 text-xs text-ink-faint">
+            <p className="mt-2 flex min-w-0 items-center gap-1.5 text-xs text-ink-faint">
               <span className="inline-flex h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent" />
               {phase && <span className="shrink-0">{phase}</span>}
               {cur && <span className="truncate font-mono text-ink-faint/70">{phase ? '· ' : ''}{cur}</span>}

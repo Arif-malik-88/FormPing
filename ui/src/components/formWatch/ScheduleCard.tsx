@@ -7,7 +7,7 @@ import { TrendBar, type TrendTone } from '@/components/TrendBar';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cx, KeptNotice } from '@/components/ui';
 import { friendlyNotes } from '@/lib/friendlyNotes';
-import { FormSummary } from '@/components/FormFactChips';
+import { FormSummary, FormsOnPageLine, TrackingParamsLine } from '@/components/FormFactChips';
 
 const LEVEL_STYLE: Record<VerdictLevel | 'pending', { dot: string; text: string; label: string }> = {
   healthy: { dot: 'bg-ok', text: 'text-ok', label: 'Healthy' },
@@ -295,6 +295,8 @@ function RunRow({ run }: { run: FormRunRecord }) {
               stepKnown={stepKnown}
               captchaPresent={fp.captchaDetected}
             />
+            <TrackingParamsLine tracking={fp.tracking} />
+            <FormsOnPageLine forms={fp.formsOnPage} pageUrl={fp.contactPage ?? undefined} />
           </div>
         );
       })()}

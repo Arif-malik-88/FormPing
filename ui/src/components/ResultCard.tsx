@@ -3,7 +3,7 @@ import { useState } from 'react';
 import type { SiteResult } from '@/types';
 import { getReasonMessage, type Severity } from '@/lib/reasonMessages';
 import { runVerdict } from '@/lib/formWatch/verdict';
-import { FormSummary } from './FormFactChips';
+import { FormSummary, FormsOnPageLine, TrackingParamsLine } from './FormFactChips';
 
 // Banner icons are real SVGs (no emoji glyphs — house design rule). `info` reads
 // as a recognised, informational state (a detected third-party embed). FR-60.
@@ -187,6 +187,7 @@ export function ResultCard({ result }: { result: SiteResult }) {
                   stepKnown={hasNativeForm}
                   captchaPresent={result.captchaDetected}
                 />
+                <TrackingParamsLine tracking={result.tracking} size="lg" />
               </div>
             )}
 
@@ -219,6 +220,17 @@ export function ResultCard({ result }: { result: SiteResult }) {
           </div>
         );
       })()}
+
+      {/* How many forms are on the page + what the others are (2+ forms only). FR-68. */}
+      {result.formsOnPage && (
+        <div className="mx-4 mb-3">
+          <FormsOnPageLine
+            forms={result.formsOnPage}
+            pageUrl={result.resolvedContactPage || result.finalUrl || result.normalizedUrl}
+            size="lg"
+          />
+        </div>
+      )}
 
       {/* Footer: raw JSON for devs (everything else is already on the card) */}
       <div className="flex items-center justify-end border-t border-line">
