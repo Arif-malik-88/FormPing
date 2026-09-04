@@ -1,6 +1,18 @@
 import type { Metadata, Viewport } from 'next';
+import { JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { AppShell } from '@/components/shell/AppShell';
+
+// Self-hosted at build time (no runtime request to Google), exposed as a CSS
+// variable that tailwind's fontFamily.mono references. Tailwind declared
+// JetBrains Mono but the font was never actually loaded — this loads it while
+// keeping the app (and the hermetic e2e) free of any external network call.
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-jetbrains-mono',
+  display: 'swap',
+});
 
 // Public base URL used to resolve absolute OG/Twitter image URLs. Defaults to the
 // current Railway domain; override with NEXT_PUBLIC_SITE_URL after a domain change.
@@ -54,7 +66,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" className={`dark ${jetbrainsMono.variable}`} suppressHydrationWarning>
       {/* suppressHydrationWarning quiets dev-only mismatches from browser
           extensions (Grammarly, LastPass, Dark Reader, etc.) that inject
           attributes/divs into the DOM before React hydrates. Doesn't hide
