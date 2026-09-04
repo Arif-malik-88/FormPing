@@ -9,6 +9,7 @@
 
 import { spawn } from 'child_process';
 import path from 'path';
+import type { FormsOnPage, TrackingParams } from '@/types';
 
 /** The subset of the CLI's SiteResult we consume. Parsed defensively. */
 export interface RawSiteResult {
@@ -29,6 +30,8 @@ export interface RawSiteResult {
   fields?: { label: string; type: string }[];
   isMultiStep?: boolean;
   landingPageMode?: boolean;
+  formsOnPage?: FormsOnPage; // FR-68 — "N forms on this page" (2+ forms only)
+  tracking?: TrackingParams; // FR-68 — hidden UTM/tracking params captured
   notes?: string[];
   errors?: string[];
   [k: string]: unknown;

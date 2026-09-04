@@ -6,6 +6,8 @@
  * monitor/watch code. It only reuses the form-test CLI by spawning it.
  */
 
+import type { FormsOnPage, TrackingParams } from '@/types';
+
 export type FormWatchMode = 'live' | 'safe' | 'detect-only';
 
 /** A recurring schedule for one form URL. */
@@ -61,6 +63,11 @@ export interface FormFingerprint {
   fields?: { label: string; type: string }[];
   isMultiStep?: boolean;
   landingPageMode?: boolean;
+  /** "N forms on this page" summary (2+ forms only) — same data the Tester card
+   *  shows, so a scheduled run reads identically. FR-68. */
+  formsOnPage?: FormsOnPage;
+  /** Hidden tracking/UTM params the form captures. FR-68. */
+  tracking?: TrackingParams;
 }
 
 /** One recorded run of a scheduled form test. */

@@ -3,10 +3,11 @@ import type { AppConfig, SiteResult } from '../types.js';
 import { normalizeUrl } from '../utils/url.js';
 import { findContactPage } from '../discovery/findContactPage.js';
 import { findContactForm } from '../forms/findContactForm.js';
+import { inventorySiteForms } from '../forms/siteFormInventory.js';
 import { fillForm } from '../forms/fillForm.js';
 import { submitForm } from '../forms/submitForm.js';
 import { detectCaptcha, detectAntiBot } from '../forms/detectSuccess.js';
-import { nativeFormFacts, embedFormFacts, shouldHoldMultiStepSubmit } from './formFacts.js';
+import { nativeFormFacts, embedFormFacts, shouldHoldMultiStepSubmit, buildFormsOnPage, detectTrackingParams } from './formFacts.js';
 import {
   newPage,
   closePage,
@@ -104,6 +105,16 @@ export async function runSingleSite(
         'Landing-page mode: tested the form on the given URL directly (contact-page discovery skipped)',
       );
     } else {
+    // Site-level form inventory (FR-68): crawl the site's reachable pages and
+    // record EVERY form found — so forms on pages OTHER than the tested contact
+    // page (rental, book-a-demo, …) are reported too, not just the one we test.
+    // Best-effort: a crawl failure never breaks the primary run.
+    try {
+      baseResult.siteForms = await inventorySiteForms(normalizedUrl, browser, config);
+    } catch (err) {
+      logger.debug(`Site inventory failed (non-fatal): ${err}`);
+    }
+
     const { candidate, allCandidates, usedAiFallback, blockedByHost, diagnostic } =
       await findContactPage(normalizedUrl, browser, config);
 
@@ -253,6 +264,11 @@ export async function runSingleSite(
       // ── Step 3: Find contact form ──────────────────────────────────────────
       const { form, allForms, embeds, acceptedByLandingLeniency, hiddenMultiStep } = await findContactForm(page, config);
 
+      // "N forms on this page" — set once here so EVERY return path (embed-only,
+      // no-contact-form, and the tested-form success) carries it. Only populated
+      // when the page has 2+ forms, so single-form pages read as before. FR-68.
+      baseResult.formsOnPage = buildFormsOnPage(allForms, embeds, form?.index ?? null) ?? undefined;
+
       if (!form) {
         // If the contact page itself looks like a hosting-provider block
         // page (tiny response or no real markup), surface BLOCKED_BY_HOST
@@ -348,6 +364,32 @@ export async function runSingleSite(
         };
       }
 
+      // Honesty guard (FR-68): the only form we could match is NOT a contact form
+      // (a search box / newsletter / login). This is what landing-page leniency
+      // used to accept, then "fail" trying to fill — a hidden search box reported
+      // as "form found" AND "could not fill". Report it plainly instead: no
+      // contact form here, nothing filled, no self-contradiction.
+      if (form.kind === 'search' || form.kind === 'newsletter' || form.kind === 'login') {
+        const what =
+          form.kind === 'search' ? 'a search box' : form.kind === 'newsletter' ? 'a newsletter sign-up' : 'a login form';
+        return {
+          ...baseResult,
+          finalUrl: page.url(),
+          captchaDetected,
+          formType: 'native',
+          finalStatus: 'warn',
+          reasonCode: 'NON_CONTACT_FORM_FOUND',
+          notes: [
+            ...baseResult.notes,
+            `The only form on this page is ${what} — not a contact form, so nothing was filled.`,
+            ...(config.landingPage
+              ? ['Landing-page mode tested this exact URL. If the contact form is on another page, turn Landing-page mode off to let FormPing find it.']
+              : []),
+          ],
+          durationMs: Date.now() - start,
+        };
+      }
+
       const formConfidence = Math.min(Math.max(form.score / 75, 0), 1);
       baseResult.formFound = true;
       baseResult.formConfidence = formConfidence;
@@ -361,6 +403,9 @@ export async function runSingleSite(
       baseResult.fieldCount = facts.fieldCount;
       baseResult.fields = facts.fields;
       baseResult.isMultiStep = facts.isMultiStep;
+      // Hidden tracking/UTM params the form captures — from ALL its fields
+      // (hidden ones included), so we can flag campaign-attribution coverage. FR-68.
+      baseResult.tracking = detectTrackingParams(form.fields);
 
       // Plain, user-facing detection note (FR-64). The detector score + signal
       // list are developer-internal and confusing on the result card / run log —

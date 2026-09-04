@@ -49,3 +49,7 @@ Thumbs.db
 *.tar.gz
 *.zip
 *.bak
+
+# Internal planning / process docs — kept local, never pushed to GitHub
+docs/architecture/
+WORKING_AGREEMENT.md

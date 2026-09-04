@@ -123,12 +123,31 @@ export interface FormIdentifier {
   method: string | null;
 }
 
+/** A light classification of what a form is FOR — derived from its fields +
+ *  submit/text, so a page with several forms can be described honestly. FR-68. */
+export type FormKind = 'contact' | 'newsletter' | 'search' | 'login' | 'other';
+
+/** Roughly WHERE a form sits on the page, so we can say "in the footer" /
+ *  "under 'Subscribe'" and offer a jump-to link. All optional. FR-68. */
+export interface FormLocation {
+  /** Nearest landmark region: header | footer | navigation | sidebar | main content. */
+  landmark?: string;
+  /** Nearest heading text above the form. */
+  heading?: string;
+  /** id of the form (or nearest ancestor with one) — for a `page#id` deep link. */
+  anchorId?: string;
+}
+
 export interface FormCandidate {
   index: number;
   identifier: FormIdentifier;
   score: number;
   signals: string[];
   negativeSignals: string[];
+  /** What this form looks like it's for (contact / newsletter / search / …). FR-68. */
+  kind: FormKind;
+  /** Roughly where this form sits on the page. FR-68. */
+  location?: FormLocation;
   /** The form's detected fields (label + input type), so the caller can report
    *  "N fields: Name, Email, Message …" without re-reading the DOM. FR-64. */
   fields: DetectedFormField[];
@@ -138,6 +157,64 @@ export interface FormCandidate {
 export interface DetectedFormField {
   label: string;
   type: string;
+  /** The field's `name` — used to collapse radio/checkbox groups into one
+   *  logical field so counts are accurate (5 radio options ≠ 5 fields). FR-68. */
+  name?: string;
+}
+
+/** A compact, human-facing summary of ONE of the other forms on the page. FR-68. */
+export interface FormBrief {
+  kind: FormKind | 'third-party';
+  identifier: FormIdentifier | null;
+  /** Provider name when kind === 'third-party' (Typeform, HubSpot, …). */
+  provider?: string;
+  /** Fillable-field count for a native form. */
+  fieldCount?: number;
+  /** Roughly where on the page this form sits. FR-68. */
+  location?: FormLocation;
+}
+
+/** Hidden tracking params a form captures — campaign attribution for its leads.
+ *  `utm` = utm_source/medium/campaign/…; `other` = gclid/fbclid/… FR-68. */
+export interface TrackingParams {
+  utm: string[];
+  other: string[];
+}
+
+/** One form found anywhere on the SITE (across pages), for the site-level
+ *  inventory: what it is, where it lives, its fields, security + tracking. FR-68. */
+export interface SiteForm {
+  /** The page URL where this form lives (its live source/address). */
+  url: string;
+  kind: FormKind | 'third-party';
+  /** Human "what it's about" — nearest heading, else submit-button text. */
+  about: string;
+  formType: 'native' | 'third-party';
+  /** Provider when third-party (Typeform, HubSpot, …). */
+  provider?: string;
+  /** Accurate fillable-field count (groups collapsed, hidden dropped). */
+  fieldCount: number;
+  fields: DetectedFormField[];
+  security: { captcha: boolean };
+  tracking: TrackingParams;
+  /** True when this same form appears on many pages (search/footer newsletter). */
+  siteWide: boolean;
+  /** How many crawled pages this form was seen on. */
+  seenOn: number;
+}
+
+/** "This page has N forms" — surfaced only when total ≥ 2, so single-form pages
+ *  read exactly as before (no "1 form" noise). FR-68. */
+export interface FormsOnPage {
+  total: number;
+  native: number;
+  embeds: number;
+  /** The form we actually tested (kind + identifier), or null if none chosen. */
+  tested: { kind: FormKind; identifier: FormIdentifier | null } | null;
+  /** Every OTHER form on the page, lightly classified. */
+  others: FormBrief[];
+  /** True when 2+ native forms look like plausible contact forms (ambiguity). */
+  multipleContacts: boolean;
 }
 
 export interface FilledField {
@@ -189,6 +266,16 @@ export interface SiteResult {
   fields?: DetectedFormField[];
   /** True when the native form sits in a hidden multi-step widget (FR-62). */
   isMultiStep?: boolean;
+  /** How many forms are on the tested page + what the others are — only set when
+   *  the page has 2+ forms (native + embeds), else absent. FR-68. */
+  formsOnPage?: FormsOnPage;
+  /** Hidden tracking/UTM params the tested form captures — set whenever a native
+   *  form was found (empty arrays = "found a form, but no UTM params"). FR-68. */
+  tracking?: TrackingParams;
+  /** Every form found across the SITE (site-level crawl) — set in whole-site mode
+   *  when the crawl runs; each entry names its page, kind, fields, security,
+   *  tracking. Absent in landing-page mode. FR-68. */
+  siteForms?: SiteForm[];
   /** True when the run skipped discovery and tested the given URL directly
    *  (Landing-page mode) — the card must not show a "contact page" confidence. */
   landingPageMode?: boolean;
