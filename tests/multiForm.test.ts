@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { classifyFormKind, buildFormsOnPage, meaningfulFields, detectTrackingParams } from '../src/runners/formFacts';
+import { classifyFormKind, buildFormsOnPage, meaningfulFields, detectTrackingParams, isLeadForm } from '../src/runners/formFacts';
 import type { FormCandidate, FormIdentifier } from '../src/types';
 import type { EmbedDetection } from '../src/forms/detectEmbeds';
 
@@ -91,6 +91,28 @@ describe('meaningfulFields — the ONE accurate counter', () => {
       { label: 'B', type: 'radio' },
     ];
     expect(meaningfulFields(fields).length).toBe(2);
+  });
+});
+
+describe('isLeadForm — which forms the inventory fills (FR-76)', () => {
+  it('a contact form is always a lead form', () => {
+    expect(isLeadForm('contact', 1)).toBe(true);
+    expect(isLeadForm('contact', 7)).toBe(true);
+  });
+
+  it('a multi-field "other" (rental/demo) is a lead form', () => {
+    expect(isLeadForm('other', 5)).toBe(true);
+  });
+
+  it('a single-field "other" is NOT a lead form (likely a widget)', () => {
+    expect(isLeadForm('other', 1)).toBe(false);
+    expect(isLeadForm('other', 0)).toBe(false);
+  });
+
+  it('utility inputs are never lead forms — nothing to fill', () => {
+    expect(isLeadForm('newsletter', 1)).toBe(false);
+    expect(isLeadForm('search', 1)).toBe(false);
+    expect(isLeadForm('login', 2)).toBe(false);
   });
 });
 

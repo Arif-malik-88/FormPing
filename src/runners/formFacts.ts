@@ -137,6 +137,17 @@ export function classifyFormKind(form: ClassifyInput): FormKind {
 }
 
 /**
+ * A lead-capture form we'd actually fill — a contact form, or a real multi-field
+ * "other" (rental / demo request). Newsletter / search / login are utility inputs
+ * and are never filled. Drives which forms the site inventory fills (FR-76).
+ */
+export function isLeadForm(kind: FormKind, fieldCount: number): boolean {
+  if (kind === 'contact') return true;
+  if (kind === 'other') return fieldCount > 1;
+  return false;
+}
+
+/**
  * Build the "N forms on this page" summary from the already-scored native forms
  * + detected embeds. Returns null when the page has fewer than 2 forms, so a
  * single-form page stays exactly as before. Pure — no DOM, unit-tested. FR-68.

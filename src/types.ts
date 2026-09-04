@@ -181,6 +181,20 @@ export interface TrackingParams {
   other: string[];
 }
 
+/** What actually happened to a detected lead form when we tried to fill it (site
+ *  inventory now fills every lead form, not just the primary). `detected` = we
+ *  didn't attempt a fill (detect-only, or a utility form like search/newsletter);
+ *  `filled` = fields entered, not submitted; `submitted` = a live submit went
+ *  through; `skipped` = nothing fillable reached (e.g. hidden multi-step);
+ *  `failed` = the fill attempt errored. FR-76. */
+export interface FormOutcome {
+  state: 'detected' | 'filled' | 'submitted' | 'skipped' | 'failed';
+  /** How many fields we actually filled (for `filled` / `submitted`). */
+  filledCount?: number;
+  /** A short, plain qualifier — e.g. "multi-step", "no fillable fields reached". */
+  note?: string;
+}
+
 /** One form found anywhere on the SITE (across pages), for the site-level
  *  inventory: what it is, where it lives, its fields, security + tracking. FR-68. */
 export interface SiteForm {
@@ -201,6 +215,8 @@ export interface SiteForm {
   siteWide: boolean;
   /** How many crawled pages this form was seen on. */
   seenOn: number;
+  /** What we did with it this run — fill every lead form, detect the rest. FR-76. */
+  outcome?: FormOutcome;
 }
 
 /** "This page has N forms" — surfaced only when total ≥ 2, so single-form pages

@@ -1,5 +1,4 @@
 'use client';
-import { useState } from 'react';
 import type { SiteResult } from '@/types';
 import { getReasonMessage, type Severity } from '@/lib/reasonMessages';
 import { runVerdict } from '@/lib/formWatch/verdict';
@@ -66,7 +65,6 @@ function VerdictBadge({ level }: { level: 'healthy' | 'detected' | 'attention' |
 }
 
 export function ResultCard({ result }: { result: SiteResult }) {
-  const [showJson, setShowJson] = useState(false);
   const domain = getDomain(result.normalizedUrl);
 
   const statusBorder: Record<string, string> = {
@@ -232,21 +230,7 @@ export function ResultCard({ result }: { result: SiteResult }) {
         </div>
       )}
 
-      {/* Footer: raw JSON for devs (everything else is already on the card) */}
-      <div className="flex items-center justify-end border-t border-line">
-        <button onClick={() => setShowJson(!showJson)} className="px-4 py-2 font-mono text-xs text-ink-faint transition-colors hover:bg-panel-raised hover:text-ink">
-          {showJson ? '{ hide }' : '{ JSON }'}
-        </button>
-      </div>
-
-      {/* Raw JSON */}
-      {showJson && (
-        <div className="fp-rise border-t border-line">
-          <pre className="overflow-x-auto whitespace-pre-wrap break-all p-4 font-mono text-xs leading-relaxed text-ink-secondary">
-            {JSON.stringify(result, null, 2)}
-          </pre>
-        </div>
-      )}
+      {/* Raw JSON lives once, at the top of the results panel ("For developers"). */}
     </div>
   );
 }

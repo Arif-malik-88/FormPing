@@ -60,6 +60,13 @@ export interface TrackingParams {
   other: string[];
 }
 
+/** What we did with a detected lead form (we now fill every lead form). FR-76. */
+export interface FormOutcome {
+  state: 'detected' | 'filled' | 'submitted' | 'skipped' | 'failed';
+  filledCount?: number;
+  note?: string;
+}
+
 /** One form found anywhere on the site (site-level crawl). FR-68. */
 export interface SiteForm {
   url: string;
@@ -73,6 +80,8 @@ export interface SiteForm {
   tracking: TrackingParams;
   siteWide: boolean;
   seenOn: number;
+  /** What we did with it this run — fill every lead form, detect the rest. FR-76. */
+  outcome?: FormOutcome;
 }
 
 /** "This page has N forms" — present only when the page has 2+ forms. FR-68. */

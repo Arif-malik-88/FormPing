@@ -10,6 +10,7 @@ Find, fill and verify contact forms on sites you own or are authorized to test, 
 ![Next.js](https://img.shields.io/badge/Next.js%2014-000000?style=flat&logo=nextdotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React%2018-20232A?style=flat&logo=react&logoColor=61DAFB)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-06B6D4?style=flat&logo=tailwindcss&logoColor=white)
+![Vitest](https://img.shields.io/badge/Vitest-6E9F18?style=flat&logo=vitest&logoColor=white)
 ![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
 ![CI](https://github.com/waseembashir/FormPing/actions/workflows/ci.yml/badge.svg)
@@ -54,7 +55,7 @@ The app is organized around **Projects** (a client and their URLs), with two too
 | Area | What it does |
 |------|--------------|
 | **Projects** | Group a client's URLs into a project and see their form, uptime and SSL health at a glance. URLs you've tested or monitored but not grouped yet surface in an **Unassigned** bucket to assign or dismiss, so nothing is ever invisible. |
-| **Contact Forms** | **Form Tester** — run an on-demand test against a URL; results persist across refreshes. **Form Scheduler** — recurring form tests with alerts when a form changes or breaks. |
+| **Contact Forms** | **Form Tester** — run an on-demand test against a URL. On a whole-site run it finds *every* form across the site and reports them form-by-form (summary + a tab per form); results persist across refreshes. **Form Scheduler** — recurring form tests with alerts when a form changes or breaks. |
 | **Site Health** | **Uptime & SSL** — availability plus certificate and domain expiry monitoring. **Content Changes** — track content, SEO, form and script changes over time, with an optional AI summary of each diff. |
 | **Status pages** | A live, client-safe health page per client (and per single URL), shareable with no login. An internal, richer version is available to the team. |
 | **Team** | Manage who can do what (roles), and triage bug reports submitted from within the app. |
@@ -73,6 +74,8 @@ Given a URL, the engine:
 4. Fills it with configurable test data — including **multi-step wizards**, walking each step (fill → Next → fill) until it reaches the submit control, even when the steps live outside the `<form>` element.
 5. Optionally submits and watches for a thank-you redirect or an inline success message. For a multi-step form in Live mode, submission is **held unless the run cleanly reached the final step and filled an email** — so a partial walk never drops a junk entry into the inbox.
 6. Returns a structured result explaining exactly what happened — in plain language. The result surfaces the key facts about what was found: the page the form sits on, whether it's a **native** in-page form or a **third-party embed** (and which provider, iframe vs script), how many fields and their names, and whether it's a **single- or multi-step** form. The same facts appear on the Form Tester result card and each Form Scheduler run.
+
+**Beyond the main contact form — every form on the site.** On a whole-site run the engine also inventories the other reachable pages (navigation, footer, sitemap) and records **every** form it finds, each with its own live source URL. It works out what each one is — **contact, newsletter, search, login, or another lead form** such as a rental or demo request — and **fills every lead form** with test data (safe mode fills and never submits; the primary contact form is the one submitted in live mode). Search / newsletter / login inputs are recognized as utility forms and left untouched. For each form it reports the source page, native vs embed, field count and names, single- vs multi-step, whether a CAPTCHA is present, and any hidden **UTM / click-id tracking** the form captures — or flags a lead form that captures none, since its leads won't carry a campaign source. A form that repeats on every page (a header search, a footer newsletter) is shown once and marked **global**. The result reads as one report: a summary of what was found, then a tab and detail panel per form.
 
 **Three test modes** put safety first:
 

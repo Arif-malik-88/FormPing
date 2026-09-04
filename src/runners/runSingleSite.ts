@@ -105,18 +105,22 @@ export async function runSingleSite(
         'Landing-page mode: tested the form on the given URL directly (contact-page discovery skipped)',
       );
     } else {
+    // Discover the contact page FIRST, so the inventory below can skip re-filling
+    // the contact form the main flow is about to test (no double-fill). FR-76.
+    const { candidate, allCandidates, usedAiFallback, blockedByHost, diagnostic } =
+      await findContactPage(normalizedUrl, browser, config);
+
     // Site-level form inventory (FR-68): crawl the site's reachable pages and
     // record EVERY form found — so forms on pages OTHER than the tested contact
     // page (rental, book-a-demo, …) are reported too, not just the one we test.
+    // In safe/live it now fills each lead form (FR-76), except the primary
+    // contact form (`candidate.url`), which the main flow fills once below.
     // Best-effort: a crawl failure never breaks the primary run.
     try {
-      baseResult.siteForms = await inventorySiteForms(normalizedUrl, browser, config);
+      baseResult.siteForms = await inventorySiteForms(normalizedUrl, browser, config, candidate?.url ?? null);
     } catch (err) {
       logger.debug(`Site inventory failed (non-fatal): ${err}`);
     }
-
-    const { candidate, allCandidates, usedAiFallback, blockedByHost, diagnostic } =
-      await findContactPage(normalizedUrl, browser, config);
 
     if (!candidate) {
       logger.warn(`No contact page found for ${normalizedUrl}`);
