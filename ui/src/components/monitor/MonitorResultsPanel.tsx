@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useState } from 'react';
 import type { ChangeReport, SnapshotResult, MonitorMode } from '@/types';
 import { CompareReportCard } from './CompareReportCard';
 import { SnapshotResultCard } from './SnapshotResultCard';
+import { RunLoaderShell } from '@/components/ui/RunLoader';
 
 interface Props {
   reports: ChangeReport[];
@@ -24,14 +24,9 @@ const SCAN_FACTS = [
   'Nothing on the site is changed — we only read it.',
 ];
 
-/** Mode-aware scan loader — never shows raw engine/crawler logs. FR-65. */
+/** Mode-aware scan loader — never shows raw engine/crawler logs. FR-65.
+ *  Shares the app-wide RunLoaderShell so its look + size match the Form Tester. */
 function ScanLoader({ mode, watchActive }: { mode: MonitorMode; watchActive: boolean }) {
-  const [factIdx, setFactIdx] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setFactIdx((i) => (i + 1) % SCAN_FACTS.length), 8000);
-    return () => clearInterval(t);
-  }, []);
-
   const headline = watchActive
     ? 'Watching your site for changes'
     : mode === 'snapshot' ? 'Taking a baseline snapshot' : 'Comparing against the baseline';
@@ -42,33 +37,18 @@ function ScanLoader({ mode, watchActive }: { mode: MonitorMode; watchActive: boo
       : 'Scanning your site and diffing it against the last saved baseline.';
 
   return (
-    <div className="fp-rise overflow-hidden rounded-xl border border-line bg-panel p-5">
-      <div className="flex items-center gap-4">
-        <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
-          <span className="absolute inline-flex h-10 w-10 animate-ping rounded-full bg-accent/15 [animation-duration:2s] motion-reduce:animate-none" aria-hidden />
-          <span className="absolute h-12 w-12 rounded-full border border-accent/15" aria-hidden />
-          <span className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-panel-raised text-accent-soft ring-1 ring-line-strong">
-            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden>
-              <rect x="4" y="4" width="16" height="16" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
-              <path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-            </svg>
-          </span>
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-ink">{headline}</p>
-          <p className="mt-0.5 text-xs leading-relaxed text-ink-muted">{sub}</p>
-        </div>
-      </div>
-      <div className="mt-3 fp-indeterminate h-1 w-full rounded-full bg-line" />
-      <div className="mt-3 flex items-start gap-2 border-t border-line pt-3">
-        <svg viewBox="0 0 24 24" fill="none" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-soft" aria-hidden>
-          <path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.6.6 1 1.2 1 2h6c0-.8.4-1.4 1-2A6 6 0 0012 3z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    <RunLoaderShell
+      glyph={
+        <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden>
+          <rect x="4" y="4" width="16" height="16" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
+          <path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         </svg>
-        <p key={factIdx} className="fp-rise text-xs leading-relaxed text-ink-muted">
-          <span className="font-semibold text-ink-secondary">Did you know?</span> {SCAN_FACTS[factIdx]}
-        </p>
-      </div>
-    </div>
+      }
+      headline={headline}
+      sub={sub}
+      progress={<div className="fp-indeterminate h-1 w-full rounded-full bg-line" />}
+      facts={SCAN_FACTS}
+    />
   );
 }
 
