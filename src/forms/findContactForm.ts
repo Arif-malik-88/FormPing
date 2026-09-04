@@ -3,6 +3,7 @@ import type { AppConfig, FormCandidate, FormIdentifier } from '../types.js';
 import { normalizeText } from '../utils/text.js';
 import { logger } from '../utils/logger.js';
 import { detectEmbeds, type EmbedDetection } from './detectEmbeds.js';
+import { classifyFormKind } from '../runners/formFacts.js';
 
 // Patterns that indicate this is NOT a contact form
 const NEGATIVE_SUBMIT_PATTERNS = [/subscribe/i, /newsletter/i, /sign\s*up/i, /register/i, /search/i, /login/i, /log\s*in/i];
@@ -11,7 +12,7 @@ const NEGATIVE_FORM_PATTERNS = [/search/i, /newsletter/i, /subscribe/i];
 // Positive submit button patterns
 const POSITIVE_SUBMIT_PATTERNS = [/^send$/i, /^submit$/i, /send\b[\w\s]{0,20}\bmessage/i, /contact\s+us/i, /get\s+in\s+touch/i, /^send\s+it$/i, /^go$/i, /^submit\s+form$/i, /let'?s\s+(talk|connect|chat)/i, /send\s+(my\s+)?(enquiry|inquiry|request|details)/i];
 
-interface FormInfo {
+export interface FormInfo {
   index: number;
   id: string | null;
   name: string | null;
@@ -25,9 +26,12 @@ interface FormInfo {
    *  (FR-62). Kept (not filtered out) so a hidden-but-real contact form is still
    *  detected; visibility is weighed at selection time. */
   visible: boolean;
+  /** Roughly where the form sits — nearest landmark, nearest heading above it,
+   *  and an id to deep-link to. Empty strings when unknown. FR-68. */
+  location: { landmark: string; heading: string; anchorId: string };
 }
 
-interface FieldInfo {
+export interface FieldInfo {
   type: string;
   name: string;
   id: string;
@@ -39,11 +43,20 @@ interface FieldInfo {
  * Extract form metadata from the page via Playwright.
  * Returns serializable data so we can score without browser coupling.
  */
-async function extractForms(page: Page): Promise<FormInfo[]> {
+export async function extractForms(page: Page): Promise<FormInfo[]> {
   return page.evaluate(() => {
     const forms = Array.from(document.querySelectorAll('form'));
     return forms.map((form, index) => {
       const inputs = Array.from(form.querySelectorAll('input, textarea, select'));
+      // Also fields wired to this form by the HTML `form="<id>"` attribute but
+      // living OUTSIDE the <form> element — common on modern/React pages, and a
+      // frequent cause of undercounted fields. FR-68.
+      if (form.id) {
+        const esc = window.CSS && CSS.escape ? CSS.escape(form.id) : form.id;
+        document.querySelectorAll('input[form="' + esc + '"], textarea[form="' + esc + '"], select[form="' + esc + '"]').forEach((el) => {
+          if (!inputs.includes(el)) inputs.push(el);
+        });
+      }
       const fields = inputs.map((el) => {
         const input = el as HTMLInputElement;
         const id = input.id || '';
@@ -98,6 +111,36 @@ async function extractForms(page: Page): Promise<FormInfo[]> {
         if (rect.width === 0 || rect.height === 0) formVisible = false;
       }
 
+      // ── Location (FR-68): nearest landmark, nearest heading, an id to link to.
+      // Inlined (no nested named functions) to avoid the esbuild `__name` wrap
+      // that breaks inside page.evaluate.
+      let landmark = '';
+      let anchorId = form.id || '';
+      let node: Element | null = form;
+      while (node && node !== document.body) {
+        const tag = node.tagName.toLowerCase();
+        const role = node.getAttribute('role');
+        if (!landmark) {
+          if (tag === 'footer' || role === 'contentinfo') landmark = 'footer';
+          else if (tag === 'header' || role === 'banner') landmark = 'header';
+          else if (tag === 'nav' || role === 'navigation') landmark = 'navigation';
+          else if (tag === 'aside' || role === 'complementary') landmark = 'sidebar';
+          else if (tag === 'main' || role === 'main') landmark = 'main content';
+        }
+        if (!anchorId && node !== form && node.id) anchorId = node.id;
+        node = node.parentElement;
+      }
+      // Nearest heading that appears BEFORE the form in document order.
+      let heading = '';
+      const heads = Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6'));
+      for (let hi = heads.length - 1; hi >= 0; hi--) {
+        // DOCUMENT_POSITION_PRECEDING === 2: the heading comes before the form.
+        if (form.compareDocumentPosition(heads[hi]!) & 2) {
+          heading = (heads[hi]!.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
+          if (heading) break;
+        }
+      }
+
       return {
         index,
         id: form.id || null,
@@ -108,6 +151,7 @@ async function extractForms(page: Page): Promise<FormInfo[]> {
         submitText,
         allText: form.textContent?.slice(0, 500) ?? '',
         visible: formVisible,
+        location: { landmark, heading, anchorId },
       };
     });
     // FR-62: return ALL forms (including hidden ones — multi-step steps sit at
@@ -235,9 +279,21 @@ export async function findContactForm(
       score,
       signals,
       negativeSignals,
-      // Carry the detected fields (label + type) so the runner can report
-      // "N fields: Name, Email, Message …" on the result card. FR-64.
-      fields: form.fields.map((f) => ({ label: f.label || f.placeholder || f.name, type: f.type })),
+      // What this form looks like it's for — reuses the fields + submit/text we
+      // already have, no extra DOM pass. FR-68.
+      kind: classifyFormKind({ fields: form.fields, submitText: form.submitText, allText: form.allText }),
+      // Where it sits — only the parts we actually found. FR-68.
+      location: (form.location.landmark || form.location.heading || form.location.anchorId)
+        ? {
+            ...(form.location.landmark ? { landmark: form.location.landmark } : {}),
+            ...(form.location.heading ? { heading: form.location.heading } : {}),
+            ...(form.location.anchorId ? { anchorId: form.location.anchorId } : {}),
+          }
+        : undefined,
+      // Carry the detected fields (label + type + name) so the runner can report
+      // "N fields: Name, Email, Message …" AND collapse radio/checkbox groups by
+      // name for an accurate count. FR-64/FR-68.
+      fields: form.fields.map((f) => ({ label: f.label || f.placeholder || f.name, type: f.type, name: f.name })),
     };
   });
 
