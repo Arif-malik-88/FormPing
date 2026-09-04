@@ -75,6 +75,8 @@ function toRecord(schedule: FormSchedule, raw: RawSiteResult, ranAt: string): Fo
       fields: Array.isArray(raw.fields) ? raw.fields : undefined,
       isMultiStep: Boolean(raw.isMultiStep),
       landingPageMode: Boolean(raw.landingPageMode),
+      formsOnPage: raw.formsOnPage && typeof raw.formsOnPage === 'object' ? raw.formsOnPage : undefined,
+      tracking: raw.tracking && typeof raw.tracking === 'object' ? raw.tracking : undefined,
     },
     notes: Array.isArray(raw.notes) ? raw.notes.map(String) : [],
     errors: Array.isArray(raw.errors) ? raw.errors.map(String) : [],

@@ -31,6 +31,58 @@ export interface FormIdentifier {
 export interface DetectedFormField {
   label: string;
   type: string;
+  /** Field name — collapses radio/checkbox groups for accurate counts. FR-68. */
+  name?: string;
+}
+
+/** What a form looks like it's for — for describing multi-form pages. FR-68. */
+export type FormKind = 'contact' | 'newsletter' | 'search' | 'login' | 'other';
+
+/** Roughly where a form sits on the page — "in the footer" / "under 'Subscribe'". FR-68. */
+export interface FormLocation {
+  landmark?: string;
+  heading?: string;
+  anchorId?: string;
+}
+
+/** One of the OTHER forms on the page (not the one we tested). FR-68. */
+export interface FormBrief {
+  kind: FormKind | 'third-party';
+  identifier: FormIdentifier | null;
+  provider?: string;
+  fieldCount?: number;
+  location?: FormLocation;
+}
+
+/** Hidden tracking/UTM params a form captures — campaign attribution. FR-68. */
+export interface TrackingParams {
+  utm: string[];
+  other: string[];
+}
+
+/** One form found anywhere on the site (site-level crawl). FR-68. */
+export interface SiteForm {
+  url: string;
+  kind: FormKind | 'third-party';
+  about: string;
+  formType: 'native' | 'third-party';
+  provider?: string;
+  fieldCount: number;
+  fields: DetectedFormField[];
+  security: { captcha: boolean };
+  tracking: TrackingParams;
+  siteWide: boolean;
+  seenOn: number;
+}
+
+/** "This page has N forms" — present only when the page has 2+ forms. FR-68. */
+export interface FormsOnPage {
+  total: number;
+  native: number;
+  embeds: number;
+  tested: { kind: FormKind; identifier: FormIdentifier | null } | null;
+  others: FormBrief[];
+  multipleContacts: boolean;
 }
 
 export interface SiteResult {
@@ -66,6 +118,12 @@ export interface SiteResult {
   fields?: DetectedFormField[];
   isMultiStep?: boolean;
   landingPageMode?: boolean;
+  /** How many forms are on the tested page + what the others are (2+ only). FR-68. */
+  formsOnPage?: FormsOnPage;
+  /** Hidden tracking/UTM params the tested form captures. FR-68. */
+  tracking?: TrackingParams;
+  /** Every form found across the site (whole-site crawl). FR-68. */
+  siteForms?: SiteForm[];
 }
 
 export interface RunConfig {
