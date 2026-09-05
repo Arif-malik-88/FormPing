@@ -29,6 +29,8 @@ interface Props {
   mode?: SubmitMode;
   /** Clear the on-screen view + URL input (not the server-stored result). */
   onClear?: () => void;
+  /** Runs a real live submission for one detected form (per-form "Submit a live test"). */
+  onSubmitLiveTest?: (url: string) => Promise<SiteResult | null>;
 }
 
 function StatPill({ count, label, color }: { count: number; label: string; color: string }) {
@@ -194,7 +196,7 @@ function RunningLoader({
   );
 }
 
-export function ResultsPanel({ results, progress, logs, running, landingPage, mode, onClear }: Props) {
+export function ResultsPanel({ results, progress, logs, running, landingPage, mode, onClear, onSubmitLiveTest }: Props) {
   // Tally by mode-aware verdict (not raw status), so a healthy safe/detect run
   // counts as OK — never a misleading "WARN". Matches the per-result badge. FR-63.
   const levels = results.map((r) => runVerdict(r.reasonCode, r.formFound, r.finalStatus).level);
@@ -301,7 +303,7 @@ export function ResultsPanel({ results, progress, logs, running, landingPage, mo
       <div className="space-y-3">
         {results.map((r, i) =>
           (r.siteForms?.length ?? 0) >= 2 ? (
-            <FormTesterReport key={`${r.normalizedUrl}-${i}`} result={r} />
+            <FormTesterReport key={`${r.normalizedUrl}-${i}`} result={r} onSubmitLiveTest={onSubmitLiveTest} />
           ) : (
             <ResultCard key={`${r.normalizedUrl}-${i}`} result={r} />
           ),

@@ -9,8 +9,9 @@ import { PageHeader, KeptNotice } from '@/components/ui';
 import { Toaster } from '@/components/Toaster';
 import { checkUrl } from '@/lib/urlCheck';
 import * as testerRun from '@/lib/testerRun';
+import { submitLiveTest } from '@/lib/perFormLiveTest';
 import { markCleared, unmarkCleared, wasCleared } from '@/lib/clearedInput';
-import type { RunConfig } from '@/types';
+import type { RunConfig, SiteResult } from '@/types';
 
 const DEFAULT_CONFIG: RunConfig = {
   mode: 'safe',
@@ -140,6 +141,13 @@ export default function Home() {
     testerRun.stop();
   }, []);
 
+  // Per-form "Submit a live test" — a real live+landing submission for one form's
+  // URL, using the current run config (email, AI, proxy…). FR-76.
+  const handleSubmitLiveTest = useCallback(
+    (url: string): Promise<SiteResult | null> => submitLiveTest(url, config),
+    [config],
+  );
+
   return (
     <>
       <main className="mx-auto max-w-5xl px-4 pb-16 pt-8">
@@ -179,7 +187,7 @@ export default function Home() {
               <KeptNotice title={flash} onDismiss={() => setFlash(null)} />
             </div>
           )}
-          <ResultsPanel results={results} progress={progress} logs={logs} running={running} landingPage={config.landingPage} mode={config.mode} onClear={handleClear} />
+          <ResultsPanel results={results} progress={progress} logs={logs} running={running} landingPage={config.landingPage} mode={config.mode} onClear={handleClear} onSubmitLiveTest={handleSubmitLiveTest} />
         </div>
       </main>
 

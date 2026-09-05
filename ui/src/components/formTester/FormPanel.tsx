@@ -1,4 +1,8 @@
-import type { DetectedFormField, SubmitMode } from '@/types';
+'use client';
+import { useState } from 'react';
+import type { DetectedFormField, SiteResult, SubmitMode } from '@/types';
+import { runVerdict } from '@/lib/formWatch/verdict';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { aboutIsTitle, displayName, DOT, KindIcon, type PreparedForm, type Tone } from './formMeta';
 
 /**
@@ -6,8 +10,8 @@ import { aboutIsTitle, displayName, DOT, KindIcon, type PreparedForm, type Tone 
  * head with status pill, then the form title · source · type/fields/security
  * chips · a field-name preview · tracking. Newsletter/Search get a highlighted
  * category chip. Site-wide forms say so. In Live mode an untested lead form shows
- * an opt-in "Submit a live test" button (disabled for now — per-form live submit
- * is a follow-up; single-form Live still submits directly).
+ * an opt-in "Submit a live test" button that sends a real submission (confirmed
+ * first); the tested contact form is submitted by the main run. FR-76.
  */
 
 const RAIL: Record<PreparedForm['rail'], string> = {
@@ -54,9 +58,31 @@ function RowLabel({ children }: { children: React.ReactNode }) {
   return <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-ink-faint">{children}</span>;
 }
 
-export function FormPanel({ prepared, mode }: { prepared: PreparedForm; mode: SubmitMode }) {
-  const { form, tested, status, rail, isMultiStep } = prepared;
+export function FormPanel({
+  prepared,
+  mode,
+  onSubmitLiveTest,
+}: {
+  prepared: PreparedForm;
+  mode: SubmitMode;
+  /** Runs a real live submission for this form's URL; resolves the outcome. */
+  onSubmitLiveTest?: (url: string) => Promise<SiteResult | null>;
+}) {
+  const { form, tested, status, rail, isMultiStep, detail } = prepared;
   const lead = rail !== 'info';
+
+  // Per-form live submit (FR-76): confirm → submit → show the real outcome here.
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [submit, setSubmit] = useState<{ phase: 'idle' | 'running' | 'done'; result?: SiteResult | null }>({ phase: 'idle' });
+  const canLiveSubmit = mode === 'live' && lead && !tested && Boolean(onSubmitLiveTest);
+
+  async function runLiveSubmit() {
+    if (!onSubmitLiveTest) return;
+    setConfirmOpen(false);
+    setSubmit({ phase: 'running' });
+    const result = await onSubmitLiveTest(form.url);
+    setSubmit({ phase: 'done', result });
+  }
   const showTitle = Boolean(form.about) && !aboutIsTitle(form);
   const categoryChip =
     form.kind === 'newsletter' ? 'We detected a Newsletter form'
@@ -72,6 +98,13 @@ export function FormPanel({ prepared, mode }: { prepared: PreparedForm; mode: Su
   const fields = form.fields.filter((f) => f.label || f.name || f.type);
   const hasGlobal = fields.some(isGlobalField);
   const FIELD_CAP = 10;
+
+  // Normalise hidden fields to {name,value}. Results persist in localStorage, so a
+  // result cached before hiddenFields carried values may still be a string[] — tolerate
+  // both so a stale cached run can never crash the panel. FR-76.
+  const hidden = ((form.hiddenFields ?? []) as ({ name: string; value: string } | string)[]).map((f) =>
+    typeof f === 'string' ? { name: f, value: '' } : f,
+  );
 
   return (
     <div className="fp-rise relative overflow-hidden rounded-xl border border-line bg-panel p-5">
@@ -93,6 +126,32 @@ export function FormPanel({ prepared, mode }: { prepared: PreparedForm; mode: Su
 
       {/* Body — indented to align under the heading (icon width + gap) */}
       <div className="mt-4 flex flex-col gap-3.5 sm:pl-[52px]">
+        {/* Live mode — the action/status sits at the TOP so it's seen without
+            scrolling. The primary contact form is auto-submitted by the run (a
+            clear note, no button); every other lead form gets an opt-in button. */}
+        {tested && mode === 'live' && <AutoSubmitNote detail={detail} tone={status.tone} />}
+        {canLiveSubmit && (
+          <div>
+            {submit.phase === 'idle' && (
+              <button
+                type="button"
+                onClick={() => setConfirmOpen(true)}
+                className="inline-flex w-fit items-center gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3.5 py-2 text-[13px] font-semibold text-accent-soft transition-colors hover:bg-accent/15"
+              >
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M5 4l11 6-11 6V4z" /></svg>
+                Submit a live test
+              </button>
+            )}
+            {submit.phase === 'running' && (
+              <span className="inline-flex w-fit items-center gap-2 rounded-lg border border-line-strong bg-panel-raised px-3.5 py-2 text-[13px] font-semibold text-ink-muted">
+                <svg viewBox="0 0 20 20" className="h-4 w-4 animate-spin" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden><path strokeLinecap="round" d="M10 3a7 7 0 017 7" /><circle cx="10" cy="10" r="7" className="opacity-25" /></svg>
+                Submitting a live test…
+              </span>
+            )}
+            {submit.phase === 'done' && <SubmitOutcome result={submit.result} onRetry={() => setSubmit({ phase: 'idle' })} />}
+          </div>
+        )}
+
         {/* Site-wide forms (a header/footer search or newsletter that sits on every
             page) announce that up front, so it's clear this isn't a page-specific form. */}
         {form.siteWide && (
@@ -122,14 +181,14 @@ export function FormPanel({ prepared, mode }: { prepared: PreparedForm; mode: Su
           <Chip>{form.formType === 'third-party' ? `Third-party${form.provider ? ` · ${form.provider}` : ''}` : 'Native form'}</Chip>
           {tested && typeof isMultiStep === 'boolean' && <Chip>{isMultiStep ? 'Multi-step' : 'Single-step'}</Chip>}
           <Chip><b className="font-mono font-bold text-ink">{form.fieldCount}</b> field{form.fieldCount === 1 ? '' : 's'}</Chip>
-          {form.security?.captcha ? (
+          {/* Only claim CAPTCHA when we actually detect one — we can't see an
+              invisible reCAPTCHA that appears on submit, so we never say "No CAPTCHA". FR-76. */}
+          {form.security?.captcha && (
             <Chip tone="captcha">
               <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M6 9V6.5a4 4 0 018 0V9M5 9h10a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6a1 1 0 011-1z" /></svg>
               CAPTCHA
             </Chip>
-          ) : lead ? (
-            <Chip>No CAPTCHA</Chip>
-          ) : null}
+          )}
         </div>
 
         {/* Field-name preview — each field a chip, aligned next to the label;
@@ -163,6 +222,30 @@ export function FormPanel({ prepared, mode }: { prepared: PreparedForm; mode: Su
           </div>
         )}
 
+        {/* Hidden MARKETING fields — utm_*, gclid, fbclid… captured invisibly by the
+            form. Framework nonces/ids are filtered out as noise. Shown as name=value. FR-76. */}
+        {hidden.length > 0 && (
+          <details className="group [&_summary::-webkit-details-marker]:hidden">
+            <summary className="flex w-fit cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink-faint transition-colors hover:text-ink-secondary">
+              <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 transition-transform group-open:rotate-90" fill="currentColor" aria-hidden><path fillRule="evenodd" d="M7.21 5.23a.75.75 0 011.06.02l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 11-1.08-1.04L10.92 10 7.23 6.31a.75.75 0 01-.02-1.08z" clipRule="evenodd" /></svg>
+              Hidden marketing fields ({hidden.length})
+            </summary>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {hidden.map((f, i) => (
+                <span key={i} className="inline-flex max-w-full items-baseline gap-1 rounded-md border border-line-strong bg-panel-raised/60 px-2 py-0.5 font-mono text-[11px]" title={f.value ? `${f.name}=${f.value}` : f.name}>
+                  <span className="shrink-0 text-ink-secondary">{f.name}</span>
+                  {f.value && (
+                    <>
+                      <span className="shrink-0 text-line-strong">=</span>
+                      <span className="max-w-[160px] truncate text-ink-faint">{f.value}</span>
+                    </>
+                  )}
+                </span>
+              ))}
+            </div>
+          </details>
+        )}
+
         {/* Tracking / UTM */}
         {showTracking && (
           <div className="flex flex-wrap items-center gap-2">
@@ -185,21 +268,104 @@ export function FormPanel({ prepared, mode }: { prepared: PreparedForm; mode: Su
           </div>
         )}
 
-        {/* Live mode — opt-in per-form submit (disabled for now; wiring is a follow-up).
-            The tested contact form is submitted directly, so its button is not shown. */}
-        {mode === 'live' && lead && !tested && (
-          <button
-            type="button"
-            disabled
-            title="Per-form live submit is coming soon. For now, run a single form in Live mode to submit it."
-            className="mt-1 inline-flex w-fit cursor-not-allowed items-center gap-2 rounded-lg border border-line-strong bg-panel-raised px-3.5 py-2 text-[13px] font-semibold text-ink-muted opacity-70"
-          >
-            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M5 4l11 6-11 6V4z" /></svg>
-            Submit a live test
-            <span className="rounded bg-ground px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-faint">Soon</span>
-          </button>
-        )}
       </div>
+
+      {canLiveSubmit && (
+        <ConfirmDialog
+          open={confirmOpen}
+          variant="edit"
+          title="Send a real test submission?"
+          confirmLabel="Submit live test"
+          message={
+            <>
+              This fills and <b className="text-ink">submits</b> the form at{' '}
+              <span className="break-all font-mono text-ink-secondary">{form.url}</span> — a real message is sent to
+              the site owner. Only do this on a site you own or are authorized to test.
+            </>
+          }
+          onConfirm={runLiveSubmit}
+          onCancel={() => setConfirmOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Explains, clearly + distinctly, that Live mode auto-submitted THIS form (the
+ *  primary contact form) — so it reads differently from the opt-in "Submit a live
+ *  test" forms below it, and users understand why it has no button. FR-76. */
+function AutoSubmitNote({ detail, tone }: { detail?: string; tone: Tone }) {
+  const styles =
+    tone === 'ok' ? { wrap: 'border-ok/25 bg-ok/8', head: 'text-ok' }
+    : tone === 'danger' ? { wrap: 'border-danger/25 bg-danger/8', head: 'text-danger' }
+    : { wrap: 'border-warn/25 bg-warn/8', head: 'text-warn' };
+  const headline =
+    tone === 'ok' ? 'Submitted automatically by Live mode'
+    : tone === 'danger' ? 'Live mode tried to submit this form'
+    : 'Submitted automatically — couldn’t confirm it landed';
+  return (
+    <div className={`flex items-start gap-2.5 rounded-lg border px-3.5 py-2.5 ${styles.wrap}`}>
+      <svg viewBox="0 0 20 20" className={`mt-0.5 h-4 w-4 shrink-0 ${styles.head}`} fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10 13.5v-4M10 6.8v.1M10 2.5a7.5 7.5 0 100 15 7.5 7.5 0 000-15z" />
+      </svg>
+      <div className="min-w-0">
+        <p className={`text-[13px] font-semibold ${styles.head}`}>{headline}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-ink-muted">
+          This is the contact form we found and tested — Live mode filled and submitted it for you{detail ? <> (<span className="text-ink-secondary">{detail}</span>)</> : ''}. The other lead forms below are filled but <b className="text-ink-secondary">not sent</b> — send each yourself with its <b className="text-ink-secondary">Submit a live test</b> button.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// A submission blocked by a protection (CAPTCHA, anti-bot, host/anti-spam block)
+// will NEVER go through by retrying — so we say "Can't submit" and hide "Try again".
+const CANT_SUBMIT = new Set([
+  'CAPTCHA_DETECTED',
+  'ANTI_BOT_DETECTED',
+  'BLOCKED_BY_HOST',
+  'SUBMISSION_BLOCKED_BY_ANTISPAM',
+  'PROXY_REJECTED_POST',
+]);
+
+/** The real outcome of a per-form live submit, in the panel's own vocabulary. */
+function SubmitOutcome({ result, onRetry }: { result?: SiteResult | null; onRetry: () => void }) {
+  if (!result) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 text-[13px]">
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ring-1 ${STATUS_PILL.danger}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${DOT.danger}`} />Didn&rsquo;t run
+        </span>
+        <button type="button" onClick={onRetry} className="text-ink-muted underline-offset-2 hover:text-ink hover:underline">Try again</button>
+      </div>
+    );
+  }
+  const { level, label } = runVerdict(result.reasonCode, result.formFound, result.finalStatus);
+  const blocked = CANT_SUBMIT.has(result.reasonCode);
+
+  // Protected → "Can't submit", no retry (it can't succeed).
+  if (blocked) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 text-[13px]">
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ring-1 ${STATUS_PILL.warn}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${DOT.warn}`} />Can&rsquo;t submit
+        </span>
+        <span className="text-ink-muted">{label} — this form is protected, so a live submit can&rsquo;t get through.</span>
+      </div>
+    );
+  }
+
+  const tone: Tone = level === 'healthy' ? 'ok' : level === 'failing' ? 'danger' : level === 'detected' ? 'info' : 'warn';
+  const short = level === 'healthy' ? 'Submitted ✓' : level === 'failing' ? 'Failed' : level === 'detected' ? 'Detected' : 'Attention';
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-[13px]">
+      <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ring-1 ${STATUS_PILL[tone]}`}>
+        <span className={`h-1.5 w-1.5 rounded-full ${DOT[tone]}`} />{short}
+      </span>
+      <span className="text-ink-muted">{label}</span>
+      {tone !== 'ok' && (
+        <button type="button" onClick={onRetry} className="text-ink-muted underline-offset-2 hover:text-ink hover:underline">Try again</button>
+      )}
     </div>
   );
 }

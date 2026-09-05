@@ -30,13 +30,20 @@ function formatMs(ms: number): string {
 }
 
 /** The real verdict for the primary form runSingleSite fully tested (it may submit
- *  in live mode, so its verdict is richer than a plain fill outcome). */
+ *  in live mode, so its verdict is richer than a plain fill outcome). In live mode
+ *  the primary is AUTO-submitted, so lead with "Submitted" (green if a thank-you
+ *  was confirmed, amber if not) rather than a bare "Attention". */
 function testedStatus(result: SiteResult): FormStatus {
   const { level } = runVerdict(result.reasonCode, result.formFound, result.finalStatus);
+  if (result.mode === 'live' && result.submissionAttempted) {
+    if (level === 'healthy') return { label: 'Submitted ✓', tone: 'ok' };
+    if (level === 'attention') return { label: 'Submitted', tone: 'warn' }; // e.g. no confirmation seen
+    if (level === 'failing') return { label: 'Failed', tone: 'danger' };
+    return { label: 'Detected', tone: 'info' };
+  }
   if (level === 'failing') return { label: 'Failed', tone: 'danger' };
   if (level === 'attention') return { label: 'Attention', tone: 'warn' };
   if (level === 'detected') return { label: 'Detected', tone: 'info' };
-  if (result.mode === 'live') return { label: 'Submitted ✓', tone: 'ok' };
   if (result.mode === 'safe') return { label: 'Filled ✓', tone: 'ok' };
   return { label: 'Detected', tone: 'info' };
 }
@@ -72,7 +79,8 @@ function prepare(forms: SiteForm[], result: SiteResult): PreparedForm[] {
     const status: FormStatus = tested ? testedStatus(result) : outcomeStatus(form.outcome);
     const rail: PreparedForm['rail'] = status.tone === 'ok' ? 'ok' : lead ? 'accent' : 'info';
     const group = tested ? 0 : lead ? 1 : 2;
-    return { form, tested, status, rail, group, isMultiStep: tested ? result.isMultiStep : undefined };
+    const detail = tested ? runVerdict(result.reasonCode, result.formFound, result.finalStatus).label : undefined;
+    return { form, tested, status, rail, group, isMultiStep: tested ? result.isMultiStep : undefined, detail };
   });
   entries.sort((a, b) => a.group - b.group);
   return entries.map(({ group, ...rest }, i) => ({ ...rest, n: i + 1 }));
@@ -89,7 +97,14 @@ function StatPill({ count, label, color }: { count: number; label: string; color
   );
 }
 
-export function FormTesterReport({ result }: { result: SiteResult }) {
+export function FormTesterReport({
+  result,
+  onSubmitLiveTest,
+}: {
+  result: SiteResult;
+  /** Runs a real live submission for one form's URL (per-form "Submit a live test"). */
+  onSubmitLiveTest?: (url: string) => Promise<SiteResult | null>;
+}) {
   const forms = result.siteForms ?? [];
   const prepared = prepare(forms, result);
   const [active, setActive] = useState(0);
@@ -110,7 +125,7 @@ export function FormTesterReport({ result }: { result: SiteResult }) {
       return (
         <>
           submitted the <b className="font-semibold text-ink-muted">contact form</b>; the other{' '}
-          {leadWord(leadForms.length)} are filled and ready — per-form live submit is coming soon.
+          {leadWord(leadForms.length)} are filled — submit each from its panel with <b className="font-semibold text-ink-muted">Submit a live test</b>.
         </>
       );
     }
@@ -189,7 +204,11 @@ export function FormTesterReport({ result }: { result: SiteResult }) {
       </div>
 
       {/* ── Active panel ─────────────────────────────────────────────────── */}
-      {prepared[active] && <FormPanel prepared={prepared[active]} mode={result.mode} />}
+      {prepared[active] && (
+        // key by the form so switching tabs mounts a FRESH panel — a per-form
+        // submit's state never leaks onto another form's tab. FR-76.
+        <FormPanel key={prepared[active].form.url + active} prepared={prepared[active]} mode={result.mode} onSubmitLiveTest={onSubmitLiveTest} />
+      )}
     </div>
   );
 }
