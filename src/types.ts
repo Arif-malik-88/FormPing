@@ -217,6 +217,10 @@ export interface SiteForm {
   seenOn: number;
   /** What we did with it this run — fill every lead form, detect the rest. FR-76. */
   outcome?: FormOutcome;
+  /** The form's hidden inputs (nonces, form/page ids, utm_*…) as name=value —
+   *  dropped from the visible count, surfaced in a "Hidden fields" disclosure. The
+   *  values differ per form, proving they're detected per form, not shared. FR-76. */
+  hiddenFields?: { name: string; value: string }[];
 }
 
 /** "This page has N forms" — surfaced only when total ≥ 2, so single-form pages

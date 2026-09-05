@@ -3,7 +3,7 @@ import type { AppConfig, DetectedFormField, FormCandidate, FormKind, FormOutcome
 import { extractForms, type FormInfo } from './findContactForm.js';
 import { detectEmbeds } from './detectEmbeds.js';
 import { fillForm } from './fillForm.js';
-import { classifyFormKind, meaningfulFields, detectTrackingParams, isLeadForm } from '../runners/formFacts.js';
+import { classifyFormKind, meaningfulFields, detectTrackingParams, isLeadForm, isMarketingParam } from '../runners/formFacts.js';
 import { fetchHtml } from '../browser/playwrightClient.js';
 import { loadHtml, extractLinks } from '../utils/dom.js';
 import { resolveHref, isSameOrigin } from '../utils/url.js';
@@ -73,6 +73,19 @@ function shortPath(u: string): string {
   try { return new URL(u).pathname || '/'; } catch { return u; }
 }
 
+/** Canonical page URL — drop hash + a trailing slash so "/x/" and "/x" are the
+ *  SAME page and never crawled (and counted) twice. FR-76. */
+function normUrl(u: string): string {
+  try {
+    const x = new URL(u);
+    x.hash = '';
+    x.pathname = x.pathname.replace(/\/+$/, '') || '/';
+    return x.toString();
+  } catch {
+    return u;
+  }
+}
+
 /** Same page, ignoring a trailing slash — used to spot the contact form the main
  *  flow will test, so the inventory doesn't fill it a second time. */
 function samePage(a: string, b: string): boolean {
@@ -123,6 +136,7 @@ interface NativeRec {
   kind: FormKind;
   action: string;
   meaningful: DetectedFormField[];
+  hiddenFields: { name: string; value: string }[];
   tracking: TrackingParams;
   outcome: FormOutcome;
 }
@@ -151,31 +165,21 @@ export async function inventorySiteForms(
 
   // ── 1. Candidate page pool: homepage links (same-origin) + sitemap, form-likely first.
   const homeHtml = await fetchHtml(start, config.timeout);
+  const startNorm = normUrl(start);
   const sameOrigin = new Set<string>();
   if (homeHtml) {
     for (const { href } of extractLinks(loadHtml(homeHtml))) {
       const resolved = resolveHref(start, href);
-      if (resolved && isSameOrigin(resolved, start)) {
-        try {
-          const u = new URL(resolved);
-          u.hash = '';
-          sameOrigin.add(u.toString());
-        } catch { /* skip */ }
-      }
+      if (resolved && isSameOrigin(resolved, start)) sameOrigin.add(normUrl(resolved));
     }
   }
   for (const u of await fetchSitemapUrls(start, config.timeout)) {
-    if (isSameOrigin(u, start)) {
-      try {
-        const x = new URL(u);
-        x.hash = '';
-        sameOrigin.add(x.toString());
-      } catch { /* skip */ }
-    }
+    if (isSameOrigin(u, start)) sameOrigin.add(normUrl(u));
   }
+  sameOrigin.delete(startNorm); // start is added first below
   const others = Array.from(sameOrigin);
   const pool = Array.from(
-    new Set([start, ...others.filter((u) => FORM_SLUG.test(u)), ...others.filter((u) => !FORM_SLUG.test(u))]),
+    new Set([startNorm, ...others.filter((u) => FORM_SLUG.test(u)), ...others.filter((u) => !FORM_SLUG.test(u))]),
   ).slice(0, POOL_CAP);
   const willFill = config.mode !== 'detect-only';
   logger.info(`Site inventory: crawling ${pool.length} page(s) for forms${willFill ? ' (filling lead forms)' : ''}`);
@@ -202,6 +206,12 @@ export async function inventorySiteForms(
           const allFields = toFields(form);
           const kind = classifyFormKind({ fields: allFields, submitText: form.submitText, allText: form.allText });
           const meaningful = meaningfulFields(allFields);
+          // Hidden MARKETING inputs only — utm_*, gclid, fbclid… (not framework nonces
+          // /ids, which are noise). Shown as name=value in the disclosure; deduped. FR-76.
+          const seenHidden = new Set<string>();
+          const hiddenFields = form.fields
+            .filter((x) => x.type === 'hidden' && x.name && isMarketingParam(x.name) && !seenHidden.has(x.name) && seenHidden.add(x.name))
+            .map((x) => ({ name: x.name, value: x.value ?? '' }));
           const lead = isLeadForm(kind, meaningful.length);
 
           // The contact form on the page the main flow will test is filled there,
@@ -232,6 +242,7 @@ export async function inventorySiteForms(
             kind,
             action: (form.action ?? '').trim(),
             meaningful,
+            hiddenFields,
             tracking: detectTrackingParams(allFields),
             outcome,
           });
@@ -268,20 +279,27 @@ export async function inventorySiteForms(
   }
 
   for (const rec of records) {
-    const key = rec.action
-      ? `act:${rec.action}|${rec.kind}|${rec.meaningful.length}`
-      : `page:${rec.url}|${rec.kind}|${rec.meaningful.length}`;
+    // Identity is the form's CONTENT — its kind + field signature (names/count) —
+    // not its page or action. So the same form appearing on many pages (a header
+    // search, a footer newsletter, a reused contact form) collapses into ONE entry
+    // marked site-wide, instead of a duplicate per page. FR-76.
+    const sig = rec.meaningful.map((f) => (f.name || f.label || f.type).toLowerCase()).sort().join(',');
+    const key = `${rec.kind}|${rec.meaningful.length}|${sig}`;
     const found = byKey.get(key);
     if (found) {
       bump(found);
       // Prefer a real fill outcome if a later copy of the same form was filled.
       if (found.outcome?.state !== 'filled' && rec.outcome.state === 'filled') found.outcome = rec.outcome;
+      // Prefer the primary contact page as the canonical URL, so the UI's "tested"
+      // mapping (which matches by page) still lands on this entry.
+      if (primaryContactUrl && rec.kind === 'contact' && samePage(rec.url, primaryContactUrl)) found.url = rec.url;
       continue;
     }
     byKey.set(key, {
       url: rec.url, kind: rec.kind, about: rec.about, formType: 'native',
       fieldCount: rec.meaningful.length, fields: rec.meaningful, security: { captcha: rec.captcha },
       tracking: rec.tracking, siteWide: false, seenOn: 1, outcome: rec.outcome,
+      hiddenFields: rec.hiddenFields,
     });
   }
 

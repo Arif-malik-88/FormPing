@@ -224,6 +224,15 @@ export function detectTrackingParams(fields: Pick<DetectedFormField, 'name'>[]):
   return { utm, other };
 }
 
+/** Whether a field name is a marketing/tracking param — utm_* or a known click id
+ *  (gclid, fbclid, msclkid…). Used to keep the "Hidden fields" disclosure to the
+ *  marketing params that matter, not framework nonces/ids. FR-76. */
+export function isMarketingParam(name: string): boolean {
+  const key = (name ?? '').trim().toLowerCase();
+  if (!key) return false;
+  return /^utm_[a-z]+/i.test(key) || TRACKING_NAMES.has(key);
+}
+
 /** Human phrase for how an embed is mounted — for the card copy. */
 export function embedKindLabel(kind: EmbedDetection['kind']): string {
   switch (kind) {
