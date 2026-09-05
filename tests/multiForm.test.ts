@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { classifyFormKind, buildFormsOnPage, meaningfulFields, detectTrackingParams, isLeadForm } from '../src/runners/formFacts';
+import { classifyFormKind, buildFormsOnPage, meaningfulFields, detectTrackingParams, isLeadForm, isMarketingParam } from '../src/runners/formFacts';
 import type { FormCandidate, FormIdentifier } from '../src/types';
 import type { EmbedDetection } from '../src/forms/detectEmbeds';
 
@@ -113,6 +113,30 @@ describe('isLeadForm — which forms the inventory fills (FR-76)', () => {
     expect(isLeadForm('newsletter', 1)).toBe(false);
     expect(isLeadForm('search', 1)).toBe(false);
     expect(isLeadForm('login', 2)).toBe(false);
+  });
+});
+
+describe('isMarketingParam — only marketing hidden fields, not framework noise (FR-76)', () => {
+  it('matches utm_* (any case)', () => {
+    expect(isMarketingParam('utm_source')).toBe(true);
+    expect(isMarketingParam('UTM_Campaign')).toBe(true);
+  });
+
+  it('matches known click ids', () => {
+    expect(isMarketingParam('gclid')).toBe(true);
+    expect(isMarketingParam('fbclid')).toBe(true);
+    expect(isMarketingParam('msclkid')).toBe(true);
+  });
+
+  it('rejects framework/plugin hidden fields (the noise we want gone)', () => {
+    for (const n of ['forminator_nonce', 'form_id', 'page_id', 'action', '_wp_http_referer', 'render_id', 'current_url']) {
+      expect(isMarketingParam(n)).toBe(false);
+    }
+  });
+
+  it('rejects empty / junk', () => {
+    expect(isMarketingParam('')).toBe(false);
+    expect(isMarketingParam('   ')).toBe(false);
   });
 });
 

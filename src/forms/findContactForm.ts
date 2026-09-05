@@ -37,6 +37,8 @@ export interface FieldInfo {
   id: string;
   placeholder: string;
   label: string;
+  /** The input's current value — used to show hidden fields as name=value. FR-76. */
+  value: string;
 }
 
 /**
@@ -76,6 +78,7 @@ export async function extractForms(page: Page): Promise<FormInfo[]> {
           id,
           placeholder: input.placeholder || '',
           label,
+          value: (input.value || '').slice(0, 120),
         };
       });
 
