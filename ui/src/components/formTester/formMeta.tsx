@@ -31,6 +31,8 @@ export interface PreparedForm {
   rail: 'ok' | 'accent' | 'info';
   /** Known only for the tested form (the inventory doesn't walk each form's steps). */
   isMultiStep?: boolean;
+  /** The tested form's full verdict sentence (e.g. "Submitted — no confirmation seen"). */
+  detail?: string;
 }
 
 /** Status-dot background class per tone — for tabs + index rows. */

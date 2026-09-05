@@ -82,6 +82,8 @@ export interface SiteForm {
   seenOn: number;
   /** What we did with it this run — fill every lead form, detect the rest. FR-76. */
   outcome?: FormOutcome;
+  /** The form's hidden inputs (nonces, ids, utm_*…) as name=value — for the "Hidden fields" disclosure. FR-76. */
+  hiddenFields?: { name: string; value: string }[];
 }
 
 /** "This page has N forms" — present only when the page has 2+ forms. FR-68. */
