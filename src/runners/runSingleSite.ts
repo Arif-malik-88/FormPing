@@ -7,7 +7,8 @@ import { inventorySiteForms } from '../forms/siteFormInventory.js';
 import { fillForm } from '../forms/fillForm.js';
 import { submitForm } from '../forms/submitForm.js';
 import { detectCaptcha, detectAntiBot } from '../forms/detectSuccess.js';
-import { nativeFormFacts, embedFormFacts, shouldHoldMultiStepSubmit, buildFormsOnPage, detectTrackingParams } from './formFacts.js';
+import { captureFormShot } from '../forms/captureFormShot.js';
+import { nativeFormFacts, embedFormFacts, shouldHoldMultiStepSubmit, buildFormsOnPage, detectTrackingParams, assessFormConfidence } from './formFacts.js';
 import {
   newPage,
   closePage,
@@ -17,6 +18,21 @@ import {
   hasResidentialProxyCreds,
 } from '../browser/playwrightClient.js';
 import { logger } from '../utils/logger.js';
+
+/** Same page, ignoring protocol, www and a trailing slash — used to tell whether
+ *  the site inventory already photographed the form we're about to test. */
+function samePagePath(a: string, b: string): boolean {
+  try {
+    const ua = new URL(a);
+    const ub = new URL(b);
+    return (
+      ua.hostname.replace(/^www\./, '') === ub.hostname.replace(/^www\./, '') &&
+      ua.pathname.replace(/\/+$/, '') === ub.pathname.replace(/\/+$/, '')
+    );
+  } catch {
+    return a === b;
+  }
+}
 
 function makeErrorResult(
   inputUrl: string,
@@ -250,13 +266,20 @@ export async function runSingleSite(
       }
 
       const antiBotDetected = detectAntiBot(pageHtml, pageTitle, config);
-      const captchaDetected = detectCaptcha(pageHtml, config);
+      // Bot-protection markup somewhere on the PAGE. This is NOT evidence that
+      // any particular form is protected — a site-wide reCAPTCHA script sits on
+      // every page — and reporting it as "CAPTCHA protected" on an unrelated
+      // form was exactly the false confidence FR-73 was raised for. It is now
+      // reported as its own page-level fact; `captchaDetected` means "on the
+      // form we tested", set from the form's own subtree below. FR-73.
+      const pageProtection = detectCaptcha(pageHtml, config);
+      baseResult.pageProtection = pageProtection;
 
       if (antiBotDetected) {
         return {
           ...baseResult,
           finalUrl: page.url(),
-          captchaDetected,
+          captchaDetected: false,
           antiBotDetected: true,
           finalStatus: 'fail',
           reasonCode: 'ANTI_BOT_DETECTED',
@@ -284,7 +307,7 @@ export async function runSingleSite(
           return {
             ...baseResult,
             finalUrl: page.url(),
-            captchaDetected,
+            captchaDetected: false,
             finalStatus: 'warn',
             reasonCode: 'BLOCKED_BY_HOST',
             notes: [
@@ -311,7 +334,7 @@ export async function runSingleSite(
             ...baseResult,
             ...embedFacts,
             finalUrl: page.url(),
-            captchaDetected,
+            captchaDetected: false,
             finalStatus: 'warn',
             reasonCode: 'THIRD_PARTY_EMBED_FORM',
             notes: [
@@ -322,29 +345,53 @@ export async function runSingleSite(
           };
         }
 
-        // (2) Native <form>(s) exist but none scored as a contact form. Explain
-        //     the best candidate's score + what contact signals are missing, so
-        //     the user can tell "this is a search box" from "detection is off".
+        // (2) Native <form>(s) exist but none scored as a contact form.
+        //
+        // This return used to carry NO facts about what it found, so the card
+        // said "Found a form — but not a contact form" in its banner and "No
+        // form found" directly underneath: one run, two answers. We now describe
+        // the form we DID find — what it looks like, its fields, and a picture of
+        // it — so the page agrees with itself and the user can judge it. FR-73.
         if (allForms.length > 0) {
           const b = allForms[0]!; // scored[] is sorted best-first
-          const wanted: [string, string][] = [
-            ['email field', 'email'],
-            ['textarea/message field', 'message'],
-            ['name field', 'name'],
-          ];
-          const missing = wanted.filter(([sig]) => !b.signals.includes(sig)).map(([, label]) => label);
-          const present = b.signals.length ? b.signals.join(', ') : 'no contact signals';
+          const bFacts = nativeFormFacts(b, { hiddenMultiStep: false });
+          const missing = (
+            [
+              ['email field', 'an email field'],
+              ['textarea/message field', 'a message box'],
+              ['name field', 'a name field'],
+            ] as [string, string][]
+          )
+            .filter(([sig]) => !b.signals.includes(sig))
+            .map(([, label]) => label);
+          const looksLike =
+            b.kind === 'search' ? 'a search box'
+            : b.kind === 'newsletter' ? 'a newsletter sign-up'
+            : b.kind === 'login' ? 'a login form'
+            : bFacts.fieldCount <= 1 ? 'a single-field form (a search or sign-up box)'
+            : 'a form for something else';
           return {
             ...baseResult,
             finalUrl: page.url(),
-            captchaDetected,
+            captchaDetected: b.captcha === true,
+            // The facts of the form we actually found — so the card can show it
+            // rather than claim nothing is there.
+            formType: 'native',
+            fieldCount: bFacts.fieldCount,
+            fields: bFacts.fields,
+            ...(b.location?.anchorId ? { formAnchorId: b.location.anchorId } : {}),
+            ...(b.about ? { formAbout: b.about } : {}),
+            formKind: b.kind,
+            formShot: (await captureFormShot(page, b.index)) ?? undefined,
             finalStatus: 'warn',
             reasonCode: 'NON_CONTACT_FORM_FOUND',
             notes: [
               ...baseResult.notes,
-              `Found ${allForms.length} form(s), but none looks like a contact form — best scored ${b.score} (has: ${present}${missing.length ? `; missing: ${missing.join(', ')}` : ''}).`,
-              ...(b.negativeSignals.length ? [`Flags on the best form: ${b.negativeSignals.join(', ')}.`] : []),
-              'If this IS the contact form (a quiz/booking/assessment form), re-run in Landing-page mode to test it directly.',
+              allForms.length === 1
+                ? `The one form on this page looks like ${looksLike}, not a contact form.`
+                : `${allForms.length} forms on this page, and the closest match looks like ${looksLike}, not a contact form.`,
+              ...(missing.length ? [`It has no ${missing.join(', no ')} — the things a contact form normally asks for.`] : []),
+              'Check the screenshot. If this IS the form you wanted tested, re-run with Landing page on to test it directly.',
             ],
             durationMs: Date.now() - start,
           };
@@ -354,7 +401,7 @@ export async function runSingleSite(
         return {
           ...baseResult,
           finalUrl: page.url(),
-          captchaDetected,
+          captchaDetected: false,
           finalStatus: 'fail',
           reasonCode: 'FORM_NOT_FOUND',
           notes: [
@@ -376,11 +423,20 @@ export async function runSingleSite(
       if (form.kind === 'search' || form.kind === 'newsletter' || form.kind === 'login') {
         const what =
           form.kind === 'search' ? 'a search box' : form.kind === 'newsletter' ? 'a newsletter sign-up' : 'a login form';
+        const utilityFacts = nativeFormFacts(form, { hiddenMultiStep });
         return {
           ...baseResult,
           finalUrl: page.url(),
-          captchaDetected,
+          captchaDetected: form.captcha === true,
           formType: 'native',
+          // Describe and photograph it, so "this is a search box, not your
+          // contact form" is something the user can see rather than trust. FR-73.
+          fieldCount: utilityFacts.fieldCount,
+          fields: utilityFacts.fields,
+          ...(form.location?.anchorId ? { formAnchorId: form.location.anchorId } : {}),
+          ...(form.about ? { formAbout: form.about } : {}),
+          formKind: form.kind,
+          formShot: (await captureFormShot(page, form.index)) ?? undefined,
           finalStatus: 'warn',
           reasonCode: 'NON_CONTACT_FORM_FOUND',
           notes: [
@@ -407,6 +463,63 @@ export async function runSingleSite(
       baseResult.fieldCount = facts.fieldCount;
       baseResult.fields = facts.fields;
       baseResult.isMultiStep = facts.isMultiStep;
+      // An id to jump straight to the form, so the user can go look at what we
+      // matched instead of taking our word for it. FR-73.
+      if (form.location?.anchorId) baseResult.formAnchorId = form.location.anchorId;
+      // What the page calls this form ("Request a Rental"). The whole-site report
+      // has always led with it; the single-page card could only say "Contact
+      // form" while the screenshot beside it said something else. FR-73.
+      if (form.about) baseResult.formAbout = form.about;
+      baseResult.formKind = form.kind;
+
+      // ── Evidence + honest confidence (FR-73) ─────────────────────────────
+      // Screenshot what we matched, so "here's the form" is something the user
+      // can SEE. Best-effort: a failed capture must never fail the run.
+      //
+      // Skipped when the site inventory ALREADY photographed this same form: on
+      // a whole-site run the report renders from `siteForms`, so capturing it
+      // again here produced a second, near-identical image that nothing ever
+      // displayed — a wasted capture and a wasted upload on every run. Only
+      // skipped when the inventory genuinely has a shot for THIS page, so a form
+      // beyond the inventory's shot cap still gets its own. FR-73.
+      // The report only takes over at 2+ forms; a single-form result still
+      // renders the card that reads `formShot`, so the skip must not apply there.
+      const reportWillRender = (baseResult.siteForms?.length ?? 0) >= 2;
+      const inventoryShotForThisPage =
+        reportWillRender && baseResult.siteForms?.some((f) => f.shot && samePagePath(f.url, targetUrl));
+      if (!inventoryShotForThisPage) {
+        baseResult.formShot = (await captureFormShot(page, form.index)) ?? undefined;
+      }
+
+      const confidence = assessFormConfidence({
+        score: form.score,
+        fieldCount: facts.fieldCount,
+        acceptedByLandingLeniency,
+        isMultiStep: facts.isMultiStep,
+      });
+      baseResult.formConfidenceLevel = confidence.level;
+      if (confidence.reason) baseResult.lowConfidenceReason = confidence.reason;
+
+      // Too weak to fill: a single-input <form> is a search box or an email
+      // capture. Filling its one field and calling it healthy is precisely how
+      // the tester used to invent a contact form nobody could see — so stop
+      // here, show the evidence, and ask the user. FR-73.
+      if (confidence.tooWeakToFill) {
+        return {
+          ...baseResult,
+          finalUrl: page.url(),
+          captchaDetected: form.captcha === true,
+          formType: 'native',
+          finalStatus: 'warn',
+          reasonCode: 'LOW_CONFIDENCE_FORM',
+          notes: [
+            ...baseResult.notes,
+            `We only matched a ${facts.fieldCount === 1 ? 'single-field' : 'very small'} form here, so nothing was filled — ${confidence.reason}.`,
+            'Check the screenshot: if this IS your contact form, tell us and we will test it; if it is not, the real form may be on another page.',
+          ],
+          durationMs: Date.now() - start,
+        };
+      }
       // Hidden tracking/UTM params the form captures — from ALL its fields
       // (hidden ones included), so we can flag campaign-attribution coverage. FR-68.
       baseResult.tracking = detectTrackingParams(form.fields);
@@ -415,8 +528,8 @@ export async function runSingleSite(
       // list are developer-internal and confusing on the result card / run log —
       // they're logged for debugging just below, not surfaced to users.
       baseResult.notes.push(
-        acceptedByLandingLeniency
-          ? 'Contact form detected on this page (accepted in Landing-page mode).'
+        confidence.level === 'low'
+          ? `Possible contact form detected — low confidence: ${confidence.reason}. Check the screenshot to confirm it is the right form.`
           : 'Contact form detected.',
       );
       logger.debug(`Form score=${form.score} signals=[${form.signals.join(', ')}]`);
@@ -430,7 +543,7 @@ export async function runSingleSite(
         return {
           ...baseResult,
           finalUrl: page.url(),
-          captchaDetected,
+          captchaDetected: form.captcha === true,
           finalStatus: 'warn',
           reasonCode: 'DETECT_ONLY',
           notes: [...baseResult.notes, 'detect-only mode: form detected, not filled or submitted'],
@@ -561,7 +674,9 @@ export async function runSingleSite(
 
       // ── Step 5: Submit (live mode only) ───────────────────────────────────
       if (config.mode === 'safe') {
-        const captchaPresent = captchaDetected || fillCaptcha;
+        // Only this form's own CAPTCHA counts — plus one the fill actually ran
+        // into. Page-wide protection is reported separately and never here. FR-73.
+        const captchaPresent = form.captcha === true || fillCaptcha;
         return {
           ...baseResult,
           finalUrl: page.url(),
@@ -648,7 +763,15 @@ export async function runSingleSite(
         };
       }
 
-      if (submitResult.validationErrorDetected) {
+      // A 5xx from the site's own endpoint outranks anything written on the page.
+      //
+      // This check used to come first unconditionally, so a run that submitted a
+      // form and got HTTP 500 back was reported as "Validation error" — blaming
+      // the data we typed for the site's server crashing. Page text is a guess;
+      // a status code is evidence. Defer to the HTTP-status branch below whenever
+      // we captured a server error. FR-73.
+      const sawServerError = submitResult.capturedResponses.some((r) => r.status >= 500);
+      if (submitResult.validationErrorDetected && !sawServerError) {
         return {
           ...baseResult,
           finalUrl: submitResult.finalUrl,
@@ -721,12 +844,23 @@ export async function runSingleSite(
         const statuses = submitResult.capturedResponses.map((r) => r.status);
         const hasAntiSpamStatus = statuses.some((s) => s === 402 || s === 403 || s === 429);
         const hasValidationStatus = statuses.some((s) => s === 400 || s === 422);
+        const hasServerError = statuses.some((s) => s >= 500);
 
         let reasonCode: SiteResult['reasonCode'] = 'SUBMIT_FAILED';
         let explanation =
           'AJAX response explicitly reported failure — submission was rejected server-side.';
 
-        if (hasAntiSpamStatus) {
+        // Checked FIRST: a 5xx means the site's own backend fell over, which is
+        // the clearest, most actionable thing we can report — and the one the
+        // site's owner has to fix. FR-73.
+        if (hasServerError) {
+          reasonCode = 'SERVER_ERROR';
+          const statusStr = statuses.filter((s) => s >= 500).join('/');
+          explanation =
+            `The site's own server returned HTTP ${statusStr} when the form was submitted. ` +
+            'The form and its fields are fine — the code behind it failed, so the message was never delivered. ' +
+            'Anyone filling in this form right now is hitting the same error.';
+        } else if (hasAntiSpamStatus) {
           reasonCode = 'SUBMISSION_BLOCKED_BY_ANTISPAM';
           const statusStr = statuses.filter((s) => s === 402 || s === 403 || s === 429).join('/');
           explanation =
