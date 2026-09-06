@@ -4,6 +4,7 @@ import { writeFileSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import { recordRun } from '@/lib/onDemandRunStore';
+import { hostFormShots } from '@/lib/formShots';
 import { requireRole } from '@/lib/auth/authorize';
 
 export const runtime = 'nodejs';
@@ -97,6 +98,24 @@ export async function POST(request: NextRequest) {
 
       let stdoutBuf = '';
 
+      // Results are handled through one promise chain (FR-73). Each result is
+      // piped through `hostFormShots` first, which swaps the engine's inline
+      // screenshots for hosted URLs so the heavy bytes stop here and never reach
+      // the browser. Chaining (rather than firing each off) keeps results in
+      // order, and lets `close` wait for the last one before saying "done".
+      let queue: Promise<void> = Promise.resolve();
+      function emitResult(raw: unknown) {
+        queue = queue
+          .then(async () => {
+            const result = await hostFormShots(raw);
+            send({ type: 'result', result });
+            // Persist the manual run so the Projects view can show it later.
+            // Fire-and-forget + self-guarded — must never break the stream.
+            void recordRun(result);
+          })
+          .catch(() => { /* a result must never take the stream down */ });
+      }
+
       child.stdout.on('data', (chunk: Buffer) => {
         stdoutBuf += chunk.toString();
         const lines = stdoutBuf.split('\n');
@@ -110,10 +129,7 @@ export async function POST(request: NextRequest) {
             const type = parsed['__type'];
 
             if (type === 'result') {
-              send({ type: 'result', result: parsed['result'] });
-              // Persist the manual run so the Projects view can show it later.
-              // Fire-and-forget + self-guarded — must never break the stream.
-              void recordRun(parsed['result']);
+              emitResult(parsed['result']);
             } else if (type === 'progress') {
               send({
                 type: 'progress',
@@ -149,10 +165,7 @@ export async function POST(request: NextRequest) {
         if (stdoutBuf.trim()) {
           try {
             const parsed = JSON.parse(stdoutBuf.trim()) as Record<string, unknown>;
-            if (parsed['__type'] === 'result') {
-              send({ type: 'result', result: parsed['result'] });
-              void recordRun(parsed['result']);
-            }
+            if (parsed['__type'] === 'result') emitResult(parsed['result']);
           } catch { /* ignore */ }
         }
 
@@ -160,8 +173,12 @@ export async function POST(request: NextRequest) {
           try { unlinkSync(tempFile); } catch { /* ignore */ }
         }
 
-        send({ type: 'done', exitCode: code });
-        controller.close();
+        // "done" must land AFTER the last result, or the UI stops the run before
+        // its own result arrives. The queue is bounded by the upload budget.
+        void queue.finally(() => {
+          send({ type: 'done', exitCode: code });
+          controller.close();
+        });
       });
 
       child.on('error', (err) => {

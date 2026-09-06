@@ -42,18 +42,57 @@ function emit(): void {
   for (const l of listeners) l();
 }
 
+/** How long we let writes coalesce. Long enough to collapse a burst of log
+ *  lines into one write, short enough that leaving the tab mid-run keeps the
+ *  view. */
+const PERSIST_DEBOUNCE_MS = 400;
+
 /** Replace state (new object identity so useSyncExternalStore re-renders). */
 function set(patch: Partial<TesterRunState>): void {
   state = { ...state, ...patch };
-  persist();
+  schedulePersist();
   emit();
+}
+
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+/** Results as last written — lets a logs-only change skip re-serializing them. */
+let persistedResults: SiteResult[] | null = null;
+
+/**
+ * Coalesce cache writes (FR-73).
+ *
+ * `set` runs on every streamed event, and a run emits a log line every few
+ * hundred milliseconds. Writing straight through meant each of those lines
+ * re-serialized the whole results array and made a synchronous localStorage
+ * write on the main thread — work that grew with the size of the result and
+ * showed up as jank while the run streamed. Now writes coalesce, and results
+ * are only re-serialized when they actually changed.
+ */
+function schedulePersist(): void {
+  if (typeof window === 'undefined' || persistTimer) return;
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    persist();
+  }, PERSIST_DEBOUNCE_MS);
+}
+
+/** Write now — for the moments that must not be lost (run finished, cleared). */
+function flushPersist(): void {
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+  persist();
 }
 
 function persist(): void {
   if (typeof window === 'undefined') return;
   try {
-    if (state.results.length) window.localStorage.setItem(STORAGE_KEY_RESULTS, JSON.stringify(state.results));
-    else window.localStorage.removeItem(STORAGE_KEY_RESULTS);
+    if (state.results !== persistedResults) {
+      if (state.results.length) window.localStorage.setItem(STORAGE_KEY_RESULTS, JSON.stringify(state.results));
+      else window.localStorage.removeItem(STORAGE_KEY_RESULTS);
+      persistedResults = state.results;
+    }
     if (state.logs.length) window.localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(state.logs));
     else window.localStorage.removeItem(STORAGE_KEY_LOGS);
   } catch {
@@ -75,6 +114,8 @@ export function hydrate(): void {
       results: Array.isArray(results) ? results : [],
       logs: Array.isArray(logs) ? logs : [],
     };
+    // Restored straight from storage, so it's already written — don't rewrite it.
+    persistedResults = state.results;
     emit();
   } catch {
     /* malformed cache — start clean */
@@ -96,6 +137,7 @@ export function getServerSnapshot(): TesterRunState {
 /** Clear the on-screen view (never touches the server-side stored result). */
 export function clear(): void {
   set({ results: [], logs: [], progress: null });
+  flushPersist(); // clearing must reach storage immediately, not in 400ms
 }
 
 export function clearPendingAssign(): void {
@@ -189,5 +231,6 @@ export async function startRun(urls: string[], config: RunConfig): Promise<void>
   } finally {
     abort = null;
     set({ running: false, progress: null });
+    flushPersist(); // the finished run is the one worth keeping — write it now
   }
 }

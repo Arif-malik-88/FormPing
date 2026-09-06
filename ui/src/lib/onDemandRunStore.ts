@@ -16,6 +16,7 @@ import { urlKey as runKey } from './projects/projectStore';
 import { removeDismissed } from './projects/dismissedStore';
 import { supabaseAdmin } from '@/lib/supabase';
 import { extractFormRunDetail, type FormRunDetail } from './formRunDetail';
+import { removeShots } from './formShots';
 
 interface OnDemandRunRow {
   url_key: string;
@@ -136,6 +137,10 @@ export async function removeRun(url: string): Promise<void> {
   const k = runKey(url);
   const { error } = await supabaseAdmin().from('form_tester_runs').delete().eq('url_key', k);
   if (error) console.warn(`[onDemandRunStore] removeRun: ${error.message}`);
+  // The run's screenshots are part of the run. Deleting the row and leaving the
+  // images behind would orphan them in Storage — nothing left to trace them to,
+  // and nothing that would ever clean them up. FR-73.
+  await removeShots(url);
 }
 
 /** Load all recorded runs as a Map keyed by normalized+lowercased URL. */
