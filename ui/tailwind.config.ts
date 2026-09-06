@@ -52,6 +52,9 @@ const config: Config = {
         'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'slide-in': 'slideIn 0.2s ease-out',
         'fade-in': 'fadeIn 0.15s ease-out',
+        // The loader cat's ground scrolling under her when we don't know how far
+        // along the run is (indeterminate) — motion without claiming a %. FR-76.
+        track: 'track 0.6s linear infinite',
       },
       keyframes: {
         slideIn: {
@@ -61,6 +64,10 @@ const config: Config = {
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
+        },
+        track: {
+          '0%': { backgroundPosition: '0 0' },
+          '100%': { backgroundPosition: '-12px 0' },
         },
       },
     },

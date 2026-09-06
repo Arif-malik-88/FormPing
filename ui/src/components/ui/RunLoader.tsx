@@ -8,21 +8,71 @@ import { useEffect, useState } from 'react';
  * here (type scale, height, spacing) lands everywhere the loader appears.
  *
  * Callers supply the glyph, copy, an optional `middle` slot (progress phases /
- * the multi-form narrative), the progress bar node, and the rotating facts.
+ * the multi-form narrative), how far along the run is, and the rotating facts.
+ *
+ * Progress IS the cat's path: the track fills up to the cat, who rides at the
+ * frontier. `pct` is only ever a REAL fraction (derived from "page N/T" the
+ * crawlers emit, or a batch's current/total) — when we genuinely don't know, it's
+ * null and the cat runs on the spot with the ground scrolling under it, which
+ * says "working" without inventing a percentage. A slim bar stands in on small
+ * screens, where the cat is hidden.
  */
+const DASHES = {
+  backgroundImage: 'repeating-linear-gradient(to right, currentColor 0 6px, transparent 6px 12px)',
+  backgroundSize: '12px 100%',
+} as const;
+
+/** Roughly how wide the cat renders at h-10 — used to keep her fully on the
+ *  track at 0% and 100% instead of hanging off either end. */
+const CAT_W = 40;
+
+/** The cat on her path — the loader's progress indicator (sm+ only). */
+function CatTrack({ pct }: { pct: number | null }) {
+  const known = pct != null;
+  const clamped = known ? Math.min(Math.max(pct, 0), 1) : 0;
+  const left = `calc(${(clamped * 100).toFixed(1)}% - ${(clamped * CAT_W).toFixed(0)}px)`;
+
+  return (
+    <div className="relative hidden h-10 py-1 sm:block" aria-hidden>
+      {/* The ground she runs on. Unknown progress → the dashes scroll under her. */}
+      <div
+        className={`absolute inset-x-0 bottom-0 h-[3px] rounded-full text-accent-soft/35 ${known ? '' : 'animate-track motion-reduce:animate-none'}`}
+        style={DASHES}
+      />
+      {/* Ground already covered — only drawn when the distance is real. */}
+      {known && (
+        <div
+          className="absolute bottom-0 left-0 h-[3px] rounded-full bg-gradient-to-r from-accent/40 to-accent transition-all duration-500"
+          style={{ width: `${(clamped * 100).toFixed(1)}%` }}
+        />
+      )}
+      {/* eslint-disable-next-line @next/next/no-img-element -- animated GIF: next/image would freeze it */}
+      {/* GIF faces left by default; scaleX(-1) mirrors it to run rightward. */}
+      <img
+        src="/running-cat.gif"
+        alt=""
+        className="absolute bottom-0 h-10 w-auto select-none invert transition-all duration-500"
+        style={{ left: known ? left : '18%', transform: 'scaleX(-1)' }}
+        draggable={false}
+      />
+    </div>
+  );
+}
+
 export function RunLoaderShell({
   glyph,
   headline,
   sub,
   middle,
-  progress,
+  pct,
   facts,
 }: {
   glyph: React.ReactNode;
   headline: string;
   sub: string;
   middle?: React.ReactNode;
-  progress: React.ReactNode;
+  /** 0..1 when progress is genuinely known; null/undefined = indeterminate. */
+  pct?: number | null;
   facts: string[];
 }) {
   const [factIdx, setFactIdx] = useState(0);
@@ -43,36 +93,30 @@ export function RunLoaderShell({
             {glyph}
           </span>
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-lg font-semibold text-ink">{headline}</p>
           <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">{sub}</p>
           {middle}
         </div>
+      </div>
 
-        {/* Cat running rightward ALONG the dashed path: the path is the ground and
-            the cat's feet sit ON it. Fills the space right of the copy, up here at
-            the header level so it never reads as a second progress bar. Hidden on
-            small screens, frozen for reduced motion. FR-76. */}
-        <div className="relative hidden h-12 flex-1 self-center sm:block" aria-hidden>
-          {/* Static dashed path (plain CSS gradient — no keyframes, always renders). */}
-          <div
-            className="absolute bottom-[3px] right-0 h-[3px] w-56 max-w-full rounded-full text-accent-soft/45"
-            style={{ backgroundImage: 'repeating-linear-gradient(to right, currentColor 0 6px, transparent 6px 12px)', backgroundSize: '12px 100%' }}
-          />
-          {/* Cat running rightward, feet on the path. GIF faces left by default;
-              scaleX(-1) mirrors it to run right; invert → white. */}
-          {/* eslint-disable-next-line @next/next/no-img-element -- animated GIF: next/image would freeze it */}
-          <img
-            src="/running-cat.gif"
-            alt=""
-            className="absolute bottom-0 right-[25%] h-12 w-auto select-none invert"
-            style={{ transform: 'scaleX(-1)' }}
-            draggable={false}
-          />
+      {/* PROGRESS = the cat's path. The track fills up to the cat, who rides at
+          the frontier when we truly know how far along we are; otherwise she runs
+          on the spot while the ground scrolls under her. */}
+      <div className="mt-7 sm:mt-8">
+        <CatTrack pct={pct ?? null} />
+        {/* Small screens hide the cat, so they get the plain bar instead. */}
+        <div className="sm:hidden">
+          {pct == null ? (
+            <div className="fp-indeterminate h-1 w-full rounded-full bg-line" />
+          ) : (
+            <div className="h-1 w-full overflow-hidden rounded-full bg-line">
+              <div className="h-full rounded-full bg-accent transition-all duration-500" style={{ width: `${Math.round(pct * 100)}%` }} />
+            </div>
+          )}
         </div>
       </div>
-      <div className="mt-5">{progress}</div>
-      <div className="mt-5 flex items-start gap-2.5 border-t border-line pt-4">
+      <div className="mt-7 flex items-start gap-2.5 border-t border-line pt-5">
         <svg viewBox="0 0 24 24" fill="none" className="mt-0.5 h-4 w-4 shrink-0 text-accent-soft" aria-hidden>
           <path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.6.6 1 1.2 1 2h6c0-.8.4-1.4 1-2A6 6 0 0012 3z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>

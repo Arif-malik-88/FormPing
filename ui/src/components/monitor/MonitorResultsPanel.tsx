@@ -24,9 +24,24 @@ const SCAN_FACTS = [
   'Nothing on the site is changed — we only read it.',
 ];
 
+// Real progress only: the crawler emits "Snapshotting page N/T" per page, which
+// is the one place we genuinely know the total. No signal → null (indeterminate).
+const SCAN_PAGE_RE = /Snapshotting page (\d+)\/(\d+)/;
+function scanPct(logs: string[]): number | null {
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const m = SCAN_PAGE_RE.exec(logs[i]!);
+    if (m) {
+      const done = Number(m[1]);
+      const total = Number(m[2]);
+      if (total > 0) return Math.min(done / total, 1);
+    }
+  }
+  return null;
+}
+
 /** Mode-aware scan loader — never shows raw engine/crawler logs. FR-65.
  *  Shares the app-wide RunLoaderShell so its look + size match the Form Tester. */
-function ScanLoader({ mode, watchActive }: { mode: MonitorMode; watchActive: boolean }) {
+function ScanLoader({ mode, watchActive, logs }: { mode: MonitorMode; watchActive: boolean; logs: string[] }) {
   const headline = watchActive
     ? 'Watching your site for changes'
     : mode === 'snapshot' ? 'Taking a baseline snapshot' : 'Comparing against the baseline';
@@ -46,14 +61,15 @@ function ScanLoader({ mode, watchActive }: { mode: MonitorMode; watchActive: boo
       }
       headline={headline}
       sub={sub}
-      progress={<div className="fp-indeterminate h-1 w-full rounded-full bg-line" />}
+      pct={scanPct(logs)}
       facts={SCAN_FACTS}
     />
   );
 }
 
 export function MonitorResultsPanel({ reports, snapshot, logs, running, watchActive, mode, onClear }: Props) {
-  void logs; // raw crawler logs are intentionally NOT shown to users (FR-65)
+  // Raw crawler logs are still never SHOWN to users (FR-65) — they're only read
+  // to derive how many pages have been scanned, for the loader's progress.
   const isEmpty = reports.length === 0 && !snapshot && !running;
   const hasContent = reports.length > 0 || !!snapshot;
 
@@ -76,7 +92,7 @@ export function MonitorResultsPanel({ reports, snapshot, logs, running, watchAct
       )}
 
       {/* Live status — friendly mode-aware loader, never raw crawler logs */}
-      {running && <ScanLoader mode={mode} watchActive={watchActive} />}
+      {running && <ScanLoader mode={mode} watchActive={watchActive} logs={logs} />}
 
       {/* Snapshot result (only one at a time) */}
       {snapshot && <SnapshotResultCard result={snapshot} />}

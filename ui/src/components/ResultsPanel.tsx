@@ -42,20 +42,6 @@ function StatPill({ count, label, color }: { count: number; label: string; color
   );
 }
 
-/** Determinate for a batch (know how many of N are done); a gentle pulsing track
- *  for a single URL (one long check with no measurable sub-steps). */
-function RunBar({ current, total }: { current: number; total: number }) {
-  if (total > 1) {
-    const pct = (current / total) * 100;
-    return (
-      <div className="h-1 w-full overflow-hidden rounded-full bg-line">
-        <div className="h-full rounded-full bg-accent transition-all duration-300" style={{ width: `${pct}%` }} />
-      </div>
-    );
-  }
-  return <div className="fp-indeterminate h-1 w-full rounded-full bg-line" />;
-}
-
 // Map raw engine log lines to a friendly, user-facing phase. We NEVER show the
 // raw logs (version strings, proxy state, byte counts, "Discovering contact
 // page" — all internal); instead we surface a plain phrase tied to real
@@ -106,6 +92,22 @@ function readInventory(logs: string[]): InventoryProgress {
 }
 function kindWord(k: string): string {
   return k === 'other' ? 'lead' : k.charAt(0).toUpperCase() + k.slice(1);
+}
+
+// Real progress only. The site crawl emits "Site inventory: page N/T" per page —
+// the one point in a single-URL run where we genuinely know how far along we are.
+// No signal → null, and the loader says "working" without inventing a percentage.
+const CRAWL_PAGE_RE = /Site inventory: page (\d+)\/(\d+)/;
+function crawlPct(logs: string[]): number | null {
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const m = CRAWL_PAGE_RE.exec(logs[i]!);
+    if (m) {
+      const done = Number(m[1]);
+      const total = Number(m[2]);
+      if (total > 0) return Math.min(done / total, 1);
+    }
+  }
+  return null;
 }
 
 /** Contextual "we're testing…" loader. The copy tells the user exactly what the
@@ -190,7 +192,9 @@ function RunningLoader({
       headline={multi ? `Found ${inv.found.length} forms — testing them` : headline}
       sub={multi ? multiSub : sub}
       middle={middle}
-      progress={<RunBar current={current} total={total} />}
+      // A batch knows its own progress (N of M URLs); a single URL's real signal
+      // is the site crawl's "page N/T". Neither → indeterminate.
+      pct={total > 1 ? current / total : crawlPct(logs)}
       facts={RUN_FACTS}
     />
   );
