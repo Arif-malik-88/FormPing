@@ -15,6 +15,7 @@
 import { urlKey as runKey } from './projects/projectStore';
 import { removeDismissed } from './projects/dismissedStore';
 import { supabaseAdmin } from '@/lib/supabase';
+import { extractFormRunDetail, type FormRunDetail } from './formRunDetail';
 
 interface OnDemandRunRow {
   url_key: string;
@@ -25,8 +26,11 @@ interface OnDemandRunRow {
   form_found: boolean;
   duration_ms: number;
   ran_at: string;
+  /** FR-67 — rich run facts. Absent until migration 0012 is applied. */
+  detail?: FormRunDetail | null;
 }
-const RUN_COLS = 'url_key, input_url, final_status, reason_code, mode, form_found, duration_ms, ran_at';
+const BASE_COLS = 'url_key, input_url, final_status, reason_code, mode, form_found, duration_ms, ran_at';
+const RUN_COLS = `${BASE_COLS}, detail`;
 function rowToRun(r: OnDemandRunRow): OnDemandRun {
   return {
     url: r.url_key,
@@ -37,6 +41,7 @@ function rowToRun(r: OnDemandRunRow): OnDemandRun {
     formFound: r.form_found ?? false,
     durationMs: r.duration_ms ?? 0,
     ranAt: r.ran_at,
+    detail: r.detail ?? undefined,
   };
 }
 
@@ -52,6 +57,9 @@ export interface OnDemandRun {
   durationMs: number;
   /** ISO timestamp of when this run was recorded. */
   ranAt: string;
+  /** FR-67 — the rich facts (form type, fields, why-failed…). Undefined for rows
+   *  written before migration 0012, so every reader must treat it as optional. */
+  detail?: FormRunDetail;
 }
 
 const STATUSES = ['pass', 'fail', 'warn', 'error'] as const;
@@ -86,22 +94,33 @@ export async function recordRun(raw: unknown): Promise<void> {
       formFound: r.formFound === true,
       durationMs: typeof r.durationMs === 'number' ? r.durationMs : 0,
       ranAt: new Date().toISOString(),
+      // FR-67 — everything the engine computed about this run, kept as jsonb so
+      // the per-URL dashboard can show the detail, not just a pass/fail badge.
+      detail: extractFormRunDetail(raw),
     };
 
-    const { error } = await supabaseAdmin().from('form_tester_runs').upsert(
-      {
-        url_key: run.url,
-        input_url: run.inputUrl,
-        final_status: run.finalStatus,
-        reason_code: run.reasonCode || null,
-        mode: run.mode || null,
-        form_found: run.formFound,
-        duration_ms: run.durationMs,
-        ran_at: run.ranAt,
-      },
-      { onConflict: 'url_key' },
-    );
-    if (error) console.warn(`[onDemandRunStore] recordRun: ${error.message}`);
+    const baseRow = {
+      url_key: run.url,
+      input_url: run.inputUrl,
+      final_status: run.finalStatus,
+      reason_code: run.reasonCode || null,
+      mode: run.mode || null,
+      form_found: run.formFound,
+      duration_ms: run.durationMs,
+      ran_at: run.ranAt,
+    };
+
+    const { error } = await supabaseAdmin()
+      .from('form_tester_runs')
+      .upsert({ ...baseRow, detail: run.detail ?? null }, { onConflict: 'url_key' });
+    if (error) {
+      // `detail` is missing until migration 0012 is applied — retry without it so
+      // the run still persists (best-effort: never lose the row over a new column).
+      const { error: retry } = await supabaseAdmin()
+        .from('form_tester_runs')
+        .upsert(baseRow, { onConflict: 'url_key' });
+      if (retry) console.warn(`[onDemandRunStore] recordRun: ${retry.message}`);
+    }
 
     // Re-testing a URL un-dismisses it: if it was "Don't track"-ed, testing it
     // again means the user cares about it, so bring it back to Unassigned.
@@ -122,9 +141,14 @@ export async function removeRun(url: string): Promise<void> {
 /** Load all recorded runs as a Map keyed by normalized+lowercased URL. */
 export async function loadRuns(): Promise<Map<string, OnDemandRun>> {
   const { data, error } = await supabaseAdmin().from('form_tester_runs').select(RUN_COLS);
-  if (error) {
-    console.warn(`[onDemandRunStore] loadRuns: ${error.message}`);
+  if (!error) return new Map((data as OnDemandRunRow[]).map((r) => [r.url_key, rowToRun(r)]));
+
+  // `detail` is missing until migration 0012 is applied — fall back to the thin
+  // columns so the dashboard keeps working (it just has no detail to show yet).
+  const { data: base, error: retry } = await supabaseAdmin().from('form_tester_runs').select(BASE_COLS);
+  if (retry) {
+    console.warn(`[onDemandRunStore] loadRuns: ${retry.message}`);
     return new Map();
   }
-  return new Map((data as OnDemandRunRow[]).map((r) => [r.url_key, rowToRun(r)]));
+  return new Map((base as OnDemandRunRow[]).map((r) => [r.url_key, rowToRun(r)]));
 }
