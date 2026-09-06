@@ -443,8 +443,10 @@ export async function snapshotSite(
   const pageUrls = await discoverImportantPages(normalized, browser, config, options.maxPages);
 
   const pages: PageSnapshot[] = [];
-  for (const pageUrl of pageUrls) {
-    logger.info(`  Snapshotting ${pageUrl}`);
+  for (const [i, pageUrl] of pageUrls.entries()) {
+    // "page N/T" is the real progress signal the UI loader reads to place the
+    // cat on its track — emitted only because we genuinely know the total here.
+    logger.info(`  Snapshotting page ${i + 1}/${pageUrls.length}: ${pageUrl}`);
     const snapshot = options.takeScreenshots
       ? await snapshotPageWithPlaywright(pageUrl, browser, config, true, screenshotDir)
       : await snapshotPageWithFetch(pageUrl, config);

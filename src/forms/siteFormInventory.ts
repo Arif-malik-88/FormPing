@@ -192,7 +192,10 @@ export async function inventorySiteForms(
   const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
   ctx.setDefaultNavigationTimeout(RENDER_TIMEOUT);
   try {
-    for (const url of pool) {
+    for (const [pageIndex, url] of pool.entries()) {
+      // "page N/T" is the real progress signal the UI loader reads to place the
+      // cat on its track — we only emit it because the total is genuinely known.
+      logger.info(`Site inventory: page ${pageIndex + 1}/${pool.length}`);
       let page: Page | null = null;
       try {
         page = await ctx.newPage();
