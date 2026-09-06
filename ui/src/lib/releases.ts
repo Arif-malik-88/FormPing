@@ -31,6 +31,51 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.1.0',
+    name: 'Engine rebuild',
+    date: 'September 2026',
+    major: true,
+    summary:
+      'FormPing now checks every form on a site, shows you a picture of each one it tested, and tells you when it isn’t sure.',
+    changes: [
+      {
+        title: 'Every form on the site, not just the contact form',
+        detail:
+          'A test used to find one contact form and stop. Now it looks across your client’s whole site — the pages linked from the navigation, the footer and the sitemap — and reports every form it finds, wherever it lives. Each one is identified for what it is: a contact form, a rental or demo request, a newsletter sign-up, a search box. Every form that captures leads is filled with test data, and the results come back as one report with a tab for each form. A quote form sitting on a forgotten page is exactly the kind of thing that breaks quietly, and now you see it.',
+      },
+      {
+        title: 'See the form we tested',
+        detail:
+          'Every form now comes with a picture of it, headline and all, so you can tell in a second that we checked the form you meant. Cookie banners and chat bubbles are taken out of the shot, so you see the form rather than whatever was floating over it — and the form’s address opens the page right at it. No more taking our word for it.',
+      },
+      {
+        title: 'We tell you when we’re not sure',
+        detail:
+          'If the only form on a page has a single box to type in, that’s usually a search bar or a newsletter sign-up rather than a way to contact you — so we no longer fill it and call it healthy. We show you the picture and ask. In the same spirit, a CAPTCHA is only reported on the form that actually has one, and field counts now match what you can see on the form.',
+      },
+      {
+        title: 'Multi-step forms are tested properly',
+        detail:
+          'Forms that ask questions across several “Next” steps are now walked through one step at a time, just like a real visitor. In Live mode the message is only sent if the walk completes cleanly and a real email was entered — so a half-finished test entry never lands in your client’s inbox.',
+      },
+      {
+        title: 'Clearer results everywhere',
+        detail:
+          'Every result now says what happened in plain language and, when something failed, why. A broken form caused by the site’s own server error reads as exactly that, instead of a vague “validation error”. Uptime checks, content-change reports and the per-URL dashboard all had the same treatment, so a result means the same thing wherever you read it.',
+      },
+      {
+        title: 'Each URL has its own dashboard',
+        detail:
+          'Open any URL in a project and you’ll see the detail of the last test we ran on it — which forms were found, what happened to each, when it ran and how long it took — instead of a single pass or fail badge. Uptime and certificate history sit alongside it, with proper charts.',
+      },
+      {
+        title: 'Alerts that keep telling you',
+        detail:
+          'An alert now says exactly what broke and links straight to it. And if a problem is still there tomorrow, you hear about it again on a sensible schedule rather than getting one message and silence — so an ongoing outage can’t quietly slip off the radar.',
+      },
+    ],
+  },
+  {
     version: '2.0.0',
     name: 'App redesign',
     date: 'August 2026',
