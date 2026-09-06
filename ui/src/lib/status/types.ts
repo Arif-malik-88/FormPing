@@ -8,6 +8,8 @@
  * client page. (FR-20: response time + latency + check frequency are internal.)
  */
 
+import type { FormRunDetail } from '../formRunDetail';
+
 export type OverallStatus = 'operational' | 'degraded' | 'down';
 export type SiteUp = 'up' | 'down' | 'blocked' | 'unknown';
 
@@ -56,6 +58,13 @@ export interface SiteTech {
     level: string | null;
     label: string | null;
     lastRunAt: string | null;
+    /** FR-67 — the last manual Form Tester run's reason code + rich facts, so the
+     *  per-URL dashboard can explain WHAT was found and WHY it failed. Internal
+     *  only (it lives in `tech`, which never reaches the public status page). */
+    reasonCode?: string | null;
+    /** How long the run took, in ms — shown as "took 98s" beside when it ran. */
+    durationMs?: number | null;
+    detail?: FormRunDetail;
   };
 }
 
