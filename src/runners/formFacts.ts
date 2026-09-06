@@ -36,21 +36,109 @@ export function meaningfulFields(fields: DetectedFormField[]): DetectedFormField
   return out;
 }
 
+/**
+ * A field that belongs to the SITE, not to this form — a header/footer search
+ * box that sits near the form in the DOM (or is wired to it by a `form`
+ * attribute) and gets swept up with it.
+ *
+ * It must not be counted. A rental form with seven boxes on screen reported
+ * "8 fields" because a global search input came along for the ride, and a count
+ * that disagrees with the form in front of you undermines every other number on
+ * the card. The field is still LISTED — tagged as global — because pretending we
+ * never saw it would be its own kind of dishonesty. FR-73.
+ *
+ * `\bsearch\b` deliberately: "Research budget" is a real field, not a search box.
+ */
+export function isGlobalField(f: DetectedFormField): boolean {
+  if (f.type.toLowerCase() === 'search') return true;
+  return /\bsearch\b/i.test(`${f.name ?? ''} ${f.label ?? ''}`);
+}
+
+/**
+ * The fields that are genuinely this form's own — what "N fields" counts.
+ *
+ * `kind` matters: a SEARCH form's search input is its own field, not foreign
+ * chrome. Filtering it would leave the site's search box reporting "0 fields",
+ * which is how a nonsense count sneaks back in from the other direction. FR-73.
+ */
+export function ownFields(fields: DetectedFormField[], kind?: string): DetectedFormField[] {
+  if (kind === 'search') return fields;
+  return fields.filter((f) => !isGlobalField(f));
+}
+
 export interface NativeFormFacts {
   formType: 'native';
+  /** Counts the form's OWN fields — site-wide inputs are excluded. */
   fieldCount: number;
+  /** Every meaningful field, global ones included so the UI can show + tag them. */
   fields: DetectedFormField[];
   isMultiStep: boolean;
 }
 
 /** Facts for a hand-coded DOM `<form>` we detected. */
 export function nativeFormFacts(
-  form: Pick<FormCandidate, 'fields'>,
+  form: Pick<FormCandidate, 'fields'> & { kind?: string },
   opts: { hiddenMultiStep: boolean; stepsTraversed?: number },
 ): NativeFormFacts {
   const fields = meaningfulFields(form.fields);
   const isMultiStep = opts.hiddenMultiStep || (opts.stepsTraversed ?? 0) > 1;
-  return { formType: 'native', fieldCount: fields.length, fields, isMultiStep };
+  // Count what belongs to the form; list everything we saw. FR-73.
+  return { formType: 'native', fieldCount: ownFields(fields, form.kind).length, fields, isMultiStep };
+}
+
+/** How much the detector's pick is worth trusting, and why. FR-73. */
+export interface FormConfidence {
+  level: 'high' | 'low';
+  /** Plain, user-facing reason — empty when the match is a confident one. */
+  reason: string;
+  /** The match is too weak to fill at all: a single-input form is a search box
+   *  or an email capture, never a contact form. Fill it and we'd be inventing a
+   *  result nobody can verify — so we stop and ask instead. */
+  tooWeakToFill: boolean;
+}
+
+/**
+ * FR-73 — decide how honestly to present a detected form.
+ *
+ * The engine used to be biased to always say "found something": Landing-page
+ * leniency accepts the best form even at a NEGATIVE score, and a stray one-field
+ * `<form>` was then filled and reported as a green pass. Two different problems,
+ * two different answers:
+ *
+ *   • one meaningful field  → too weak to fill; report it and ask the user.
+ *   • leniency-accepted     → fill it (the user asserted the form is on this
+ *                             page — that's the whole point of the mode), but
+ *                             present it as a low-confidence match, never a
+ *                             confident pass.
+ *
+ * Pure — unit-tested.
+ */
+export function assessFormConfidence(opts: {
+  score: number;
+  /** Count AFTER meaningfulFields() — hidden inputs and submit buttons dropped. */
+  fieldCount: number;
+  acceptedByLandingLeniency: boolean;
+  /** A wizard shows one field at a time on purpose, so a low count says nothing
+   *  about whether it's a real contact form. Never judged too weak on size. */
+  isMultiStep?: boolean;
+}): FormConfidence {
+  if (opts.fieldCount <= 1 && !opts.isMultiStep) {
+    return {
+      level: 'low',
+      reason:
+        'the only form here has a single input — that reads like a search box or an email sign-up, not a contact form',
+      tooWeakToFill: true,
+    };
+  }
+  if (opts.acceptedByLandingLeniency || opts.score < 0) {
+    return {
+      level: 'low',
+      reason:
+        'this form is missing the usual contact signals (a message box, a name field, a "Send" button) — we took it because Landing-page mode says the form is on this page',
+      tooWeakToFill: false,
+    };
+  }
+  return { level: 'high', reason: '', tooWeakToFill: false };
 }
 
 export interface EmbedFormFacts {

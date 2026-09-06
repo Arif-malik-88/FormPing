@@ -24,14 +24,29 @@ const MESSAGES: Record<string, ReasonMessage> = {
     severity: 'warn',
   },
   FORM_NOT_FOUND: {
-    title: 'No form on the page',
-    description: 'No form of any kind was found on the tested page — neither a native <form> nor a known third-party embed. The form may have moved, been removed, or sit on a different page.',
+    title: 'No form on this page',
+    description:
+      'We found no form of any kind here — nothing built into the page, and no embedded form from a provider like Typeform or HubSpot. It may have been removed, or it may live on a different page.',
     severity: 'error',
   },
   NON_CONTACT_FORM_FOUND: {
-    title: 'Found a form — but not a contact form',
-    description: 'The page has a form, but it did not score as a contact form (it may be a search, newsletter, quiz, or booking form). The run notes show its score and which contact fields are missing. If this really is the contact form, re-run in Landing-page mode to test it directly.',
+    // Plain language, and no internal jargon: the old copy sent people to "the
+    // run notes" to read a detector "score", which is a number only we
+    // understand. The form itself is now shown below, which answers the question
+    // far better than any explanation could. FR-73.
+    title: 'This page has a form, but it is not a contact form',
+    // Deliberately does NOT guess at what it was ("a search box, a newsletter…").
+    // The engine classified it and the panel below names it outright, so listing
+    // possibilities here reads as vagueness next to an answer. FR-73.
+    description:
+      'It does not ask for the things a contact form asks for, so nothing was filled in. The form we matched is shown below — if it IS the one you wanted tested, run it again with Landing page turned on and we will test it directly.',
     severity: 'warn',
+  },
+  LOW_CONFIDENCE_FORM: {
+    title: 'Only a single-field form here — is this your contact form?',
+    description:
+      'The one form we could match on this page has a single input, which usually means a search box or an email sign-up rather than a contact form. Rather than fill it and call it healthy, we stopped and took a picture of it — have a look. If it IS your contact form, tell us. If it is not, your real form is probably on another page: turn Landing-page mode off and we will go and find it.',
+    severity: 'info',
   },
   THIRD_PARTY_EMBED_FORM: {
     title: 'Third-party form detected',
@@ -98,6 +113,12 @@ const MESSAGES: Record<string, ReasonMessage> = {
   VALIDATION_ERROR: {
     title: 'Form rejected submission',
     description: 'The form displayed validation errors after submission. Field values may be incorrect for this site.',
+    severity: 'error',
+  },
+  SERVER_ERROR: {
+    title: 'The form is broken — the site’s server returned an error',
+    description:
+      'We filled the form correctly and sent it, and the site’s own code failed with a server error (HTTP 5xx). Nothing was delivered. Anyone using this form right now is hitting the same failure, so their enquiries are being lost. The run notes show the exact endpoint and the error it returned — send those to whoever maintains the site.',
     severity: 'error',
   },
   NO_REDIRECT_NO_SUCCESS: {
