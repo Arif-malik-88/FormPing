@@ -32,6 +32,11 @@ export interface RawSiteResult {
   landingPageMode?: boolean;
   formsOnPage?: FormsOnPage; // FR-68 — "N forms on this page" (2+ forms only)
   tracking?: TrackingParams; // FR-68 — hidden UTM/tracking params captured
+  // FR-73 — how sure the engine was, and whether protection was on the page
+  // rather than on the form. A scheduled run reads exactly like a manual one.
+  formConfidenceLevel?: 'high' | 'low';
+  lowConfidenceReason?: string;
+  pageProtection?: boolean;
   notes?: string[];
   errors?: string[];
   [k: string]: unknown;

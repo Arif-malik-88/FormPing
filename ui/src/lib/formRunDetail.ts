@@ -36,6 +36,10 @@ export interface FormRunFormSummary {
   outcome?: string;
   /** True for the one form the run actually tested. */
   primary?: boolean;
+  /** Hosted URL of this form's screenshot, so the per-URL dashboard can show the
+   *  same evidence the tester did. Only ever an http(s) URL — an inline `data:`
+   *  image would bloat every stored row, so it is rejected here. FR-73. */
+  shot?: string;
 }
 
 export interface FormRunDetail {
@@ -45,6 +49,10 @@ export interface FormRunDetail {
   fieldCount?: number;
   fields?: { label: string; type: string }[];
   isMultiStep?: boolean;
+  /** What the matched form is — contact / newsletter / search / login / other.
+   *  Without it the dashboard could say "not a contact form" but never say what
+   *  it WAS, which is the one thing the reader wants to know. FR-73. */
+  formKind?: string;
   /** The page the form was actually found on (may differ from the entered URL). */
   resolvedPage?: string | null;
   landingPageMode?: boolean;
@@ -52,8 +60,17 @@ export interface FormRunDetail {
   submissionResult?: string;
   thankYouDetected?: boolean;
   inlineSuccessDetected?: boolean;
+  /** A CAPTCHA widget on the tested FORM (page-level protection is `pageProtection`). */
   captchaDetected?: boolean;
+  /** Bot-protection markup on the page — true of the page, not of the form. FR-73. */
+  pageProtection?: boolean;
   antiBotDetected?: boolean;
+  /** How sure we were that this is really the contact form. Persisted so the
+   *  per-URL dashboard hedges exactly where the tester did — one story in both
+   *  places, rather than a confident dashboard over an unsure run. FR-73. */
+  confidence?: 'high' | 'low';
+  /** Plain reason the match was low-confidence. FR-73. */
+  lowConfidenceReason?: string;
   tracking?: { utm: string[]; other: string[] };
   /** How many forms were on the tested page (2+ only). */
   formsOnPageTotal?: number;
@@ -100,6 +117,7 @@ export function extractFormRunDetail(raw: unknown): FormRunDetail {
   }
 
   const ms = bool(r.isMultiStep); if (ms !== undefined) d.isMultiStep = ms;
+  const kind = str(r.formKind); if (kind !== undefined) d.formKind = kind;
   if (typeof r.resolvedContactPage === 'string' || r.resolvedContactPage === null) d.resolvedPage = r.resolvedContactPage as string | null;
   const lp = bool(r.landingPageMode); if (lp !== undefined) d.landingPageMode = lp;
   const sa = bool(r.submissionAttempted); if (sa !== undefined) d.submissionAttempted = sa;
@@ -107,7 +125,10 @@ export function extractFormRunDetail(raw: unknown): FormRunDetail {
   const ty = bool(r.thankYouDetected); if (ty !== undefined) d.thankYouDetected = ty;
   const inl = bool(r.inlineSuccessDetected); if (inl !== undefined) d.inlineSuccessDetected = inl;
   const cap = bool(r.captchaDetected); if (cap !== undefined) d.captchaDetected = cap;
+  const pp = bool(r.pageProtection); if (pp !== undefined) d.pageProtection = pp;
   const ab = bool(r.antiBotDetected); if (ab !== undefined) d.antiBotDetected = ab;
+  if (r.formConfidenceLevel === 'high' || r.formConfidenceLevel === 'low') d.confidence = r.formConfidenceLevel;
+  const lcr = str(r.lowConfidenceReason); if (lcr !== undefined) d.lowConfidenceReason = lcr;
 
   if (r.tracking && typeof r.tracking === 'object') {
     const t = r.tracking as Record<string, unknown>;
@@ -159,6 +180,12 @@ export function extractFormRunDetail(raw: unknown): FormRunDetail {
 
         const tr = f.tracking && typeof f.tracking === 'object' ? (f.tracking as Record<string, unknown>) : undefined;
         const utm = strArr(tr?.utm); if (utm && utm.length) summary.utm = utm;
+
+        // Hosted images only. The run route swaps the engine's inline `data:`
+        // image for a URL before this ever runs; if that failed, storing the
+        // base64 would put a few hundred KB in every row. FR-73.
+        const shot = str(f.shot);
+        if (shot && /^https?:\/\//.test(shot)) summary.shot = shot;
 
         return summary;
       })

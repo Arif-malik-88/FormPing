@@ -25,9 +25,9 @@ export async function onRunComplete(schedule: FormSchedule, record: FormRunRecor
   const prev = await latestRun(schedule.id); // previous run (this one not yet stored)
   const changes = compareFingerprints(prev?.fingerprint ?? null, record.fingerprint);
   const prevLevel = prev
-    ? runVerdict(prev.reasonCode, prev.fingerprint.formFound, prev.status).level
+    ? runVerdict(prev.reasonCode, prev.fingerprint.formFound, prev.status, prev.fingerprint.formConfidenceLevel).level
     : null;
-  const verdict = runVerdict(record.reasonCode, record.fingerprint.formFound, record.status);
+  const verdict = runVerdict(record.reasonCode, record.fingerprint.formFound, record.status, record.fingerprint.formConfidenceLevel);
   const regression = isRegression(prevLevel, verdict.level);
   const suggestions = buildSuggestions(record, changes);
 

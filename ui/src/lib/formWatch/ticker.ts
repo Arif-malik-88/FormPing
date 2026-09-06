@@ -77,6 +77,13 @@ function toRecord(schedule: FormSchedule, raw: RawSiteResult, ranAt: string): Fo
       landingPageMode: Boolean(raw.landingPageMode),
       formsOnPage: raw.formsOnPage && typeof raw.formsOnPage === 'object' ? raw.formsOnPage : undefined,
       tracking: raw.tracking && typeof raw.tracking === 'object' ? raw.tracking : undefined,
+      // FR-73 — the same engine ran this, so it carries the same doubts. Without
+      // these a scheduled run would present a weak match as a confident pass
+      // while the Tester, on the identical result, said it wasn't sure.
+      formConfidenceLevel:
+        raw.formConfidenceLevel === 'low' || raw.formConfidenceLevel === 'high' ? raw.formConfidenceLevel : undefined,
+      lowConfidenceReason: typeof raw.lowConfidenceReason === 'string' ? raw.lowConfidenceReason : undefined,
+      pageProtection: typeof raw.pageProtection === 'boolean' ? raw.pageProtection : undefined,
     },
     notes: Array.isArray(raw.notes) ? raw.notes.map(String) : [],
     errors: Array.isArray(raw.errors) ? raw.errors.map(String) : [],

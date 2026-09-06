@@ -155,21 +155,43 @@ function formWorking(h: UrlHealth, internal: boolean): boolean | null {
 
 /** Internal `tech.form` block from whichever form signal exists (monitor or manual run). */
 function formTech(h: UrlHealth): Pick<NonNullable<StatusSite['tech']>, 'form'> | Record<string, never> {
+  // The last full Form Tester run's rich facts (FR-67). Attached WHETHER OR NOT
+  // the URL also has a scheduled monitor.
+  //
+  // This used to live only in the unmonitored branch, so adding a Form Scheduler
+  // monitor to a URL silently STRIPPED its dashboard back to one line — the
+  // richest page in the app got poorer the more you monitored the URL, which is
+  // exactly backwards. Monitoring state and test detail are different facts; the
+  // page shows both. FR-73.
+  const run = h.lastRun;
+  const runDetail = run
+    ? {
+        reasonCode: run.reasonCode ?? null,
+        durationMs: run.durationMs ?? null,
+        detail: run.detail,
+        detailRanAt: run.ranAt ?? null,
+      }
+    : {};
+
   if (h.form.monitored || h.form.stopped) {
-    return { form: { mode: h.form.mode ?? null, level: h.form.level ?? null, label: h.form.label ?? null, lastRunAt: h.form.lastRunAt ?? null } };
-  }
-  if (h.lastRun) {
-    // FR-67 — carry the manual run's reason code + rich detail so the per-URL
-    // dashboard can explain what was found and why it failed. Internal-only.
     return {
       form: {
-        mode: h.lastRun.mode ?? null,
+        mode: h.form.mode ?? null,
+        level: h.form.level ?? null,
+        label: h.form.label ?? null,
+        lastRunAt: h.form.lastRunAt ?? null,
+        ...runDetail,
+      },
+    };
+  }
+  if (run) {
+    return {
+      form: {
+        mode: run.mode ?? null,
         level: null,
         label: null,
-        lastRunAt: h.lastRun.ranAt ?? null,
-        reasonCode: h.lastRun.reasonCode ?? null,
-        durationMs: h.lastRun.durationMs ?? null,
-        detail: h.lastRun.detail,
+        lastRunAt: run.ranAt ?? null,
+        ...runDetail,
       },
     };
   }

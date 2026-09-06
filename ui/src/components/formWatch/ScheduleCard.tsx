@@ -68,7 +68,7 @@ export function ScheduleCard({
   const style = LEVEL_STYLE[level];
 
   const recentRuns = (runs ?? []).slice(0, 12).reverse();
-  const levels = recentRuns.map((r) => runVerdict(r.reasonCode, r.fingerprint.formFound, r.status).level);
+  const levels = recentRuns.map((r) => runVerdict(r.reasonCode, r.fingerprint.formFound, r.status, r.fingerprint.formConfidenceLevel).level);
   // A detected third-party embed is a fine outcome — count it as OK for the pass
   // rate and give it its own sky bar in the trend (not amber). FR-60.
   const passPct = levels.length ? Math.round((levels.filter((l) => l === 'healthy' || l === 'detected').length / levels.length) * 100) : null;
@@ -157,7 +157,7 @@ export function ScheduleCard({
             </a>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-ink-faint">
               <span>{intervalLabel(schedule.intervalMs)}</span>
-              <span className="rounded bg-panel-raised px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-ink-muted">{schedule.mode}</span>
+              <ModeChip mode={schedule.mode} />
               {schedule.landingPage && (
                 <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-accent-soft ring-1 ring-accent/30" title="Landing-page mode: tested on this exact URL">Landing</span>
               )}
@@ -257,8 +257,40 @@ export function ScheduleCard({
   );
 }
 
+/**
+ * The check mode, colour-coded by how much it DOES to the client's site — the
+ * one fact on this row worth reading at a glance across a list of monitors.
+ *
+ * It used to be the same grey as the interval and the timestamps beside it, so
+ * the difference between "fills a form every day" and "SUBMITS a real message
+ * every day" was invisible in a scan. Live gets the warning colour it deserves;
+ * detect-only, which touches nothing, stays quiet. Same semantic palette the
+ * mode buttons in the form above use, so the chip reads as the same thing.
+ */
+function ModeChip({ mode }: { mode: string }) {
+  const style =
+    mode === 'live' ? 'bg-danger/12 text-danger ring-danger/35'
+    : mode === 'safe' ? 'bg-accent/12 text-accent-soft ring-accent/35'
+    : 'bg-info/12 text-info ring-info/30';
+  const label = mode === 'detect-only' ? 'detect' : mode;
+  return (
+    <span
+      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ${style}`}
+      title={
+        mode === 'live'
+          ? 'Live — every check submits a real message to the site'
+          : mode === 'safe'
+            ? 'Safe — every check fills the form but never submits'
+            : 'Detect only — every check confirms the form is there, nothing is filled'
+      }
+    >
+      {label}
+    </span>
+  );
+}
+
 function RunRow({ run }: { run: FormRunRecord }) {
-  const v = runVerdict(run.reasonCode, run.fingerprint.formFound, run.status);
+  const v = runVerdict(run.reasonCode, run.fingerprint.formFound, run.status, run.fingerprint.formConfidenceLevel);
   const s = LEVEL_STYLE[v.level];
   return (
     <div className="rounded-lg border border-line bg-ground/40 p-3">

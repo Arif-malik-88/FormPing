@@ -65,6 +65,11 @@ export interface SiteTech {
     /** How long the run took, in ms — shown as "took 98s" beside when it ran. */
     durationMs?: number | null;
     detail?: FormRunDetail;
+    /** When the run that produced `detail` happened. A monitored URL shows its
+     *  MONITOR's last check in the header, while the detail comes from the last
+     *  full Form Tester run — often a different moment. Captioned rather than
+     *  quietly presented under the wrong timestamp. FR-73. */
+    detailRanAt?: string | null;
   };
 }
 
