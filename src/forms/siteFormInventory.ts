@@ -1,9 +1,10 @@
 import type { Browser, Page } from 'playwright';
 import type { AppConfig, DetectedFormField, FormCandidate, FormKind, FormOutcome, SiteForm, TrackingParams } from '../types.js';
-import { extractForms, type FormInfo } from './findContactForm.js';
+import { extractForms, formAbout, type FormInfo } from './findContactForm.js';
 import { detectEmbeds } from './detectEmbeds.js';
 import { fillForm } from './fillForm.js';
-import { classifyFormKind, meaningfulFields, detectTrackingParams, isLeadForm, isMarketingParam } from '../runners/formFacts.js';
+import { captureFormShot } from './captureFormShot.js';
+import { classifyFormKind, meaningfulFields, ownFields, detectTrackingParams, isLeadForm, isMarketingParam } from '../runners/formFacts.js';
 import { fetchHtml } from '../browser/playwrightClient.js';
 import { loadHtml, extractLinks } from '../utils/dom.js';
 import { resolveHref, isSameOrigin } from '../utils/url.js';
@@ -36,12 +37,9 @@ function toFields(f: FormInfo): DetectedFormField[] {
 }
 
 /** "What it's about": nearest heading, else a short submit-button label. */
-function aboutOf(f: FormInfo): string {
-  const heading = (f.location?.heading ?? '').trim();
-  if (heading) return heading;
-  const submit = (f.submitText ?? '').trim();
-  return submit && submit.length <= 40 ? submit : '';
-}
+// Naming a form is shared with the single-page flow (findContactForm), so the
+// two surfaces can never call the same form different things. FR-73.
+const aboutOf = formAbout;
 
 /** Build the FormCandidate fillForm needs (it only reads `index`; the rest keeps
  *  the shape valid + carries fields/kind for logging). */
@@ -128,13 +126,22 @@ async function fillLeadForm(page: Page, f: FormInfo, kind: FormKind, config: App
 /** Lead forms first, then marketing, then utility — for a sensible report order. */
 const KIND_RANK: Record<string, number> = { contact: 0, other: 1, newsletter: 2, login: 3, search: 4, 'third-party': 5 };
 
+/** How many lead forms we photograph per run. Evidence for the forms a user
+ *  actually reads, without turning a whole-site scan into a screenshot job. FR-73. */
+const SHOT_CAP = 4;
+
 interface NativeRec {
   type: 'native';
   url: string;
+  /** A CAPTCHA widget on THIS form — not merely on the page. FR-73. */
   captcha: boolean;
+  /** Bot-protection markup somewhere on the page this form lives on. FR-73. */
+  pageProtection: boolean;
   about: string;
   kind: FormKind;
   action: string;
+  anchorId: string;
+  shot: string | null;
   meaningful: DetectedFormField[];
   hiddenFields: { name: string; value: string }[];
   tracking: TrackingParams;
@@ -143,7 +150,7 @@ interface NativeRec {
 interface EmbedRec {
   type: 'embed';
   url: string;
-  captcha: boolean;
+  pageProtection: boolean;
   provider: string;
 }
 
@@ -189,6 +196,7 @@ export async function inventorySiteForms(
   const records: NativeRec[] = [];
   const embedRecords: EmbedRec[] = [];
   let filledCount = 0;
+  let shots = 0;
   const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
   ctx.setDefaultNavigationTimeout(RENDER_TIMEOUT);
   try {
@@ -203,7 +211,11 @@ export async function inventorySiteForms(
         await page.waitForLoadState('networkidle', { timeout: SETTLE_TIMEOUT }).catch(() => { /* bounded */ });
         const forms = await extractForms(page);
         const embeds = await detectEmbeds(page);
-        const captcha = /recaptcha|hcaptcha|turnstile|g-recaptcha/i.test(await page.content());
+        // Page-level bot protection. Until FR-73 this single page-wide regex was
+        // stamped onto EVERY form on the page, so a search box came back "CAPTCHA
+        // protected". It is now kept as what it is — a fact about the page — while
+        // each form carries its own widget check from extractForms.
+        const pageProtection = /recaptcha|hcaptcha|turnstile|g-recaptcha/i.test(await page.content());
 
         for (const form of forms) {
           const allFields = toFields(form);
@@ -215,11 +227,19 @@ export async function inventorySiteForms(
           const hiddenFields = form.fields
             .filter((x) => x.type === 'hidden' && x.name && isMarketingParam(x.name) && !seenHidden.has(x.name) && seenHidden.add(x.name))
             .map((x) => ({ name: x.name, value: x.value ?? '' }));
-          const lead = isLeadForm(kind, meaningful.length);
+          const lead = isLeadForm(kind, ownFields(meaningful, kind).length);
 
           // The contact form on the page the main flow will test is filled there,
           // once — so detect it here but don't re-fill it.
           const isPrimaryContact = kind === 'contact' && primaryContactUrl !== null && samePage(url, primaryContactUrl);
+
+          // Evidence for the forms a user will actually read — lead forms only,
+          // capped per run, best-effort. A utility search box needs no portrait. FR-73.
+          let shot: string | null = null;
+          if (lead && shots < SHOT_CAP) {
+            shot = await captureFormShot(page, form.index);
+            if (shot) shots += 1;
+          }
 
           let outcome: FormOutcome = { state: 'detected' };
           if (lead) {
@@ -240,17 +260,20 @@ export async function inventorySiteForms(
           records.push({
             type: 'native',
             url,
-            captcha,
+            captcha: form.captcha,
+            pageProtection,
             about: aboutOf(form),
             kind,
             action: (form.action ?? '').trim(),
+            anchorId: form.location.anchorId,
+            shot,
             meaningful,
             hiddenFields,
             tracking: detectTrackingParams(allFields),
             outcome,
           });
         }
-        for (const embed of embeds) embedRecords.push({ type: 'embed', url, captcha, provider: embed.provider });
+        for (const embed of embeds) embedRecords.push({ type: 'embed', url, pageProtection, provider: embed.provider });
       } catch (err) {
         logger.debug(`Site inventory: skipped ${url}: ${err}`);
       } finally {
@@ -275,7 +298,9 @@ export async function inventorySiteForms(
     if (found) { bump(found); continue; }
     byKey.set(key, {
       url: rec.url, kind: 'third-party', about: rec.provider, formType: 'third-party',
-      provider: rec.provider, fieldCount: 0, fields: [], security: { captcha: rec.captcha },
+      // We can't see inside a cross-origin embed, so we never claim a CAPTCHA on
+      // one — only that the page it sits on carries bot protection. FR-73.
+      provider: rec.provider, fieldCount: 0, fields: [], security: { captcha: false, pageProtection: rec.pageProtection },
       tracking: { utm: [], other: [] }, siteWide: false, seenOn: 1,
       outcome: { state: 'detected', note: 'third-party embed — can’t auto-fill' },
     });
@@ -293,6 +318,12 @@ export async function inventorySiteForms(
       bump(found);
       // Prefer a real fill outcome if a later copy of the same form was filled.
       if (found.outcome?.state !== 'filled' && rec.outcome.state === 'filled') found.outcome = rec.outcome;
+      // Keep whatever evidence we have: the first copy of a site-wide form may
+      // have been off-screen or over budget while a later one photographed fine. FR-73.
+      if (!found.shot && rec.shot) found.shot = rec.shot;
+      if (!found.anchorId && rec.anchorId) found.anchorId = rec.anchorId;
+      // A CAPTCHA on any copy is a CAPTCHA on this form.
+      if (rec.captcha) found.security.captcha = true;
       // Prefer the primary contact page as the canonical URL, so the UI's "tested"
       // mapping (which matches by page) still lands on this entry.
       if (primaryContactUrl && rec.kind === 'contact' && samePage(rec.url, primaryContactUrl)) found.url = rec.url;
@@ -300,9 +331,14 @@ export async function inventorySiteForms(
     }
     byKey.set(key, {
       url: rec.url, kind: rec.kind, about: rec.about, formType: 'native',
-      fieldCount: rec.meaningful.length, fields: rec.meaningful, security: { captcha: rec.captcha },
+      // Count the form's own fields; a site-wide search input is listed but
+      // never counted, so the number matches the form on screen. FR-73.
+      fieldCount: ownFields(rec.meaningful, rec.kind).length, fields: rec.meaningful,
+      security: { captcha: rec.captcha, pageProtection: rec.pageProtection },
       tracking: rec.tracking, siteWide: false, seenOn: 1, outcome: rec.outcome,
       hiddenFields: rec.hiddenFields,
+      ...(rec.anchorId ? { anchorId: rec.anchorId } : {}),
+      ...(rec.shot ? { shot: rec.shot } : {}),
     });
   }
 

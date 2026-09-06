@@ -12,6 +12,11 @@ export type ReasonCode =
   // search/newsletter/quiz form). Distinct from FORM_NOT_FOUND (nothing at all)
   // so the user hears "found a form, but not a contact one" — FR-28.
   | 'NON_CONTACT_FORM_FOUND'
+  // The only thing we could match is a single-input <form> — a stray search box,
+  // a footer email capture, a hidden modal. Filling its one field and calling it
+  // healthy is how the tester used to invent a contact form nobody could see, so
+  // we now stop, say what we found, and ask the user to confirm. FR-73.
+  | 'LOW_CONFIDENCE_FORM'
   // A known third-party embed (Typeform, HubSpot, Calendly, Jotform, Tally, …)
   // is present: the form provably exists but is a cross-origin embed we can't
   // auto-fill. Reported so the user knows it's there — FR-28.
@@ -39,6 +44,11 @@ export type ReasonCode =
   | 'SUBMISSION_BLOCKED_BY_ANTISPAM'
   | 'PROXY_REJECTED_POST'
   | 'VALIDATION_ERROR'
+  // The site's OWN endpoint returned 5xx when the form was submitted — the form
+  // is wired up, we filled it correctly, and their server broke. Distinct from
+  // VALIDATION_ERROR (which blames the data we entered) because the fix belongs
+  // to whoever owns the site, not to us. FR-73.
+  | 'SERVER_ERROR'
   | 'NO_REDIRECT_NO_SUCCESS'
   | 'INLINE_SUCCESS_ONLY'
   | 'THANK_YOU_REDIRECT'
@@ -151,6 +161,11 @@ export interface FormCandidate {
   /** The form's detected fields (label + input type), so the caller can report
    *  "N fields: Name, Email, Message …" without re-reading the DOM. FR-64. */
   fields: DetectedFormField[];
+  /** A CAPTCHA widget inside THIS form. Page-wide bot protection is tracked
+   *  separately — it says nothing about whether this form is protected. FR-73. */
+  captcha?: boolean;
+  /** What the form is called on the page — nearest heading, else submit text. FR-73. */
+  about?: string;
 }
 
 /** A single field detected on a form — the bits worth showing a user. FR-64. */
@@ -209,8 +224,17 @@ export interface SiteForm {
   /** Accurate fillable-field count (groups collapsed, hidden dropped). */
   fieldCount: number;
   fields: DetectedFormField[];
-  security: { captcha: boolean };
+  /** `captcha` = a widget on THIS form. `pageProtection` = bot-protection markup
+   *  somewhere on the page it lives on — true of the whole page, not evidence
+   *  about this form, so the two are never conflated on the card. FR-73. */
+  security: { captcha: boolean; pageProtection?: boolean };
   tracking: TrackingParams;
+  /** An element id to jump straight to this form — `url#anchorId`. FR-73. */
+  anchorId?: string;
+  /** Evidence: a cropped screenshot of the form as we saw it. A `data:` URL from
+   *  the engine, swapped for a hosted URL by the run route before it reaches the
+   *  browser, so the heavy bytes never touch the client or its cache. FR-73. */
+  shot?: string;
   /** True when this same form appears on many pages (search/footer newsletter). */
   siteWide: boolean;
   /** How many crawled pages this form was seen on. */
@@ -286,6 +310,32 @@ export interface SiteResult {
   fields?: DetectedFormField[];
   /** True when the native form sits in a hidden multi-step widget (FR-62). */
   isMultiStep?: boolean;
+  /** How sure we are this is really the contact form. `low` means we matched
+   *  something weak — accepted only because Landing-page mode asserted the form
+   *  is here — so the card must ask "is this your form?" instead of showing a
+   *  confident green pass. FR-73. */
+  formConfidenceLevel?: 'high' | 'low';
+  /** Plain, user-facing reason the match is low-confidence. FR-73. */
+  lowConfidenceReason?: string;
+  /** Bot-protection markup was seen on the PAGE (a site-wide reCAPTCHA script,
+   *  say) — separate from `captchaDetected`-on-this-form, so we never present
+   *  page-level protection as evidence about the form we tested. FR-73. */
+  pageProtection?: boolean;
+  /** An element id to jump straight to the tested form — `page#anchorId`. FR-73. */
+  formAnchorId?: string;
+  /** What the form is CALLED on the page — its nearest heading ("Request a
+   *  Rental"), else its submit-button text. The whole-site report has always
+   *  shown this per form; without it here, a single-page run could only say
+   *  "Contact form" while the form on screen said something else. FR-73. */
+  formAbout?: string;
+  /** WHAT the matched form is — contact / newsletter / search / login / other.
+   *  The engine has always known this and uses it to decide whether to fill,
+   *  but it never travelled, so a dashboard could say "not a contact form"
+   *  without ever saying what it actually was. FR-73. */
+  formKind?: FormKind;
+  /** Evidence: a cropped screenshot of the tested form. `data:` URL from the
+   *  engine, replaced with a hosted URL by the run route. FR-73. */
+  formShot?: string;
   /** How many forms are on the tested page + what the others are — only set when
    *  the page has 2+ forms (native + embeds), else absent. FR-68. */
   formsOnPage?: FormsOnPage;
