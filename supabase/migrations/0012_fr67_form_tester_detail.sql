@@ -1,0 +1,23 @@
+-- FormPing — FR-67: persist the full Form Tester run detail.
+--
+-- SCHEMA-AGNOSTIC (see 0001's header): unqualified names, apply per-schema with
+-- `set search_path to public;` (prod) then `set search_path to dev;` (dev).
+-- Additive + forward-only + idempotent.
+--
+-- WHY
+-- `form_tester_runs` kept only the thin verdict (final_status / reason_code /
+-- mode / form_found / duration_ms / ran_at). Everything the engine computes about
+-- a run — which form, native vs third-party embed (+ provider/kind), field count
+-- and names, single vs multi-step, the page the form was actually found on,
+-- submission outcome, CAPTCHA/anti-bot, tracking params, notes + errors — was
+-- streamed to the browser, rendered once, then thrown away. So the per-URL
+-- dashboard could only show a badge, never the detail.
+--
+-- One jsonb column mirrors how Form Watch already stores its rich facts
+-- (`form_watch_runs.fingerprint`), rather than a dozen new typed columns: the
+-- shape evolves with the engine and is read defensively in the app.
+--
+-- Writes stay best-effort: the app falls back to the thin row if this column is
+-- missing, so it keeps working before this migration is applied.
+
+alter table form_tester_runs add column if not exists detail jsonb;
