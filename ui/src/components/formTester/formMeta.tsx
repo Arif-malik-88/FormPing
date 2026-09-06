@@ -1,4 +1,5 @@
-import type { SiteForm } from '@/types';
+import type { SiteForm, SiteResult } from '@/types';
+import { runVerdict } from '@/lib/formWatch/verdict';
 
 /**
  * FR-75 — shared vocabulary for the multi-form results log, so the summary index,
@@ -33,6 +34,10 @@ export interface PreparedForm {
   isMultiStep?: boolean;
   /** The tested form's full verdict sentence (e.g. "Submitted — no confirmation seen"). */
   detail?: string;
+  /** Set on the tested form when the detector settled for a weak match: the
+   *  plain reason, so the panel can say we are not sure rather than show a
+   *  confident pass. Absent on a confident match. FR-73. */
+  lowConfidence?: string;
 }
 
 /** Status-dot background class per tone — for tabs + index rows. */
@@ -88,6 +93,93 @@ export function displayName(f: Pick<SiteForm, 'kind' | 'about' | 'provider'>): s
  *  whose heading we already promoted into the title). */
 export function aboutIsTitle(f: Pick<SiteForm, 'kind'>): boolean {
   return f.kind === 'other';
+}
+
+/**
+ * The verdict pill for the form the run actually tested. In live mode the run
+ * auto-submits, so lead with "Submitted" (green when a thank-you was confirmed,
+ * amber when it wasn't) rather than a bare "Attention".
+ *
+ * Lives here rather than in the report because BOTH surfaces need it now: the
+ * multi-form report and the single-form card render the same panel. FR-73.
+ */
+export function testedStatus(result: SiteResult): FormStatus {
+  const { level } = runVerdict(result.reasonCode, result.formFound, result.finalStatus, result.formConfidenceLevel);
+  if (result.mode === 'live' && result.submissionAttempted) {
+    if (level === 'healthy') return { label: 'Submitted ✓', tone: 'ok' };
+    if (level === 'attention') return { label: 'Submitted', tone: 'warn' }; // e.g. no confirmation seen
+    if (level === 'failing') return { label: 'Failed', tone: 'danger' };
+    return { label: 'Detected', tone: 'info' };
+  }
+  if (level === 'failing') return { label: 'Failed', tone: 'danger' };
+  if (level === 'attention') return { label: 'Attention', tone: 'warn' };
+  if (level === 'detected') return { label: 'Detected', tone: 'info' };
+  if (result.mode === 'safe') return { label: 'Filled ✓', tone: 'ok' };
+  return { label: 'Detected', tone: 'info' };
+}
+
+/**
+ * Turn a single-form run into the same `PreparedForm` the multi-form report
+ * uses, so one page of a site renders through the SAME panel as a whole-site
+ * run — identical heading, chips, field list, evidence and copy.
+ *
+ * Before this, a single-form result went through an older card with its own
+ * layout and its own wording, so the two halves of the same feature looked and
+ * read like different products. FR-73.
+ *
+ * Returns null when the run found no form at all — there is nothing to draw.
+ */
+export function singleFormPrepared(result: SiteResult): PreparedForm | null {
+  const isEmbed = result.formType === 'third-party';
+  // Render whenever the run has ANY facts about a form it matched.
+  //
+  // This used to hinge on `fieldCount`, which broke the moment field counts
+  // started excluding site-wide inputs: a search box's ONE field is a global
+  // search input, so its count is legitimately 0 — and the card fell back to
+  // "No form found" under a banner that had just said a form was found. Never
+  // infer "no form" from a count. FR-73.
+  const hasForm = result.formFound || isEmbed || Boolean(result.formType) || Boolean(result.formKind);
+  if (!hasForm) return null;
+
+  const url = result.resolvedContactPage || result.finalUrl || result.normalizedUrl;
+  // What the run believed it was looking at. The engine now says so outright;
+  // the rest are fallbacks for results recorded before it did.
+  const kind: FormKindLike =
+    isEmbed ? 'third-party'
+    : result.formKind
+      ?? result.formsOnPage?.tested?.kind
+      ?? (result.formFound ? 'contact' : 'other');
+
+  const form: SiteForm = {
+    url,
+    kind,
+    // What the page calls it ("Request a Rental"). Without this the panel could
+    // only print its category — "Contact form" — directly above a screenshot
+    // showing a different name. FR-73.
+    about: result.formAbout ?? '',
+    formType: isEmbed ? 'third-party' : 'native',
+    ...(result.embedProvider ? { provider: result.embedProvider } : {}),
+    fieldCount: result.fieldCount ?? 0,
+    fields: result.fields ?? [],
+    security: { captcha: result.captchaDetected, pageProtection: result.pageProtection },
+    tracking: result.tracking ?? { utm: [], other: [] },
+    siteWide: false,
+    seenOn: 1,
+    ...(result.formAnchorId ? { anchorId: result.formAnchorId } : {}),
+    ...(result.formShot ? { shot: result.formShot } : {}),
+  };
+
+  const status = testedStatus(result);
+  return {
+    form,
+    n: 1,
+    tested: true,
+    status,
+    rail: status.tone === 'ok' ? 'ok' : status.tone === 'info' ? 'info' : 'accent',
+    isMultiStep: result.isMultiStep,
+    detail: runVerdict(result.reasonCode, result.formFound, result.finalStatus, result.formConfidenceLevel).label,
+    ...(result.formConfidenceLevel === 'low' ? { lowConfidence: result.lowConfidenceReason ?? '' } : {}),
+  };
 }
 
 /** A per-kind glyph — real SVGs (house rule: no emoji). Sized by the caller. */

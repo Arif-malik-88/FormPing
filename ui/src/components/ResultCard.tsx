@@ -2,7 +2,10 @@
 import type { SiteResult } from '@/types';
 import { getReasonMessage, type Severity } from '@/lib/reasonMessages';
 import { runVerdict } from '@/lib/formWatch/verdict';
-import { FormSummary, FormsOnPageLine, TrackingParamsLine } from './FormFactChips';
+import { FormsOnPageLine } from './FormFactChips';
+import { LowConfidenceNote } from './formTester/FormEvidence';
+import { FormPanel } from './formTester/FormPanel';
+import { singleFormPrepared } from './formTester/formMeta';
 
 // Banner icons are real SVGs (no emoji glyphs — house design rule). `info` reads
 // as a recognised, informational state (a detected third-party embed). FR-60.
@@ -77,6 +80,10 @@ export function ResultCard({ result }: { result: SiteResult }) {
 
   const reason = getReasonMessage(result.reasonCode);
   const banner = BANNER_STYLES[reason.severity];
+
+  // The one form this run looked at, shaped for the shared panel. Null when the
+  // run found nothing at all. FR-73.
+  const single = singleFormPrepared(result);
   const hasErrors = result.errors && result.errors.length > 0;
 
   return (
@@ -100,7 +107,7 @@ export function ResultCard({ result }: { result: SiteResult }) {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className="font-mono text-xs text-ink-faint">{formatMs(result.durationMs)}</span>
-          <VerdictBadge level={runVerdict(result.reasonCode, result.formFound, result.finalStatus).level} />
+          <VerdictBadge level={runVerdict(result.reasonCode, result.formFound, result.finalStatus, result.formConfidenceLevel).level} />
         </div>
       </div>
 
@@ -114,6 +121,16 @@ export function ResultCard({ result }: { result: SiteResult }) {
           {reason.description && <p className="mt-0.5 text-xs leading-relaxed text-ink-muted">{reason.description}</p>}
         </div>
       </div>
+
+      {/* We matched something weak — say so before any of the facts below, which
+          are all about a form that may not be the one you mean. Skipped when the
+          reason banner above IS that message (LOW_CONFIDENCE_FORM), so the card
+          never says the same thing twice. FR-73. */}
+      {result.formConfidenceLevel === 'low' && result.reasonCode !== 'LOW_CONFIDENCE_FORM' && (
+        <div className="mx-4 mb-3">
+          <LowConfidenceNote reason={result.lowConfidenceReason} />
+        </div>
+      )}
 
       {/* Errors list (field-level failures) */}
       {hasErrors && (
@@ -144,77 +161,64 @@ export function ResultCard({ result }: { result: SiteResult }) {
         </div>
       )}
 
-      {/* What we found — plain, accurate summary: where the form is + what kind */}
+      {/* The form itself — rendered through the SAME panel the multi-form report
+          uses (FR-73). A landing-page run has no site crawl, so it lands here;
+          before, that meant an older layout and different wording for exactly the
+          same information. One component now, so the two can't drift apart. */}
+      {single && (
+        <div className="mx-4 mb-3">
+          <FormPanel prepared={single} mode={result.mode} />
+        </div>
+      )}
+
+      {/* Where we looked — the context the panel itself does not carry. */}
       {(() => {
-        const hasEmbed = result.formType === 'third-party';
-        const hasNativeForm = result.formFound && !hasEmbed;
-        const aFormExists = hasNativeForm || hasEmbed;
         const pageKnown = Boolean(result.resolvedContactPage || result.finalUrl);
         const pagePath = pathOf(result.resolvedContactPage) || pathOf(result.finalUrl) || '/';
-        // Show the FULL url of the page that holds the form, so it's directly clickable/knowable.
         const pageUrl = result.resolvedContactPage || result.finalUrl || result.normalizedUrl;
-        // In default (non-landing) mode, FormPing may search the site and end up
-        // testing a DIFFERENT page than the URL typed. Surface that plainly so the
-        // result isn't confusing ("I entered X, why does it say Y?"). FR-64.
+        // In default (non-landing) mode we may search the site and end up testing
+        // a DIFFERENT page than the one typed. Say so plainly, or the result reads
+        // as a mistake ("I entered X, why does it say Y?"). FR-64.
         const enteredPath = pathOf(result.normalizedUrl) || '/';
         const enteredLabel = enteredPath === '/' ? 'the homepage' : enteredPath;
-        const testedElsewhere = !result.landingPageMode && aFormExists && enteredPath !== pagePath;
-        // Nothing useful to add beyond the reason banner (e.g. contact page not found).
-        if (!aFormExists && !pageKnown) return null;
-        return (
-          <div className="mx-4 mb-3 rounded-lg border border-line bg-panel-raised/40 px-5 py-4">
-            {/* Headline — big + obvious: found or not, and the FULL url */}
-            <div className="flex items-center gap-3">
-              <StatusMark ok={aFormExists} />
-              <p className="min-w-0 text-base">
-                <span className="font-semibold text-ink">{aFormExists ? 'Form found on' : 'No form found on'}</span>{' '}
-                <span className="break-all font-mono text-sm text-ink-muted">{pageUrl}</span>
-              </p>
-            </div>
+        const testedElsewhere = !result.landingPageMode && Boolean(single) && enteredPath !== pagePath;
 
-            {/* Summary sentence — type + structure + fields as highlighted pills */}
-            {(hasNativeForm || hasEmbed) && (
-              <div className="mt-3 pl-[40px]">
-                <FormSummary
-                  size="lg"
-                  formType={result.formType}
-                  embedProvider={result.embedProvider}
-                  embedKind={result.embedKind}
-                  isMultiStep={result.isMultiStep}
-                  fieldCount={result.fieldCount}
-                  stepKnown={hasNativeForm}
-                  captchaPresent={result.captchaDetected}
-                />
-                <TrackingParamsLine tracking={result.tracking} size="lg" />
+        // No form anywhere: the panel drew nothing, so this is the only place that
+        // can say where we looked.
+        if (!single) {
+          if (!pageKnown) return null;
+          return (
+            <div className="mx-4 mb-3 rounded-lg border border-line bg-panel-raised/40 px-5 py-4">
+              <div className="flex items-center gap-3">
+                <StatusMark ok={false} />
+                <p className="min-w-0 text-base">
+                  <span className="font-semibold text-ink">No form found on</span>{' '}
+                  <span className="break-all font-mono text-sm text-ink-muted">{pageUrl}</span>
+                </p>
               </div>
-            )}
+              {result.landingPageMode && (
+                <p className="mt-3 pl-[40px] text-xs leading-relaxed text-ink-faint">
+                  Landing page is on, so we tested only this page. If the form lives elsewhere on the site, turn it off
+                  and we will go and find it.
+                </p>
+              )}
+            </div>
+          );
+        }
 
-            {/* Third-party embed — the one useful action is to open it and send a
-                quick manual test, since we can't submit through a cross-origin form. FR-60. */}
-            {hasEmbed && (
-              <a
-                href={pageUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-3 ml-[40px] inline-flex items-center gap-1.5 rounded-lg bg-info/10 px-3 py-1.5 text-xs font-semibold text-info ring-1 ring-info/25 transition-colors hover:bg-info/15"
-              >
-                Open the form
-                <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 4H5.5A1.5 1.5 0 004 5.5v9A1.5 1.5 0 005.5 16h9a1.5 1.5 0 001.5-1.5V13M12 4h4v4M16 4l-7 7" />
-                </svg>
-              </a>
-            )}
-
-            {/* Landing-page / tested-elsewhere context — the user's own toggle language */}
-            {result.landingPageMode && (
-              <p className="mt-3 pl-[34px] text-xs text-ink-faint">Landing-page mode — only this page was tested.</p>
-            )}
-            {testedElsewhere && (
-              <p className="mt-3 pl-[34px] text-xs leading-relaxed text-ink-faint">
-                You entered <span className="font-mono text-ink-muted">{enteredLabel}</span> — we searched the site and tested the contact form at{' '}
-                <span className="font-mono text-ink-muted">{pagePath}</span>. Turn on Landing page to test only the page you enter.
-              </p>
-            )}
+        // Landing-page mode is NOT repeated here: the control that switches it on
+        // already says what it does, right above the Run button. Saying it again
+        // under every result is noise. What DOES need saying is the surprising
+        // case — we searched the site and tested a different page than the one
+        // typed. FR-73.
+        if (!testedElsewhere) return null;
+        return (
+          <div className="mx-4 mb-3 rounded-lg border border-line bg-panel-raised/40 px-5 py-3">
+            <p className="text-xs leading-relaxed text-ink-faint">
+              You entered <span className="font-mono text-ink-muted">{enteredLabel}</span> — we searched the site and
+              tested the form at <span className="font-mono text-ink-muted">{pagePath}</span>. Turn on Landing page to
+              test only the page you enter.
+            </p>
           </div>
         );
       })()}

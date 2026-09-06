@@ -3,7 +3,7 @@ import { useState } from 'react';
 import type { SiteResult, SiteForm, FormOutcome } from '@/types';
 import { runVerdict } from '@/lib/formWatch/verdict';
 import { FormPanel } from './FormPanel';
-import { DOT, isLeadForm, kindLabel, type FormStatus, type PreparedForm } from './formMeta';
+import { DOT, isLeadForm, kindLabel, testedStatus, type FormStatus, type PreparedForm } from './formMeta';
 
 /**
  * FR-75 — the Form Tester results log for a site with 2+ forms. A sibling of the
@@ -27,25 +27,6 @@ function getDomain(url: string): string {
 }
 function formatMs(ms: number): string {
   return ms >= 1000 ? `${(ms / 1000).toFixed(ms >= 10000 ? 0 : 1)}s` : `${ms}ms`;
-}
-
-/** The real verdict for the primary form runSingleSite fully tested (it may submit
- *  in live mode, so its verdict is richer than a plain fill outcome). In live mode
- *  the primary is AUTO-submitted, so lead with "Submitted" (green if a thank-you
- *  was confirmed, amber if not) rather than a bare "Attention". */
-function testedStatus(result: SiteResult): FormStatus {
-  const { level } = runVerdict(result.reasonCode, result.formFound, result.finalStatus);
-  if (result.mode === 'live' && result.submissionAttempted) {
-    if (level === 'healthy') return { label: 'Submitted ✓', tone: 'ok' };
-    if (level === 'attention') return { label: 'Submitted', tone: 'warn' }; // e.g. no confirmation seen
-    if (level === 'failing') return { label: 'Failed', tone: 'danger' };
-    return { label: 'Detected', tone: 'info' };
-  }
-  if (level === 'failing') return { label: 'Failed', tone: 'danger' };
-  if (level === 'attention') return { label: 'Attention', tone: 'warn' };
-  if (level === 'detected') return { label: 'Detected', tone: 'info' };
-  if (result.mode === 'safe') return { label: 'Filled ✓', tone: 'ok' };
-  return { label: 'Detected', tone: 'info' };
 }
 
 /** Every OTHER lead form now carries a real fill outcome from the engine. */
@@ -79,8 +60,12 @@ function prepare(forms: SiteForm[], result: SiteResult): PreparedForm[] {
     const status: FormStatus = tested ? testedStatus(result) : outcomeStatus(form.outcome);
     const rail: PreparedForm['rail'] = status.tone === 'ok' ? 'ok' : lead ? 'accent' : 'info';
     const group = tested ? 0 : lead ? 1 : 2;
-    const detail = tested ? runVerdict(result.reasonCode, result.formFound, result.finalStatus).label : undefined;
-    return { form, tested, status, rail, group, isMultiStep: tested ? result.isMultiStep : undefined, detail };
+    const detail = tested ? runVerdict(result.reasonCode, result.formFound, result.finalStatus, result.formConfidenceLevel).label : undefined;
+    // Only the tested form carries a confidence judgement — the others were
+    // inventoried, not matched against "is this the contact form?". FR-73.
+    const lowConfidence =
+      tested && result.formConfidenceLevel === 'low' ? (result.lowConfidenceReason ?? '') : undefined;
+    return { form, tested, status, rail, group, isMultiStep: tested ? result.isMultiStep : undefined, detail, lowConfidence };
   });
   entries.sort((a, b) => a.group - b.group);
   return entries.map(({ group, ...rest }, i) => ({ ...rest, n: i + 1 }));
