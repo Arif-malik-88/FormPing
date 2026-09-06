@@ -4,6 +4,8 @@ import { useState } from 'react';
 import type { ChangePoint, ClientStatus, OverallStatus, RespPoint, StatusSite, UptimeDay } from '@/lib/status/types';
 import type { PageChange } from '@/types';
 import { PageChangeCard } from '@/components/monitor/PageChangeCard';
+import { getReasonMessage } from '@/lib/reasonMessages';
+import type { FormRunFormSummary } from '@/lib/formRunDetail';
 
 type StatusData = ClientStatus & { contact?: string | null; changes?: ChangePoint[] };
 
@@ -300,6 +302,179 @@ function ResponseChart({ points }: { points: RespPoint[] }) {
     </div>
   );
 }
+/** How long a run took, in human terms ("98s", "2.4m"). */
+function duration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const s = ms / 1000;
+  return s < 90 ? `${Math.round(s)}s` : `${(s / 60).toFixed(1)}m`;
+}
+
+/** Small chip for a form fact. `info` (sky) matches how the Form Tester marks
+ *  site-wide/global things, so the two surfaces read the same. */
+function Tag({ children, tone }: { children: React.ReactNode; tone?: 'warn' | 'info' }) {
+  const cls =
+    tone === 'warn' ? 'border-warn/30 bg-warn/10 text-warn'
+    : tone === 'info' ? 'border-info/30 bg-info/10 text-info'
+    : 'border-line-strong bg-panel-raised text-ink-secondary';
+  return <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${cls}`}>{children}</span>;
+}
+
+/** What we did to one form: submitted / filled / detected / skipped / failed. */
+const OUTCOME_CHIP: Record<string, { label: string; cls: string }> = {
+  submitted: { label: 'Submitted', cls: 'border-ok/30 bg-ok/10 text-ok' },
+  filled: { label: 'Filled', cls: 'border-ok/30 bg-ok/10 text-ok' },
+  detected: { label: 'Detected', cls: 'border-info/30 bg-info/10 text-info' },
+  skipped: { label: 'Skipped', cls: 'border-line-strong bg-panel-raised text-ink-muted' },
+  failed: { label: 'Failed', cls: 'border-danger/30 bg-danger/10 text-danger' },
+};
+function OutcomeChip({ state }: { state?: string }) {
+  const c = OUTCOME_CHIP[state ?? 'detected'] ?? OUTCOME_CHIP.detected!;
+  return <span className={`shrink-0 rounded-md border px-2 py-0.5 text-xs font-semibold ${c.cls}`}>{c.label}</span>;
+}
+
+/**
+ * FR-67 — the last Form Tester run's detail on the per-URL dashboard: what was
+ * found (native vs embed + provider, structure, field count/names, CAPTCHA),
+ * where it was found, and the plain reason it passed or failed. Reuses the
+ * FR-64 reason vocabulary so Tester / Scheduler / Projects read the same.
+ * INTERNAL ONLY — rendered from `tech`, which never reaches a client page.
+ */
+const KIND_LABEL: Record<string, string> = {
+  contact: 'Contact form',
+  newsletter: 'Newsletter',
+  search: 'Search box',
+  login: 'Login form',
+  'third-party': 'Embedded form',
+  other: 'Form',
+};
+
+/**
+ * One found form as an expandable row: the full URL is the heading; opening it
+ * reveals that form's own facts (type, fields, bot protection, what it's for,
+ * whether it's site-wide). Field NAMES are deliberately left out here.
+ */
+function FormRow({ form }: { form: FormRunFormSummary }) {
+  const protectionKnown = typeof form.captcha === 'boolean';
+  return (
+    <details className="group rounded-lg border border-line bg-ground/40 [&_summary::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2.5">
+        <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 shrink-0 text-ink-faint transition-transform group-open:rotate-90" fill="currentColor" aria-hidden>
+          <path fillRule="evenodd" d="M7.21 5.23a.75.75 0 011.06.02l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 11-1.08-1.04L10.92 10 7.23 6.31a.75.75 0 01-.02-1.08z" clipRule="evenodd" />
+        </svg>
+        <span className="shrink-0 text-xs text-ink-faint">Form</span>
+        <span className="min-w-0 flex-1 truncate font-mono text-xs text-accent-soft" title={form.url}>{form.url}</span>
+        {/* "Primary", not "Tested": every lead form here was exercised — this is
+            just the one the run picked as the site's main contact form, whose
+            result drives the headline verdict above. */}
+        {form.primary && (
+          <span
+            title="The site's main contact form — its result drives the verdict above"
+            className="shrink-0 rounded border border-line-strong bg-panel-raised px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted"
+          >
+            Primary
+          </span>
+        )}
+        <OutcomeChip state={form.outcome} />
+      </summary>
+
+      <div className="space-y-2 border-t border-line px-3 py-2.5">
+        {form.about && (
+          <p className="text-xs text-ink-muted">
+            <span className="text-ink-faint">About: </span>
+            <span className="font-medium text-ink-secondary">&ldquo;{form.about}&rdquo;</span>
+          </p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <Tag>{KIND_LABEL[form.kind] ?? 'Form'}</Tag>
+          {form.formType && (
+            <Tag>{form.formType === 'third-party' ? `Third-party${form.provider ? ` · ${form.provider}` : ''}` : 'Native form'}</Tag>
+          )}
+          {typeof form.fieldCount === 'number' && form.fieldCount > 0 && (
+            <Tag>{form.fieldCount} field{form.fieldCount === 1 ? '' : 's'}</Tag>
+          )}
+          {form.captcha ? <Tag tone="warn">CAPTCHA</Tag> : protectionKnown ? <Tag>No bot protection seen</Tag> : null}
+          {form.siteWide && <Tag tone="info">Global{form.seenOn && form.seenOn > 1 ? ` · on ${form.seenOn} pages` : ''}</Tag>}
+          {form.utm?.length ? <Tag>{form.utm.length} UTM param{form.utm.length === 1 ? '' : 's'}</Tag> : null}
+        </div>
+        <a href={form.url} target="_blank" rel="noreferrer" className="inline-block text-xs text-ink-muted underline-offset-2 hover:text-accent hover:underline">
+          Open page ↗
+        </a>
+      </div>
+    </details>
+  );
+}
+
+function FormRunDetails({ form }: { form: NonNullable<NonNullable<StatusSite['tech']>['form']> }) {
+  const d = form.detail;
+  const reason = form.reasonCode ? getReasonMessage(form.reasonCode) : null;
+  const formList = d?.forms ?? [];
+  const pagePath = (() => {
+    if (!d?.resolvedPage) return null;
+    try { return new URL(d.resolvedPage).pathname || '/'; } catch { return d.resolvedPage; }
+  })();
+
+  return (
+    <div className="space-y-3">
+      {/* Mode · when it ran · how long it took. */}
+      <p className="text-xs text-ink-faint">
+        {modeLabel(form.mode)}
+        {form.lastRunAt ? ` · ${rel(form.lastRunAt)}` : ''}
+        {form.durationMs ? ` · took ${duration(form.durationMs)}` : ''}
+      </p>
+
+      {/* The outcome in one plain line (FR-64 vocabulary). */}
+      {reason && <p className="text-[13px] font-medium text-ink-secondary">{reason.title}</p>}
+
+      {d && (
+        <>
+          {/* EVERY form the run found — mirrors the Form Tester log. Each row is
+              headed by its full URL and expands to that form's own detail. */}
+          {formList.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+                Forms found ({formList.length})
+              </p>
+              <div className="space-y-1.5">
+                {formList.map((f, i) => <FormRow key={i} form={f} />)}
+              </div>
+            </div>
+          ) : (
+            // Runs recorded before the per-form list existed still carry the tested
+            // form's own facts — show those rather than an empty panel.
+            <>
+              <div className="flex flex-wrap gap-2">
+                {d.formType && (
+                  <Tag>
+                    {d.formType === 'third-party'
+                      ? `Third-party${d.embedProvider ? ` · ${d.embedProvider}` : ''}`
+                      : 'Native form'}
+                  </Tag>
+                )}
+                {typeof d.isMultiStep === 'boolean' && <Tag>{d.isMultiStep ? 'Multi-step' : 'Single-step'}</Tag>}
+                {typeof d.fieldCount === 'number' && d.fieldCount > 0 && <Tag>{d.fieldCount} field{d.fieldCount === 1 ? '' : 's'}</Tag>}
+                {d.captchaDetected ? <Tag tone="warn">CAPTCHA</Tag> : <Tag>No bot protection seen</Tag>}
+                {typeof d.siteFormsCount === 'number' && d.siteFormsCount > 1 && <Tag>{d.siteFormsCount} forms on site</Tag>}
+              </div>
+              {pagePath && (
+                <p className="text-xs text-ink-muted">
+                  <span className="text-ink-faint">Tested form on: </span>
+                  <a href={d.resolvedPage!} target="_blank" rel="noreferrer" className="text-ink-secondary hover:text-accent" title={d.resolvedPage!}>{pagePath}</a>
+                </p>
+              )}
+              <p className="text-xs text-ink-faint">Re-run the Form Tester to see every form found on this site.</p>
+            </>
+          )}
+
+          <div className="grid gap-x-6 gap-y-2 text-xs sm:grid-cols-2">
+            {d.landingPageMode && <Detail k="Scope" v="Landing page only" />}
+            {d.submissionAttempted && <Detail k="Submission" v={d.submissionResult || '—'} />}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Badge({ ok, icon, children }: { ok: boolean; icon: string; children: React.ReactNode }) {
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${ok ? 'text-ok bg-ok/12 ring-ok/20' : 'text-warn bg-warn/12 ring-warn/20'}`}>
@@ -414,12 +589,12 @@ function SiteCard({
             {s.formWorking != null ? (
               <div className="space-y-2">
                 <Badge ok={s.formWorking} icon={s.formWorking ? P.check : P.alert}>{s.formWorking ? 'Contact form working' : 'Contact form needs attention'}</Badge>
-                {internal && tech?.form && (
-                  <p className="text-[11px] text-ink-faint">
-                    {modeLabel(tech.form.mode)}{tech.form.label ? ` · ${tech.form.label}` : ''}{tech.form.lastRunAt ? ` · ${rel(tech.form.lastRunAt)}` : ''}
-                  </p>
-                )}
+                {internal && tech?.form && <FormRunDetails form={tech.form} />}
               </div>
+            ) : internal && tech?.form ? (
+              // A manual run happened but the verdict is inconclusive (e.g. no
+              // contact page located) — still show what the run actually found. FR-67.
+              <FormRunDetails form={tech.form} />
             ) : (
               <p className="text-[11px] text-ink-faint">Not monitored for this page.</p>
             )}
