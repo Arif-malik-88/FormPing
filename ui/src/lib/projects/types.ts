@@ -5,6 +5,8 @@
  * nothing about the monitors themselves changes (fully additive).
  */
 
+import type { FormRunDetail } from '../formRunDetail';
+
 export interface Project {
   id: string;
   /** Client / project name. */
@@ -92,6 +94,11 @@ export interface UrlHealth {
     mode?: string;
     formFound?: boolean;
     ranAt: string;
+    /** How long the run took, in ms. */
+    durationMs?: number;
+    /** FR-67 — the rich facts of that run (form type, fields, why-failed…).
+     *  Absent for runs recorded before the detail column existed. */
+    detail?: FormRunDetail;
   };
 }
 

@@ -145,6 +145,8 @@ function buildHealth(
           mode: lr.mode,
           formFound: lr.formFound,
           ranAt: lr.ranAt,
+          durationMs: lr.durationMs,
+          detail: lr.detail, // FR-67 — carry the rich run facts through to the dashboard
         }
       : undefined;
 

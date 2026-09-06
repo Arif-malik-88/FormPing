@@ -159,7 +159,19 @@ function formTech(h: UrlHealth): Pick<NonNullable<StatusSite['tech']>, 'form'> |
     return { form: { mode: h.form.mode ?? null, level: h.form.level ?? null, label: h.form.label ?? null, lastRunAt: h.form.lastRunAt ?? null } };
   }
   if (h.lastRun) {
-    return { form: { mode: h.lastRun.mode ?? null, level: null, label: null, lastRunAt: h.lastRun.ranAt ?? null } };
+    // FR-67 — carry the manual run's reason code + rich detail so the per-URL
+    // dashboard can explain what was found and why it failed. Internal-only.
+    return {
+      form: {
+        mode: h.lastRun.mode ?? null,
+        level: null,
+        label: null,
+        lastRunAt: h.lastRun.ranAt ?? null,
+        reasonCode: h.lastRun.reasonCode ?? null,
+        durationMs: h.lastRun.durationMs ?? null,
+        detail: h.lastRun.detail,
+      },
+    };
   }
   return {};
 }
