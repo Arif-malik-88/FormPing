@@ -29,6 +29,22 @@ export interface FormInfo {
   /** Roughly where the form sits — nearest landmark, nearest heading above it,
    *  and an id to deep-link to. Empty strings when unknown. FR-68. */
   location: { landmark: string; heading: string; anchorId: string };
+  /** A CAPTCHA widget inside THIS form's own subtree. Deliberately per-form: a
+   *  site-wide reCAPTCHA script is not evidence that this form is protected, and
+   *  claiming it was how a search box came back "CAPTCHA protected". FR-73. */
+  captcha: boolean;
+}
+
+/**
+ * What a form is CALLED on the page: its nearest heading, else its submit-button
+ * text when that reads like a label rather than a sentence. Shared so the
+ * single-page run and the whole-site inventory name a form identically. FR-73.
+ */
+export function formAbout(f: Pick<FormInfo, 'location' | 'submitText'>): string {
+  const heading = (f.location?.heading ?? '').trim();
+  if (heading) return heading;
+  const submit = (f.submitText ?? '').trim();
+  return submit && submit.length <= 40 ? submit : '';
 }
 
 export interface FieldInfo {
@@ -144,6 +160,19 @@ export async function extractForms(page: Page): Promise<FormInfo[]> {
         }
       }
 
+      // ── CAPTCHA, scoped to THIS form (FR-73). A widget must live inside the
+      // form's own subtree to count. We deliberately do NOT fall back to a
+      // page-wide script check: an invisible reCAPTCHA v3 leaves no per-form
+      // markup, so "no widget here" means "we can't see one", never "no
+      // protection" — which is why the UI never prints "No CAPTCHA".
+      const captcha = Boolean(
+        form.querySelector(
+          '.g-recaptcha, .h-captcha, .cf-turnstile, [data-sitekey], ' +
+            'textarea[name="g-recaptcha-response"], input[name="cf-turnstile-response"], ' +
+            'iframe[src*="recaptcha"], iframe[src*="hcaptcha"], iframe[src*="turnstile"]',
+        ),
+      );
+
       return {
         index,
         id: form.id || null,
@@ -155,6 +184,7 @@ export async function extractForms(page: Page): Promise<FormInfo[]> {
         allText: form.textContent?.slice(0, 500) ?? '',
         visible: formVisible,
         location: { landmark, heading, anchorId },
+        captcha,
       };
     });
     // FR-62: return ALL forms (including hidden ones — multi-step steps sit at
@@ -297,6 +327,10 @@ export async function findContactForm(
       // "N fields: Name, Email, Message …" AND collapse radio/checkbox groups by
       // name for an accurate count. FR-64/FR-68.
       fields: form.fields.map((f) => ({ label: f.label || f.placeholder || f.name, type: f.type, name: f.name })),
+      // A CAPTCHA on THIS form, not merely somewhere on the page. FR-73.
+      captcha: form.captcha,
+      // What the page calls this form — the report leads with it. FR-73.
+      about: formAbout(form),
     };
   });
 

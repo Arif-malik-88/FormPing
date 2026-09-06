@@ -140,4 +140,48 @@ describe('extractFormRunDetail — nothing the engine computes gets dropped', ()
     expect(d.errors).toBeUndefined();
     expect(d.fields).toBeUndefined();
   });
+
+  // FR-73 — the dashboard must hedge exactly where the run did. If confidence
+  // stopped being persisted, a run that said "we are not sure" would come back
+  // as settled fact on the URL page, which is the disagreement FR-73 removed.
+  it('carries the confidence judgement and its reason', () => {
+    const d = extractFormRunDetail({
+      formConfidenceLevel: 'low',
+      lowConfidenceReason: 'the only form here has a single input',
+    });
+    expect(d.confidence).toBe('low');
+    expect(d.lowConfidenceReason).toBe('the only form here has a single input');
+  });
+
+  it('keeps page-level bot protection separate from a CAPTCHA on the form', () => {
+    const d = extractFormRunDetail({ captchaDetected: false, pageProtection: true });
+    expect(d.captchaDetected).toBe(false);
+    expect(d.pageProtection).toBe(true);
+  });
+
+  it('stores a hosted screenshot but never an inline one', () => {
+    const d = extractFormRunDetail({
+      resolvedContactPage: 'https://ex.test/contact/',
+      siteForms: [
+        { url: 'https://ex.test/contact/', kind: 'contact', shot: 'https://cdn.test/a.jpg' },
+        { url: 'https://ex.test/rental/', kind: 'other', shot: 'data:image/jpeg;base64,AAAA' },
+      ],
+    });
+    expect(d.forms?.[0]?.shot).toBe('https://cdn.test/a.jpg');
+    // Inline base64 would put hundreds of KB in every stored row.
+    expect(d.forms?.[1]?.shot).toBeUndefined();
+  });
+
+  it('keeps WHAT the matched form was, not just that it failed', () => {
+    // The dashboard said "this page has a form, but it is not a contact form"
+    // while the engine knew it was a search box. Losing the kind at the
+    // persistence layer is what made that unsayable.
+    const d = extractFormRunDetail({ formKind: 'search', formType: 'native' });
+    expect(d.formKind).toBe('search');
+  });
+
+  it('ignores a confidence value the engine never sends', () => {
+    expect(extractFormRunDetail({ formConfidenceLevel: 'maybe' }).confidence).toBeUndefined();
+    expect(extractFormRunDetail({}).confidence).toBeUndefined();
+  });
 });

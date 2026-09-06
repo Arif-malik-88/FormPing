@@ -193,6 +193,12 @@ export default function DocsContent() {
                 />
                 <P>Each result is a clear verdict — <strong className="text-ink">healthy</strong>, <strong className="text-ink">needs attention</strong>, or <strong className="text-ink">failing</strong> — with a plain-English reason. It also shows what was found: the page the form is on, whether it’s a <strong className="text-ink">native</strong> in-page form or a <strong className="text-ink">third-party</strong> one (Typeform, HubSpot, …), how many fields and their names, and whether it’s a <strong className="text-ink">single- or multi-step</strong> form. CAPTCHA and anti-bot protection are detected and reported, never bypassed.</P>
                 <Note>
+                  <strong>See the form we found.</strong> Every form comes with a <strong>picture of it, headline and all</strong> — and cookie banners or chat bubbles are taken out of the shot, so you see the form and not what was sitting on top of it. Its address opens the page right at that form, so you can check in a second that we tested the form you meant instead of taking our word for it.
+                </Note>
+                <Note>
+                  <strong>We tell you when we’re not sure.</strong> If the only form on a page has a single box to type in, that’s usually a search bar or a newsletter sign-up rather than a way to contact you — so we don’t fill it and call it healthy. We show you the picture and ask. And a <strong>CAPTCHA is only reported on the form that actually has one</strong>: if the protection sits elsewhere on the page, we say that instead, because it doesn’t tell you whether your form is protected.
+                </Note>
+                <Note>
                   <strong>Landing-page mode.</strong> By default the tester searches your site to find the contact form (and tells you which page it tested if that differs from the URL you entered). Turn on <strong>Landing page</strong> when you want to test the exact URL you gave — a standalone landing page, or when the form is a quiz, assessment, or booking style that a whole-site search might skip. It tests only that page, and is lenient enough to accept those non-standard forms.
                 </Note>
                 <Note>

@@ -55,7 +55,7 @@ The app is organized around **Projects** (a client and their URLs), with two too
 | Area | What it does |
 |------|--------------|
 | **Projects** | Group a client's URLs into a project and see their form, uptime and SSL health at a glance. URLs you've tested or monitored but not grouped yet surface in an **Unassigned** bucket to assign or dismiss, so nothing is ever invisible. |
-| **Contact Forms** | **Form Tester** — run an on-demand test against a URL. On a whole-site run it finds *every* form across the site and reports them form-by-form (summary + a tab per form); results persist across refreshes. **Form Scheduler** — recurring form tests with alerts when a form changes or breaks. |
+| **Contact Forms** | **Form Tester** — run an on-demand test against a URL. On a whole-site run it finds *every* form across the site and reports them form-by-form (summary + a tab per form), each with a screenshot of the form it matched; results persist across refreshes. **Form Scheduler** — recurring form tests with alerts when a form changes or breaks. |
 | **Site Health** | **Uptime & SSL** — availability plus certificate and domain expiry monitoring. **Content Changes** — track content, SEO, form and script changes over time, with an optional AI summary of each diff. |
 | **Status pages** | A live, client-safe health page per client (and per single URL), shareable with no login. An internal, richer version is available to the team. |
 | **Team** | Manage who can do what (roles), and triage bug reports submitted from within the app. |
@@ -66,18 +66,41 @@ Every action that changes or removes data is confirmed first, and the copy alway
 
 ## How form testing works
 
-Given a URL, the engine:
+Point the engine at a URL and it does what a careful person would: find the forms, work out what each one is for, fill the ones that capture leads, and — in Live mode — actually send one and watch what the site does with it. Then it reports what happened, in plain language, with a picture of what it matched.
 
-1. Discovers the contact page using deterministic heuristics (path matching + anchor-text scoring). If a site doesn't use a conventional contact slug, a **content-driven fallback** scans the homepage, navigation, and sitemap pages — rendering them in a real browser when a site is JavaScript-heavy or blocks lightweight fetches — and picks the one that actually holds a contact form, **including a form hidden inside a multi-step widget.** So the form is found regardless of the page's URL or how it's built.
-2. Verifies the top candidates by loading them and scoring the page content.
-3. Detects the main contact form (field types, submit-button text, layout signals).
-4. Fills it with configurable test data — including **multi-step wizards**, walking each step (fill → Next → fill) until it reaches the submit control, even when the steps live outside the `<form>` element.
-5. Optionally submits and watches for a thank-you redirect or an inline success message. For a multi-step form in Live mode, submission is **held unless the run cleanly reached the final step and filled an email** — so a partial walk never drops a junk entry into the inbox.
-6. Returns a structured result explaining exactly what happened — in plain language. The result surfaces the key facts about what was found: the page the form sits on, whether it's a **native** in-page form or a **third-party embed** (and which provider, iframe vs script), how many fields and their names, and whether it's a **single- or multi-step** form. The same facts appear on the Form Tester result card and each Form Scheduler run.
+### 1. Finding the forms
 
-**Beyond the main contact form — every form on the site.** On a whole-site run the engine also inventories the other reachable pages (navigation, footer, sitemap) and records **every** form it finds, each with its own live source URL. It works out what each one is — **contact, newsletter, search, login, or another lead form** such as a rental or demo request — and **fills every lead form** with test data (safe mode fills and never submits; in live mode the primary contact form is submitted, and each other lead form can be submitted on demand from its panel with a confirmation). Search / newsletter / login inputs are recognized as utility forms and left untouched. For each form it reports the source page, native vs embed, field count and names, single- vs multi-step, whether a CAPTCHA is present, and any hidden **UTM / click-id tracking** the form captures — or flags a lead form that captures none, since its leads won't carry a campaign source. A form that repeats on every page (a header search, a footer newsletter) is shown once and marked **global**. The result reads as one report: a summary of what was found, then a tab and detail panel per form.
+By default a run covers the **whole site**. It discovers the contact page using deterministic heuristics (path matching + anchor-text scoring), and when a site doesn't use a conventional contact slug, a **content-driven fallback** scans the homepage, navigation and sitemap — rendering pages in a real browser when the site is JavaScript-heavy or blocks lightweight fetches — and picks the page that actually holds a contact form, **including one hidden inside a multi-step widget**. The form is found regardless of the page's URL or how it's built.
 
-**Three test modes** put safety first:
+Alongside that, the engine **inventories every other reachable page** and records **every** form it finds, each with its own live source URL. Each is classified — **contact, newsletter, search, login, or another lead form** such as a rental or demo request — so the report can say what a form is *for*, not just that one exists. A form that repeats across the site (a header search, a footer newsletter) is recognised as the same form, shown once, and marked **global**.
+
+For each form it reports the source page, native vs third-party embed (and which provider, iframe vs script), field count and names, single- vs multi-step, whether **that form** carries a CAPTCHA, and any hidden **UTM / click-id tracking** it captures — or flags a lead form that captures none, since those leads won't carry a campaign source.
+
+### 2. Filling them
+
+**Every lead form gets filled** with configurable test data — not just the main contact form. Search, newsletter and login inputs are recognised as utility forms and left untouched.
+
+**Multi-step wizards are walked**, step by step (fill → Next → fill) until the submit control is reached, even when the steps live outside the `<form>` element.
+
+### 3. Submitting — Live mode only
+
+In Live mode the primary contact form is submitted and the engine watches for a thank-you redirect or an inline success message. Every other lead form is filled but **not** sent; each can be submitted on demand from its own panel, behind a confirmation.
+
+Two deliberate brakes: a multi-step form is submitted **only if the run cleanly reached the final step and filled an email**, so a partial walk never drops a junk entry into someone's inbox — and CAPTCHA or anti-bot protection is **never bypassed**. If one is hit, the run stops and says so.
+
+### 4. Showing you what it matched
+
+Every matched form is **photographed** — the form *and the heading above it*, since "Request a demo" is what identifies a form and a picture of bare input boxes doesn't. Cookie banners, chat bubbles and sticky headers are hidden for the shot, so the evidence is the form rather than whatever was floating over it. The form's address carries its anchor where the page provides one, so the link opens scrolled to the form.
+
+The images are stored server-side and loaded only when you open a form's tab, so they never slow a run down or bloat what the browser keeps. Each one is captured **before** anything is filled in, so a screenshot never contains test data, and its URL carries a random component so it can't be guessed from a site's address. Re-testing a URL replaces its screenshots rather than adding to them, and deleting the URL or its project deletes them too.
+
+### 5. Saying when it isn't sure
+
+A weak match is reported as a weak match. If the only form on a page has a single input, the engine **stops rather than filling it** and asks whether that's really your contact form — that shape is a search box or an email sign-up far more often than a way to reach you. A form accepted only because Landing-page mode asserted it's on this page is still tested, but presented as *detected*, never as a confident green pass.
+
+Counts and claims are scoped to the form itself: a **CAPTCHA is only reported on the form carrying the widget** (bot-protection code elsewhere on the page is described as exactly that), and a site-wide search input swept in with a form is **listed but not counted**, so the field count matches the form in front of you.
+
+### Test modes
 
 | Mode | Behavior |
 |------|----------|
@@ -85,17 +108,19 @@ Given a URL, the engine:
 | `detect-only` | Find the contact page and form; don't fill or submit. |
 | `live` | The full flow **including submission** — only on sites you're authorized to test. |
 
-**Landing-page mode** skips contact-page discovery and detects the form directly on the given URL — for standalone landing pages with an inline form and no separate `/contact` page. In this mode detection is also more lenient: since you've asserted the form is here, the best-scoring form is accepted even if it wouldn't clear the classic contact-form threshold (a quiz, assessment, or booking form is still a real form).
+**Landing-page mode** skips discovery and the site crawl, testing the form on the exact URL given — for standalone landing pages with an inline form and no separate `/contact` page. Detection is also more lenient there: since you've asserted the form is on this page, the best-scoring form is accepted even if it wouldn't clear the usual contact-form threshold (a quiz, assessment or booking form is still a real form) — and the result says plainly that it's a low-confidence match.
 
-**When a form isn't submitted, the result says _why_** rather than a blunt "not found":
+### When a form isn't submitted, the result says *why*
 
 - **`FORM_NOT_FOUND`** — genuinely nothing: no native form and no known embed.
-- **`NON_CONTACT_FORM_FOUND`** — a form exists but scored as something else (search / newsletter / quiz); the notes carry its score and the missing contact fields.
+- **`NON_CONTACT_FORM_FOUND`** — a form exists but isn't a contact form. The result names what it actually is (a search box, a newsletter sign-up) and shows the screenshot.
+- **`LOW_CONFIDENCE_FORM`** — the only match was a single-input form, which reads like a search box or an email sign-up. Nothing was filled; the screenshot is shown so you can confirm or rule it out.
+- **`SERVER_ERROR`** — the form was filled and submitted, and the site's *own* endpoint answered with a 5xx. The form isn't misconfigured and the data wasn't rejected: the code behind it crashed, so every real enquiry is being lost too. Reported ahead of any error text on the page, because a status code is evidence where page text is a guess.
 - **`THIRD_PARTY_EMBED_FORM`** — a hosted embed (Typeform, HubSpot, Calendly, Jotform, Tally, and similar) is present. It's detected and named so you can verify it by hand, even though it can't be auto-filled across origins.
-- **`MULTI_STEP_FORM_DETECTED`** — a multi-step ("Next"-style wizard) contact form was found but couldn't be filled this run (its steps/fields weren't reachable). Detected, not broken — reported for manual verification. When the wizard *can* be walked, the run fills through the steps and reports `SAFE_MODE_NO_SUBMIT` (safe) or a submit outcome (live) instead.
-- **`SUBMIT_HELD_INCOMPLETE`** — a multi-step form was filled through its steps, but in Live mode the submission was deliberately held because the run didn't cleanly reach the final step or fill an email — so no partial/junk entry is sent.
+- **`MULTI_STEP_FORM_DETECTED`** — a multi-step ("Next"-style wizard) contact form was found but couldn't be filled this run (its steps/fields weren't reachable). Detected, not broken. When the wizard *can* be walked, the run reports `SAFE_MODE_NO_SUBMIT` (safe) or a submit outcome (live) instead.
+- **`SUBMIT_HELD_INCOMPLETE`** — a multi-step form was filled through its steps, but the Live submission was deliberately held because the run didn't cleanly reach the final step or fill an email.
 
-CAPTCHA and anti-bot systems are **never bypassed** — if one is detected, the run stops and says so.
+The same facts, in the same words, appear on the Form Tester result card, each Form Scheduler run, and the per-URL dashboard — one engine, one story.
 
 ---
 
@@ -143,7 +168,7 @@ Enforcement is **server-side on every write** — the interface hides what a rol
 
 - **Web app** — Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS. A single design-token system drives the whole UI in one coherent dark theme.
 - **Engine** — TypeScript, [Playwright](https://playwright.dev) for real-browser form testing, and lightweight HTML parsing for fast change detection.
-- **Data** — PostgreSQL for structured data; captured page snapshots are kept on disk for diffing.
+- **Data** — PostgreSQL for structured data; captured page snapshots are kept on disk for diffing; form screenshots go to object storage, so only a URL ever reaches the browser.
 - **Testing** — [Vitest](https://vitest.dev) for the engine's detection and analysis logic, and [Playwright](https://playwright.dev) end-to-end tests for the web app.
 
 ---
@@ -275,6 +300,7 @@ npm run start -- --url https://yoursite.com --monitor watch --watch-interval 360
 | `CONTACT_PAGE_AMBIGUOUS` | Multiple candidates, low confidence |
 | `FORM_NOT_FOUND` | No form of any kind on the page |
 | `NON_CONTACT_FORM_FOUND` | A form exists but didn't score as a contact form |
+| `LOW_CONFIDENCE_FORM` | Only a single-input form matched — not filled, shown for you to confirm |
 | `THIRD_PARTY_EMBED_FORM` | A hosted embed is present — exists, not auto-testable |
 | `FORM_AMBIGUOUS` | Multiple forms, low confidence |
 | `CAPTCHA_DETECTED` | CAPTCHA widget found — aborted |
@@ -286,6 +312,7 @@ npm run start -- --url https://yoursite.com --monitor watch --watch-interval 360
 | `DETECT_ONLY` | Detect-only mode — no interaction |
 | `SUBMIT_FAILED` | Submit click failed |
 | `VALIDATION_ERROR` | Form showed validation errors |
+| `SERVER_ERROR` | The site's own backend returned 5xx — the form is broken, nothing delivered |
 | `NO_REDIRECT_NO_SUCCESS` | Submitted but no success signal |
 | `INLINE_SUCCESS_ONLY` | Inline success message detected |
 | `THANK_YOU_REDIRECT` | Redirected to a thank-you URL |

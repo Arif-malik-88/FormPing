@@ -104,6 +104,8 @@ test.describe('Per-URL dashboard — Form Tester run detail (FR-67)', () => {
     await rental.getByText('https://ex.test/rental/').click();
     await expect(rental.getByText('Request a Rental')).toBeVisible();
     await expect(rental.getByText('8 fields')).toBeVisible();
-    await expect(rental.getByText('No bot protection seen')).toBeVisible();
+    // FR-73 — we no longer claim the absence of bot protection: an invisible
+    // reCAPTCHA leaves nothing to detect, so silence is the honest answer.
+    await expect(rental.getByText('No bot protection seen')).toHaveCount(0);
   });
 });

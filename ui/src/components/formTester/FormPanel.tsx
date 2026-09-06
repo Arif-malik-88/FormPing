@@ -4,6 +4,7 @@ import type { DetectedFormField, SiteResult, SubmitMode } from '@/types';
 import { runVerdict } from '@/lib/formWatch/verdict';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { aboutIsTitle, displayName, DOT, KindIcon, type PreparedForm, type Tone } from './formMeta';
+import { formHref, FormShot, LowConfidenceNote, PageProtectionNote } from './FormEvidence';
 
 /**
  * FR-75 — one form's detail block inside the multi-form results log: a category
@@ -31,8 +32,14 @@ const STATUS_PILL: Record<Tone, string> = {
 // A field that belongs to the site chrome (a header/footer search box), not to
 // this form — it gets pulled in because it lives near the form in the DOM. We
 // flag it so the count + list read honestly. FR-75.
+//
+// Must stay in step with `isGlobalField` in src/runners/formFacts.ts, which is
+// what EXCLUDES these from `fieldCount`. If the two disagree, the count and the
+// list disagree — the bug this pair exists to prevent. `\bsearch\b`, so a real
+// field like "Research budget" is never mistaken for a search box. FR-73.
 function isGlobalField(f: DetectedFormField): boolean {
-  return f.type === 'search' || /search/i.test(f.name ?? '') || /search/i.test(f.label ?? '');
+  if (f.type === 'search') return true;
+  return /\bsearch\b/i.test(`${f.name ?? ''} ${f.label ?? ''}`);
 }
 
 function ExternalLinkIcon() {
@@ -68,7 +75,7 @@ export function FormPanel({
   /** Runs a real live submission for this form's URL; resolves the outcome. */
   onSubmitLiveTest?: (url: string) => Promise<SiteResult | null>;
 }) {
-  const { form, tested, status, rail, isMultiStep, detail } = prepared;
+  const { form, tested, status, rail, isMultiStep, detail, lowConfidence } = prepared;
   const lead = rail !== 'info';
 
   // Per-form live submit (FR-76): confirm → submit → show the real outcome here.
@@ -96,7 +103,10 @@ export function FormPanel({
   const showTracking = lead;
 
   const fields = form.fields.filter((f) => f.label || f.name || f.type);
-  const hasGlobal = fields.some(isGlobalField);
+  // A search form's own search input is its field, not site chrome — tagging it
+  // "global" there would be wrong, and would contradict its own field count. FR-73.
+  const globalCount = form.kind === 'search' ? 0 : fields.filter(isGlobalField).length;
+  const hasGlobal = globalCount > 0;
   const FIELD_CAP = 10;
 
   // Normalise hidden fields to {name,value}. Results persist in localStorage, so a
@@ -129,6 +139,10 @@ export function FormPanel({
         {/* Live mode — the action/status sits at the TOP so it's seen without
             scrolling. The primary contact form is auto-submitted by the run (a
             clear note, no button); every other lead form gets an opt-in button. */}
+        {/* Said before anything else on the tested form: if we are not sure we
+            matched the right form, every fact below is about a form that may not
+            be yours. FR-73. */}
+        {lowConfidence !== undefined && <LowConfidenceNote reason={lowConfidence} />}
         {tested && mode === 'live' && <AutoSubmitNote detail={detail} tone={status.tone} />}
         {canLiveSubmit && (
           <div>
@@ -171,18 +185,35 @@ export function FormPanel({
           </div>
         )}
 
-        <a href={form.url} target="_blank" rel="noreferrer" title={form.url} className="inline-flex w-fit max-w-full items-center gap-1.5 font-mono text-[13px] text-accent-soft transition-colors hover:underline">
+        {/* One link to the form. The anchor rides in the href — so the click
+            lands on the form rather than the top of the page — but it is NOT
+            shown: "#forminator-module-653" is a machine id, and putting it in
+            the middle of an address someone has to read is pure noise. The
+            tooltip says where the link goes. FR-73. */}
+        <a
+          href={formHref(form.url, form.anchorId)}
+          target="_blank"
+          rel="noreferrer"
+          title={form.anchorId ? `Opens this page scrolled to the form (#${form.anchorId})` : form.url}
+          className="inline-flex w-fit max-w-full items-center gap-1.5 font-mono text-[13px] text-accent-soft transition-colors hover:underline"
+        >
           <ExternalLinkIcon />
           <span className="truncate">{form.url}</span>
         </a>
+
+        {/* Evidence (FR-73): a picture of this exact form, so "we found your
+            form" is checkable rather than a claim you have to take on trust. */}
+        <FormShot src={form.shot} alt={`Screenshot of the ${displayName(form)} on ${form.url}`} />
 
         {/* Type · fields · structure · security chips */}
         <div className="flex flex-wrap items-center gap-2">
           <Chip>{form.formType === 'third-party' ? `Third-party${form.provider ? ` · ${form.provider}` : ''}` : 'Native form'}</Chip>
           {tested && typeof isMultiStep === 'boolean' && <Chip>{isMultiStep ? 'Multi-step' : 'Single-step'}</Chip>}
           <Chip><b className="font-mono font-bold text-ink">{form.fieldCount}</b> field{form.fieldCount === 1 ? '' : 's'}</Chip>
-          {/* Only claim CAPTCHA when we actually detect one — we can't see an
-              invisible reCAPTCHA that appears on submit, so we never say "No CAPTCHA". FR-76. */}
+          {/* Only claim CAPTCHA when the widget is on THIS form. Page-wide
+              protection is reported separately below — stamping it here is how a
+              search box came back "CAPTCHA protected" (FR-73). We can't see an
+              invisible reCAPTCHA either, so we never say "No CAPTCHA". FR-76. */}
           {form.security?.captcha && (
             <Chip tone="captcha">
               <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M6 9V6.5a4 4 0 018 0V9M5 9h10a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6a1 1 0 011-1z" /></svg>
@@ -190,6 +221,9 @@ export function FormPanel({
             </Chip>
           )}
         </div>
+
+        {/* Protection on the page, but not on this form — said as its own fact. FR-73. */}
+        {!form.security?.captcha && form.security?.pageProtection && <PageProtectionNote />}
 
         {/* Field-name preview — each field a chip, aligned next to the label;
             global (site header/footer) fields are marked so they're not mistaken
@@ -200,7 +234,7 @@ export function FormPanel({
               <span className="mt-1"><RowLabel>Fields</RowLabel></span>
               <div className="flex min-w-0 flex-wrap gap-1.5">
                 {fields.slice(0, FIELD_CAP).map((f, i) => {
-                  const g = isGlobalField(f);
+                  const g = form.kind !== 'search' && isGlobalField(f);
                   return (
                     <span
                       key={i}
@@ -216,7 +250,11 @@ export function FormPanel({
             </div>
             {hasGlobal && (
               <p className="text-xs leading-relaxed text-ink-faint">
-                <span className="font-semibold text-info">Global</span> fields (a site-wide header/footer input like search) appear on every page — they&rsquo;re not really part of this form.
+                <span className="font-semibold text-info">Global</span> fields are site-wide inputs (a header or footer
+                search box) that appear on every page. {globalCount === 1 ? 'One is' : `${globalCount} are`} listed here
+                because {globalCount === 1 ? 'it sits' : 'they sit'} inside this form in the page&rsquo;s code, but{' '}
+                {globalCount === 1 ? "it isn't" : "they aren't"} counted in the{' '}
+                <b className="font-mono text-ink-secondary">{form.fieldCount}</b> above.
               </p>
             )}
           </div>
@@ -340,7 +378,7 @@ function SubmitOutcome({ result, onRetry }: { result?: SiteResult | null; onRetr
       </div>
     );
   }
-  const { level, label } = runVerdict(result.reasonCode, result.formFound, result.finalStatus);
+  const { level, label } = runVerdict(result.reasonCode, result.formFound, result.finalStatus, result.formConfidenceLevel);
   const blocked = CANT_SUBMIT.has(result.reasonCode);
 
   // Protected → "Can't submit", no retry (it can't succeed).

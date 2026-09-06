@@ -354,7 +354,6 @@ const KIND_LABEL: Record<string, string> = {
  * whether it's site-wide). Field NAMES are deliberately left out here.
  */
 function FormRow({ form }: { form: FormRunFormSummary }) {
-  const protectionKnown = typeof form.captcha === 'boolean';
   return (
     <details className="group rounded-lg border border-line bg-ground/40 [&_summary::-webkit-details-marker]:hidden">
       <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3 py-2.5">
@@ -392,10 +391,34 @@ function FormRow({ form }: { form: FormRunFormSummary }) {
           {typeof form.fieldCount === 'number' && form.fieldCount > 0 && (
             <Tag>{form.fieldCount} field{form.fieldCount === 1 ? '' : 's'}</Tag>
           )}
-          {form.captcha ? <Tag tone="warn">CAPTCHA</Tag> : protectionKnown ? <Tag>No bot protection seen</Tag> : null}
+          {/* Claimed only when the widget is on THIS form. The old "No bot
+              protection seen" fallback promised the opposite, which we can't
+              see — an invisible reCAPTCHA leaves no per-form markup. FR-73. */}
+          {form.captcha && <Tag tone="warn">CAPTCHA</Tag>}
           {form.siteWide && <Tag tone="info">Global{form.seenOn && form.seenOn > 1 ? ` · on ${form.seenOn} pages` : ''}</Tag>}
           {form.utm?.length ? <Tag>{form.utm.length} UTM param{form.utm.length === 1 ? '' : 's'}</Tag> : null}
         </div>
+        {/* The same evidence the tester showed — the form as we saw it. Lazy, so
+            a collapsed row costs nothing. FR-73. */}
+        {form.shot && (
+          <a
+            href={form.shot}
+            target="_blank"
+            rel="noreferrer"
+            title="Open the full-size screenshot"
+            className="block overflow-hidden rounded-lg border border-line bg-ground/40 transition-colors hover:border-line-strong"
+          >
+            {/* The whole form, scaled to fit — never cropped to its first field. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={form.shot}
+              alt={`Screenshot of the form on ${form.url}`}
+              loading="lazy"
+              decoding="async"
+              className="mx-auto max-h-96 w-full object-contain"
+            />
+          </a>
+        )}
         <a href={form.url} target="_blank" rel="noreferrer" className="inline-block text-xs text-ink-muted underline-offset-2 hover:text-accent hover:underline">
           Open page ↗
         </a>
@@ -425,6 +448,27 @@ function FormRunDetails({ form }: { form: NonNullable<NonNullable<StatusSite['te
       {/* The outcome in one plain line (FR-64 vocabulary). */}
       {reason && <p className="text-[13px] font-medium text-ink-secondary">{reason.title}</p>}
 
+      {/* The run wasn't sure it found the right form — the dashboard hedges
+          exactly where the tester did, rather than reading as settled fact. FR-73. */}
+      {d?.confidence === 'low' && (
+        <p className="rounded-lg border border-info/25 bg-info/8 px-3 py-2 text-xs leading-relaxed text-ink-muted">
+          <span className="font-semibold text-info">Not certain this is the contact form.</span>{' '}
+          {d.lowConfidenceReason
+            ? `${d.lowConfidenceReason.charAt(0).toUpperCase()}${d.lowConfidenceReason.slice(1)}.`
+            : 'The match was missing the usual contact signals.'}{' '}
+          Re-run the Form Tester to see the form we matched.
+        </p>
+      )}
+
+      {/* The detail below comes from the last full Form Tester run, which for a
+          MONITORED url is usually a different moment than the monitor's last
+          check shown above. Say which, rather than let it read as one event. FR-73. */}
+      {d && form.detailRanAt && form.lastRunAt && form.detailRanAt !== form.lastRunAt && (
+        <p className="text-xs text-ink-faint">
+          Detail below is from the last full Form Tester run · {rel(form.detailRanAt)}
+        </p>
+      )}
+
       {d && (
         <>
           {/* EVERY form the run found — mirrors the Form Tester log. Each row is
@@ -442,6 +486,18 @@ function FormRunDetails({ form }: { form: NonNullable<NonNullable<StatusSite['te
             // Runs recorded before the per-form list existed still carry the tested
             // form's own facts — show those rather than an empty panel.
             <>
+              {/* WHAT we matched, in words. "This page has a form, but it is not a
+                  contact form" told the reader what it ISN'T while the engine knew
+                  perfectly well it was a search box — the one thing worth saying. FR-73. */}
+              {d.formKind && d.formKind !== 'contact' && (
+                <p className="text-[13px] text-ink-secondary">
+                  What we found: <span className="font-semibold text-ink">{KIND_LABEL[d.formKind] ?? 'a form'}</span>
+                  {d.formKind === 'search' && ' — a site search box, not a way to contact anyone.'}
+                  {d.formKind === 'newsletter' && ' — an email sign-up, not a way to contact anyone.'}
+                  {d.formKind === 'login' && ' — a sign-in form, not a way to contact anyone.'}
+                  {d.formKind === 'other' && ' — a form for something else.'}
+                </p>
+              )}
               <div className="flex flex-wrap gap-2">
                 {d.formType && (
                   <Tag>
@@ -452,7 +508,10 @@ function FormRunDetails({ form }: { form: NonNullable<NonNullable<StatusSite['te
                 )}
                 {typeof d.isMultiStep === 'boolean' && <Tag>{d.isMultiStep ? 'Multi-step' : 'Single-step'}</Tag>}
                 {typeof d.fieldCount === 'number' && d.fieldCount > 0 && <Tag>{d.fieldCount} field{d.fieldCount === 1 ? '' : 's'}</Tag>}
-                {d.captchaDetected ? <Tag tone="warn">CAPTCHA</Tag> : <Tag>No bot protection seen</Tag>}
+                {/* Only claimed when a widget is on the form itself. We never say
+                    the opposite: an invisible reCAPTCHA leaves no markup to see,
+                    so "no bot protection seen" was a promise we can't keep. FR-73. */}
+                {d.captchaDetected && <Tag tone="warn">CAPTCHA</Tag>}
                 {typeof d.siteFormsCount === 'number' && d.siteFormsCount > 1 && <Tag>{d.siteFormsCount} forms on site</Tag>}
               </div>
               {pagePath && (

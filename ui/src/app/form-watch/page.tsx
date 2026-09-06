@@ -6,6 +6,7 @@ import { SchedulerCommandBar } from '@/components/formWatch/SchedulerCommandBar'
 import { AddToProjectModal } from '@/components/projects/AddToProjectModal';
 import { ReadOnlyBanner } from '@/components/ReadOnlyBanner';
 import { PageHeader, Skeleton } from '@/components/ui';
+import { runVerdict, type VerdictLevel } from '@/lib/formWatch/verdict';
 import type { FormSchedule, FormWatchMode } from '@/lib/formWatch/types';
 
 export default function FormWatchPage() {
@@ -21,6 +22,11 @@ export default function FormWatchPage() {
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [justAdded, setJustAdded] = useState<string | null>(null);
+  // The monitor just created. The list sits below the form and grows downward, so
+  // after adding one the user was left looking at the form with no sign anything
+  // had happened — the new row could be several screens down. We scroll to it and
+  // mark it briefly, so the result of the action is where the eye already is.
+  const [addedId, setAddedId] = useState<string | null>(null);
 
   // While a card is showing its in-place "stopped" confirmation, hold the poll so
   // a background refresh doesn't yank the card (and its message) out from under it.
@@ -70,6 +76,7 @@ export default function FormWatchPage() {
         setUrl('');
         setLandingPage(false);
         setJustAdded(target);
+        if (typeof data?.schedule?.id === 'string') setAddedId(data.schedule.id);
         await load();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Request failed');
@@ -101,6 +108,19 @@ export default function FormWatchPage() {
     },
     [load],
   );
+
+  // Scroll the new monitor into view once it has actually rendered, and let the
+  // highlight fade on its own. Honours reduced-motion: the jump still happens,
+  // it just doesn't glide.
+  useEffect(() => {
+    if (!addedId || !schedules.some((s) => s.id === addedId)) return;
+    const el = document.getElementById(`schedule-${addedId}`);
+    if (!el) return;
+    const smooth = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' });
+    const t = setTimeout(() => setAddedId(null), 2200);
+    return () => clearTimeout(t);
+  }, [addedId, schedules]);
 
   const holdPoll = useCallback((active: boolean) => {
     pollHold.current = Math.max(0, pollHold.current + (active ? 1 : -1));
@@ -147,17 +167,7 @@ export default function FormWatchPage() {
             ))
           )}
 
-          {!loading && schedules.length > 0 && (
-            <div className="flex items-center gap-2.5 rounded-lg border border-ok/25 bg-ok/10 px-3.5 py-2.5">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ok opacity-60 motion-reduce:animate-none" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-ok" />
-              </span>
-              <span className="text-xs font-medium text-ok">
-                Scheduler running — automatically watching {schedules.length} form{schedules.length === 1 ? '' : 's'}
-              </span>
-            </div>
-          )}
+          {!loading && schedules.length > 0 && <SchedulerStatus schedules={schedules} />}
 
           {!loading && schedules.length === 0 && (
             <div className="flex flex-col items-center rounded-xl border border-dashed border-line bg-panel/40 px-8 py-14 text-center">
@@ -175,12 +185,96 @@ export default function FormWatchPage() {
 
           {!loading &&
             schedules.map((s) => (
-              <ScheduleCard key={s.id} schedule={s} onStop={handleStop} onTogglePause={handleTogglePause} onDone={load} onHold={holdPoll} />
+              <div
+                key={s.id}
+                id={`schedule-${s.id}`}
+                className={
+                  s.id === addedId
+                    ? 'rounded-xl ring-2 ring-accent/60 ring-offset-2 ring-offset-ground transition-shadow duration-500'
+                    : 'rounded-xl ring-2 ring-transparent transition-shadow duration-500'
+                }
+              >
+                <ScheduleCard schedule={s} onStop={handleStop} onTogglePause={handleTogglePause} onDone={load} onHold={holdPoll} />
+              </div>
             ))}
         </div>
       </main>
 
       {justAdded && <AddToProjectModal url={justAdded} onClose={() => setJustAdded(null)} />}
     </>
+  );
+}
+
+/**
+ * The scheduler's live status bar.
+ *
+ * It used to say one thing — "automatically watching 3 forms" — which told you
+ * the scheduler was alive but nothing about whether the forms were. With more
+ * than a couple of monitors, the only way to learn that anything needed
+ * attention was to scroll the whole list and read each card.
+ *
+ * So it now BREAKS THE NUMBER DOWN, in the app's canonical status vocabulary and
+ * colours: healthy / detected / needs attention / failing / setting up. The
+ * counts are derived from the same `runVerdict` each card uses, so the summary
+ * can never disagree with the rows beneath it.
+ */
+function SchedulerStatus({ schedules }: { schedules: FormSchedule[] }) {
+  const counts: Record<VerdictLevel | 'pending' | 'paused', number> = {
+    healthy: 0, detected: 0, attention: 0, failing: 0, pending: 0, paused: 0,
+  };
+  for (const s of schedules) {
+    if (s.paused) { counts.paused += 1; continue; }
+    // No status yet = the first check is still running (a new monitor).
+    if (!s.lastStatus) { counts.pending += 1; continue; }
+    counts[runVerdict(s.lastReasonCode ?? '', s.lastFormFound ?? false, s.lastStatus).level] += 1;
+  }
+
+  // Worst-first, so what needs a look is read before what's fine.
+  const stats: { n: number; label: string; cls: string }[] = [
+    { n: counts.failing, label: 'failing', cls: 'bg-danger/12 text-danger ring-danger/30' },
+    { n: counts.attention, label: 'need a look', cls: 'bg-warn/12 text-warn ring-warn/30' },
+    { n: counts.detected, label: 'detected', cls: 'bg-info/12 text-info ring-info/30' },
+    { n: counts.healthy, label: 'healthy', cls: 'bg-ok/12 text-ok ring-ok/30' },
+    { n: counts.pending, label: 'setting up', cls: 'bg-idle/12 text-ink-muted ring-line-strong' },
+    { n: counts.paused, label: 'paused', cls: 'bg-idle/12 text-ink-muted ring-line-strong' },
+  ].filter((s) => s.n > 0);
+
+  const active = schedules.length - counts.paused;
+  const allWell = counts.failing === 0 && counts.attention === 0;
+
+  return (
+    <div
+      className={`fp-rise flex flex-wrap items-center justify-between gap-x-5 gap-y-3 rounded-xl border px-4 py-3.5 ${
+        allWell ? 'border-ok/25 bg-ok/8' : 'border-warn/25 bg-warn/8'
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        {/* The heartbeat: a ping ring, on-brand for a tool called FormPing. */}
+        <span className="relative flex h-3 w-3 shrink-0">
+          <span
+            className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 [animation-duration:2s] motion-reduce:animate-none ${allWell ? 'bg-ok' : 'bg-warn'}`}
+          />
+          <span className={`relative inline-flex h-3 w-3 rounded-full ${allWell ? 'bg-ok' : 'bg-warn'}`} />
+        </span>
+        <div className="min-w-0">
+          <p className={`text-sm font-semibold ${allWell ? 'text-ok' : 'text-warn'}`}>Scheduler running</p>
+          <p className="mt-0.5 text-xs text-ink-muted">
+            Checking <b className="font-mono tabular-nums text-ink-secondary">{active}</b> form
+            {active === 1 ? '' : 's'} on their own schedules
+            {counts.paused > 0 && <> · {counts.paused} paused</>}
+          </p>
+        </div>
+      </div>
+
+      {/* Canonical StatPills — the same shape the Form Tester report uses. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {stats.map((s) => (
+          <div key={s.label} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ring-1 ${s.cls}`}>
+            <span className="font-mono text-base font-bold tabular-nums">{s.n}</span>
+            <span className="uppercase tracking-wide opacity-80">{s.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

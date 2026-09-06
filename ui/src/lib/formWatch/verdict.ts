@@ -31,7 +31,10 @@ const DETECT_ONLY = 'DETECT_ONLY';
 // a third-party embed IS present and named, but it's a cross-origin form we can't
 // auto-fill/submit. Its own "detected" level (sky/info) — never amber "attention"
 // (nothing is wrong) and never green "healthy" (we didn't actually test a submit). FR-60.
-const DETECTED = new Set(['THIRD_PARTY_EMBED_FORM']);
+// A single-input <form> was all we could match. Something IS there and we can
+// show it, but calling it the contact form would be a guess — so it gets the
+// same "detected, your call" treatment as an embed: never green, never red. FR-73.
+const DETECTED = new Set(['THIRD_PARTY_EMBED_FORM', 'LOW_CONFIDENCE_FORM']);
 // The form is broken / submission genuinely failed.
 const FAILING = new Set([
   'FORM_NOT_FOUND',
@@ -40,6 +43,8 @@ const FAILING = new Set([
   'FORM_AMBIGUOUS',
   'SUBMIT_FAILED',
   'VALIDATION_ERROR',
+  // The site's own backend returned 5xx — the form is genuinely broken. FR-73.
+  'SERVER_ERROR',
   'SUBMISSION_BLOCKED_BY_ANTISPAM',
   'PROXY_REJECTED_POST',
   'REQUIRED_FIELDS_UNSUPPORTED',
@@ -72,6 +77,7 @@ const LABELS: Record<string, string> = {
   DETECT_ONLY: 'Form detected',
   FORM_NOT_FOUND: 'No form found on the page',
   NON_CONTACT_FORM_FOUND: 'Found a form — not a contact form',
+  LOW_CONFIDENCE_FORM: 'Only a single-field form — is this yours?',
   THIRD_PARTY_EMBED_FORM: 'Third-party form detected',
   MULTI_STEP_FORM_DETECTED: 'Multi-step form found',
   SUBMIT_HELD_INCOMPLETE: 'Multi-step filled — submission held',
@@ -83,6 +89,7 @@ const LABELS: Record<string, string> = {
   BLOCKED_BY_HOST: 'Blocked by host',
   SUBMIT_FAILED: 'Submit failed',
   VALIDATION_ERROR: 'Validation error',
+  SERVER_ERROR: 'The site’s server errored — message not delivered',
   SUBMISSION_BLOCKED_BY_ANTISPAM: 'Filtered by anti-spam',
   REQUIRED_FIELDS_UNSUPPORTED: 'Required fields could not be filled',
   NO_REDIRECT_NO_SUCCESS: 'Submitted — no confirmation seen',
@@ -93,16 +100,26 @@ export function runVerdict(
   reasonCode: string,
   formFound: boolean,
   rawStatus?: FormRunStatus,
+  /** How sure the engine is that it found the right form. A `low` match still
+   *  gets filled — Landing-page mode asserts the form is on this page — but it
+   *  must never read as a confident green pass, because the thing we filled may
+   *  not be the form the user means. Downgrades a success to "detected". FR-73. */
+  confidence?: 'high' | 'low',
 ): RunVerdict {
   const label = LABELS[reasonCode] ?? reasonCode;
 
   if (rawStatus === 'error') return { level: 'failing', label: LABELS[reasonCode] ?? 'Run error' };
-  if (HEALTHY.has(reasonCode)) return { level: 'healthy', label };
+  if (HEALTHY.has(reasonCode)) {
+    return confidence === 'low'
+      ? { level: 'detected', label: 'Filled — but we are not sure it is your contact form' }
+      : { level: 'healthy', label };
+  }
   if (DETECTED.has(reasonCode)) return { level: 'detected', label };
   if (reasonCode === DETECT_ONLY) {
-    return formFound
-      ? { level: 'healthy', label }
-      : { level: 'failing', label: 'No contact form found' };
+    if (!formFound) return { level: 'failing', label: 'No contact form found' };
+    return confidence === 'low'
+      ? { level: 'detected', label: 'Form detected — but we are not sure it is the right one' }
+      : { level: 'healthy', label };
   }
   if (FAILING.has(reasonCode)) return { level: 'failing', label };
   if (ATTENTION.has(reasonCode)) return { level: 'attention', label };

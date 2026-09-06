@@ -68,6 +68,15 @@ export interface FormFingerprint {
   formsOnPage?: FormsOnPage;
   /** Hidden tracking/UTM params the form captures. FR-68. */
   tracking?: TrackingParams;
+  /** How sure the engine was that this is really the contact form. Carried here
+   *  so a SCHEDULED run hedges exactly like a manual one — the same engine ran
+   *  it, so it must not read as more certain just because a timer started it.
+   *  FR-73. */
+  formConfidenceLevel?: 'high' | 'low';
+  /** Plain reason the match was low-confidence. FR-73. */
+  lowConfidenceReason?: string;
+  /** Bot protection on the PAGE (as opposed to a CAPTCHA on this form). FR-73. */
+  pageProtection?: boolean;
 }
 
 /** One recorded run of a scheduled form test. */

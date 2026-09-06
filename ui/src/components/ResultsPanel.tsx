@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { SiteResult, RunProgress, SubmitMode } from '@/types';
 import { ResultCard } from './ResultCard';
 import { FormTesterReport } from './formTester/FormTesterReport';
@@ -110,6 +110,53 @@ function crawlPct(logs: string[]): number | null {
   return null;
 }
 
+/**
+ * Landing-page progress (FR-73).
+ *
+ * A landing-page run never crawls, so it emits no "page N/T" and the cat used to
+ * stand still for the whole run — on a slow site that reads as frozen.
+ *
+ * There IS real signal here, just not a percentage: the engine announces each
+ * stage it reaches. Those become ANCHORS. Between them the cat creeps forward a
+ * little every few seconds, so the track always shows life, and she can never
+ * pass the last stage actually reached by more than a short lead. She never
+ * arrives while the run is still going — finishing is the result's job to show,
+ * not the loader's.
+ */
+const LANDING_STAGES: { re: RegExp; pct: number }[] = [
+  { re: /Submit captured|POST \d{3}/i, pct: 0.86 },      // sending + watching the response
+  { re: /Multi-step form: (step|completed)|Filled \d+ field/i, pct: 0.7 }, // filling it in
+  { re: /Form found/i, pct: 0.5 },                        // we have the form
+  { re: /Landing-page mode|▶ Running/i, pct: 0.15 },      // page loading
+];
+
+function landingStage(logs: string[]): number {
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const hit = LANDING_STAGES.find((s) => s.re.test(logs[i]!));
+    if (hit) return hit.pct;
+  }
+  return 0.08;
+}
+
+/** Anchor + a slow creep, so the track moves even while one stage runs long. */
+function useLandingPct(logs: string[], active: boolean): number {
+  const stage = landingStage(logs);
+  const [drift, setDrift] = useState(0);
+
+  // Each real stage resets the lead — the creep is a hint that we're alive, not
+  // a second source of truth competing with the engine.
+  useEffect(() => { setDrift(0); }, [stage]);
+
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => setDrift((d) => Math.min(d + 0.02, 0.1)), 3000);
+    return () => clearInterval(t);
+  }, [active, stage]);
+
+  // Capped below the end: only a finished run has finished.
+  return Math.min(stage + drift, 0.94);
+}
+
 /** Contextual "we're testing…" loader. The copy tells the user exactly what the
  *  run is doing — a whole-site check vs a single landing page — so the wait is
  *  clear, not a blank spinner, and NEVER exposes raw engine logs. FR-64. */
@@ -133,6 +180,9 @@ function RunningLoader({
     ? `Landing-page mode — we test only the page you gave: ${finish}.`
     : 'Scanning your whole site for its forms, then testing the contact form.';
   const total = progress?.total ?? 0;
+  // Landing-page runs have no crawl to measure, so they get the paced stage
+  // progress above; a whole-site run uses the crawl's real page count. FR-73.
+  const landingPct = useLandingPct(logs, Boolean(landingPage));
   const current = progress?.current ?? 0;
   const cur = progress?.currentUrl;
   const phase = friendlyPhase(logs);
@@ -192,9 +242,10 @@ function RunningLoader({
       headline={multi ? `Found ${inv.found.length} forms — testing them` : headline}
       sub={multi ? multiSub : sub}
       middle={middle}
-      // A batch knows its own progress (N of M URLs); a single URL's real signal
-      // is the site crawl's "page N/T". Neither → indeterminate.
-      pct={total > 1 ? current / total : crawlPct(logs)}
+      // A batch knows its own progress (N of M URLs). A whole-site run has the
+      // crawl's real "page N/T". A landing-page run has neither, so it uses the
+      // stage anchors — which move, but never claim to have finished. FR-73.
+      pct={total > 1 ? current / total : landingPage ? landingPct : crawlPct(logs)}
       facts={RUN_FACTS}
     />
   );
@@ -203,7 +254,7 @@ function RunningLoader({
 export function ResultsPanel({ results, progress, logs, running, landingPage, mode, onClear, onSubmitLiveTest }: Props) {
   // Tally by mode-aware verdict (not raw status), so a healthy safe/detect run
   // counts as OK — never a misleading "WARN". Matches the per-result badge. FR-63.
-  const levels = results.map((r) => runVerdict(r.reasonCode, r.formFound, r.finalStatus).level);
+  const levels = results.map((r) => runVerdict(r.reasonCode, r.formFound, r.finalStatus, r.formConfidenceLevel).level);
   const ok = levels.filter((l) => l === 'healthy').length;
   const detected = levels.filter((l) => l === 'detected').length;
   const attention = levels.filter((l) => l === 'attention').length;

@@ -54,7 +54,7 @@ export async function sendFormSlack(n: FormNotification): Promise<void> {
 
 function buildPayload(n: FormNotification): Record<string, unknown> {
   const { record, changes, suggestions, regression } = n;
-  const v = runVerdict(record.reasonCode, record.fingerprint.formFound, record.status);
+  const v = runVerdict(record.reasonCode, record.fingerprint.formFound, record.status, record.fingerprint.formConfidenceLevel);
   const emoji = LEVEL_EMOJI[v.level] ?? '•';
 
   // `detected` (third-party embed) and `healthy` both lead with the plain label —

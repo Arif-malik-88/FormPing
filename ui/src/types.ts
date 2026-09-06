@@ -76,10 +76,19 @@ export interface SiteForm {
   provider?: string;
   fieldCount: number;
   fields: DetectedFormField[];
-  security: { captcha: boolean };
+  /** `captcha` = a widget on THIS form; `pageProtection` = bot-protection markup
+   *  on the page it lives on. Never conflated — page-level protection says
+   *  nothing about whether this particular form is protected. FR-73. */
+  security: { captcha: boolean; pageProtection?: boolean };
   tracking: TrackingParams;
   siteWide: boolean;
   seenOn: number;
+  /** An element id to jump straight to this form — `url#anchorId`. FR-73. */
+  anchorId?: string;
+  /** Hosted URL of a cropped screenshot of this form, when we captured one.
+   *  The run route replaces the engine's inline image with this before the
+   *  result reaches the browser, so the page only loads it on demand. FR-73. */
+  shot?: string;
   /** What we did with it this run — fill every lead form, detect the rest. FR-76. */
   outcome?: FormOutcome;
   /** The form's hidden inputs (nonces, ids, utm_*…) as name=value — for the "Hidden fields" disclosure. FR-76. */
@@ -129,6 +138,22 @@ export interface SiteResult {
   fields?: DetectedFormField[];
   isMultiStep?: boolean;
   landingPageMode?: boolean;
+  /** How sure we are this is really the contact form — `low` when we matched
+   *  something weak, so the card asks instead of claiming. FR-73. */
+  formConfidenceLevel?: 'high' | 'low';
+  /** Plain, user-facing reason the match is low-confidence. FR-73. */
+  lowConfidenceReason?: string;
+  /** Bot protection seen on the PAGE (not on the form itself). FR-73. */
+  pageProtection?: boolean;
+  /** Element id to jump straight to the tested form — `page#anchorId`. FR-73. */
+  formAnchorId?: string;
+  /** What the page calls this form — its nearest heading ("Request a Rental"),
+   *  else its submit-button text. FR-73. */
+  formAbout?: string;
+  /** What the matched form IS — contact / newsletter / search / login / other. FR-73. */
+  formKind?: FormKind;
+  /** Hosted URL of a cropped screenshot of the tested form. FR-73. */
+  formShot?: string;
   /** How many forms are on the tested page + what the others are (2+ only). FR-68. */
   formsOnPage?: FormsOnPage;
   /** Hidden tracking/UTM params the tested form captures. FR-68. */

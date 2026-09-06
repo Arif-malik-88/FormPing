@@ -255,10 +255,25 @@ async function buildResult(
   // summary line; include per-response details when there's useful signal.
   const responseNotes: string[] = [];
   if (capturedResponses.length > 0) {
+    // Submitting a form fires the site's OWN request plus whatever analytics the
+    // page runs. On one real run, nine identical third-party tracking pings
+    // buried the single line that mattered — a 500 from the site's own endpoint.
+    // So third-party chatter that SUCCEEDED is summarised in one line; the
+    // site's own responses, and any failure from anywhere, are listed. FR-73.
+    let host = '';
+    try { host = new URL(initialUrl).hostname.replace(/^www\./, ''); } catch { /* keep '' */ }
+    const isOwn = (u: string): boolean => {
+      if (!host) return true;
+      try { return new URL(u).hostname.replace(/^www\./, '').endsWith(host); } catch { return true; }
+    };
+
+    const shown = capturedResponses.filter((r) => isOwn(r.url) || r.outcome === 'failure' || r.status >= 400);
+    const hiddenCount = capturedResponses.length - shown.length;
+
     responseNotes.push(
       `Captured ${capturedResponses.length} POST response(s) during submit (ajaxOutcome=${ajaxOutcome})`,
     );
-    for (const r of capturedResponses) {
+    for (const r of shown) {
       const tag =
         r.outcome === 'success' ? '✓' : r.outcome === 'failure' ? '✗' : '·';
       // Trim long URLs to keep notes readable
@@ -269,6 +284,11 @@ async function buildResult(
         const oneLine = r.bodyPreview.replace(/\s+/g, ' ').slice(0, 200);
         responseNotes.push(`   body: ${oneLine}`);
       }
+    }
+    if (hiddenCount > 0) {
+      responseNotes.push(
+        `· ${hiddenCount} other request(s) to third-party services (analytics and similar) succeeded — not shown`,
+      );
     }
   }
 
