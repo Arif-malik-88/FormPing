@@ -34,15 +34,18 @@ function CatTrack({ pct }: { pct: number | null }) {
 
   return (
     <div className="relative hidden h-10 py-1 sm:block" aria-hidden>
-      {/* The ground she runs on. Unknown progress → the dashes scroll under her. */}
+      {/* The ground STILL AHEAD of her — dashes start where she is, never behind
+          her. Drawing them full-width and painting the fill on top left the dashes
+          showing through the covered stretch; the road she has run is done with. */}
       <div
-        className={`absolute inset-x-0 bottom-0 h-[3px] rounded-full text-accent-soft/35 ${known ? '' : 'animate-track motion-reduce:animate-none'}`}
-        style={DASHES}
+        className={`absolute bottom-0 right-0 h-[3px] rounded-full text-accent-soft/35 ${known ? 'transition-all duration-500' : 'animate-track motion-reduce:animate-none'}`}
+        style={{ ...DASHES, left: known ? `${(clamped * 100).toFixed(1)}%` : 0 }}
       />
-      {/* Ground already covered — only drawn when the distance is real. */}
+      {/* Ground already covered — a smooth, solid run of colour that grows with
+          her. Both ends fully opaque, so nothing beneath can read through it. */}
       {known && (
         <div
-          className="absolute bottom-0 left-0 h-[3px] rounded-full bg-gradient-to-r from-accent/40 to-accent transition-all duration-500"
+          className="absolute bottom-0 left-0 h-[3px] rounded-full bg-gradient-to-r from-accent-deep to-accent transition-all duration-500"
           style={{ width: `${(clamped * 100).toFixed(1)}%` }}
         />
       )}
